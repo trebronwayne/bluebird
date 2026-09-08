@@ -99,4 +99,10 @@ implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
 
     // Dominant-color extraction from album art for the Now Playing screen
     implementation("androidx.palette:palette-ktx:1.0.0")
+    // Real backdrop blur behind glass panels (Taskbar, Start Menu, Action
+    // Center, etc.) — see HazeBlurSetup.kt for the shared wrapper this
+    // powers. Compose has no first-party blur-behind-content API, Haze is
+    // the standard solution (works down to minSdk, no API 31+ requirement).
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
+    implementation("dev.chrisbanes.haze:haze-materials:1.6.10")
 }
