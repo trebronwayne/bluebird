@@ -471,6 +471,24 @@ private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic
 private val TEXT_EXTS  = setOf("txt", "md", "log", "json", "xml", "csv", "html", "htm", "js", "py", "kt")
 
 // ─────────────────────────────────────────────────────────────────
+// Shared Windows-11 shell surface tokens
+// Keep Desktop popups/dialogs on the exact same neutral surface language
+// as the approved Start Menu rather than maintaining a second palette.
+// ─────────────────────────────────────────────────────────────────
+private fun desktopSurfaceFill(isDark: Boolean): Color =
+    if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
+
+private fun desktopSurfaceBorder(isDark: Boolean): Color =
+    if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
+
+private fun desktopTextPrimary(isDark: Boolean): Color =
+    if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+
+private fun desktopTextSecondary(isDark: Boolean): Color =
+    desktopTextPrimary(isDark).copy(alpha = 0.62f)
+
+
+// ─────────────────────────────────────────────────────────────────
 // Data Models
 // ─────────────────────────────────────────────────────────────────
 data class DesktopFileInfo(
@@ -1284,13 +1302,13 @@ private val BLUEBIRD_DEFAULT_APPS = listOf(
     DefaultShortcut("Browser", builtInScreen = LauncherScreen.BROWSER),
     DefaultShortcut("Calculator", builtInScreen = LauncherScreen.CALCULATOR),
     DefaultShortcut("Calendar", builtInScreen = LauncherScreen.CALENDAR),
-    DefaultShortcut("Photos", builtInScreen = LauncherScreen.PHOTOS),
+
     DefaultShortcut("Media Player", builtInScreen = LauncherScreen.MEDIA_PLAYER),
     DefaultShortcut("Image Viewer", builtInScreen = LauncherScreen.IMAGE_VIEWER),
     DefaultShortcut("Word Impress", builtInScreen = LauncherScreen.WORD_IMPRESS),
     DefaultShortcut("Text Editor", builtInScreen = LauncherScreen.PremiumTextEditorScreen),
     DefaultShortcut("Terminal", builtInScreen = LauncherScreen.TERMINAL),
-    DefaultShortcut("Task Manager", builtInScreen = LauncherScreen.TASK_MANAGER),
+
     DefaultShortcut("Recycle Bin", builtInScreen = LauncherScreen.RECYCLE_BIN),
     DefaultShortcut("Bluebird Store", builtInScreen = LauncherScreen.BLUEBIRD_STORE),
     DefaultShortcut("Program Manager", builtInScreen = LauncherScreen.PROGRAM_MANAGER)
@@ -1384,7 +1402,14 @@ fun Desktop(
     // drawn as a separate overlay on top rather than reducing Desktop()'s own measured
     // height. Defaults to 0 (no change from previous behavior) if the caller doesn't
     // pass anything. See the maxYBound comment below for why this matters.
-    bottomSafeAreaPx: Float = 0f
+    bottomSafeAreaPx: Float = 0f,
+    // Reports a muted color sampled from whichever wallpaper is currently active
+    // (gradient preset / bundled image / custom picture — see WallpaperAccent.kt),
+    // recomputed whenever the wallpaper changes. DesktopScreen uses this to tint
+    // every glass panel (Taskbar, Start Menu, …) so they follow Bluebird's own
+    // wallpaper the way real Mica/Acrylic follow the Windows desktop background —
+    // instead of a fixed accent or a manual opacity slider.
+    onWallpaperAccent: (Color) -> Unit = {}
 ) {
     // FIX: Use BoxWithConstraints so screenWPxTotal/screenHPxTotal are the
     // *actual* layout pixel dimensions.  LocalConfiguration.screenWidthDp is
@@ -1563,6 +1588,21 @@ fun Desktop(
                 prefs.customWallpaperUri = wallpaper.homeWallpaperUri
                 prefs.wallpaperMode = DesktopWallpaperMode.CUSTOM
             }
+        }
+
+        // Recompute the Mica/Acrylic tint whenever the active wallpaper changes.
+        // See WallpaperAccent.kt — cheap average for gradients, Palette (off the
+        // main thread) for bundled/custom images.
+        LaunchedEffect(wallpaperMode, gradientIndex, defaultImageIndex, customWallpaperUri) {
+            val accent = extractWallpaperAccent(
+                context = context,
+                mode = wallpaperMode,
+                gradientColors = wallpaperGradients[gradientIndex % wallpaperGradients.size],
+                imageResId = DEFAULT_WALLPAPERS[defaultImageIndex % DEFAULT_WALLPAPERS.size],
+                customUri = customWallpaperUri,
+                fallback = DS.accentStart
+            )
+            onWallpaperAccent(accent)
         }
 
         // Auto-cycle wallpaper when no custom wallpaper is set
@@ -2729,7 +2769,7 @@ fun Desktop(
                             Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 72.dp)
-                                .background(Color(0xFF1C1C1C).copy(alpha = 0.95f), RoundedCornerShape(8.dp))
+                                .background(desktopSurfaceFill(isDark), RoundedCornerShape(8.dp))
                                 .border(0.5.dp, DS.accentStart.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment    = Alignment.CenterVertically,
@@ -2742,7 +2782,7 @@ fun Desktop(
                             )
                             Text(
                                 "File access not granted",
-                                color    = Color.White,
+                                color    = desktopTextPrimary(isDark),
                                 fontSize = 13.sp,
                                 modifier = Modifier.weight(1f)
                             )
@@ -2941,7 +2981,7 @@ fun Desktop(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 72.dp)
-                        .background(Color(0xFF1C1C1C).copy(alpha = 0.95f), RoundedCornerShape(8.dp))
+                        .background(desktopSurfaceFill(isDark), RoundedCornerShape(8.dp))
                         .border(0.5.dp, DS.accentStart.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2950,7 +2990,7 @@ fun Desktop(
                     Icon(FluentIcon.Folder, contentDescription = null, tint = DS.accentStart, modifier = Modifier.size(18.dp))
                     Text(
                         "Desktop is full. Some items are still available in Desktop.",
-                        color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f)
+                        color = desktopTextPrimary(isDark), fontSize = 13.sp, modifier = Modifier.weight(1f)
                     )
                     TextButton(
                         onClick = {
@@ -2962,7 +3002,7 @@ fun Desktop(
                     TextButton(
                         onClick = { showDesktopFullDialog = false },
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                    ) { Text("Dismiss", color = Color.White.copy(alpha = 0.78f), fontSize = 12.sp) }
+                    ) { Text("Dismiss", color = desktopTextSecondary(isDark), fontSize = 12.sp) }
                 }
             }
 
@@ -3241,13 +3281,13 @@ private fun DesktopIcon(
             LauncherScreen.BROWSER -> FluentIcon.Globe
             LauncherScreen.CALCULATOR -> FluentIcon.Calculator
             LauncherScreen.CALENDAR -> FluentIcon.Calendar
-            LauncherScreen.PHOTOS -> FluentIcon.ImageMultiple
+
             LauncherScreen.MEDIA_PLAYER -> FluentIcon.PlayCircle
             LauncherScreen.IMAGE_VIEWER -> FluentIcon.Image
             LauncherScreen.WORD_IMPRESS -> FluentIcon.DocumentText
             LauncherScreen.PremiumTextEditorScreen -> FluentIcon.TextFont
             LauncherScreen.TERMINAL -> FluentIcon.Console
-            LauncherScreen.TASK_MANAGER -> FluentIcon.TaskList
+
             LauncherScreen.RECYCLE_BIN -> FluentIcon.Delete
             LauncherScreen.BLUEBIRD_STORE -> FluentIcon.Moon
             LauncherScreen.PROGRAM_MANAGER -> FluentIcon.Apps
@@ -3685,10 +3725,10 @@ fun bluebirdDesktopContextMenu(
     onDismiss: () -> Unit
 ) {
     val menuW    = 210
-    val bg       = if (isDark) DS.surfaceDark else DS.surfaceLight
+    val bg       = desktopSurfaceFill(isDark)
     val tc       = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val tcDim    = tc.copy(alpha = 0.55f)
-    val divColor = if (isDark) DS.borderDark else DS.borderLight
+    val divColor = desktopSurfaceBorder(isDark)
     val accent   = DS.accentStart
 
     var openSub by remember { mutableStateOf<String?>(null) }
@@ -3699,7 +3739,7 @@ fun bluebirdDesktopContextMenu(
             shape           = RoundedCornerShape(8.dp),
             color           = bg,
             shadowElevation = 16.dp,
-            border          = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+            border          = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
         ) {
             Column(Modifier.padding(vertical = 5.dp)) {
                 bluebirdFlyoutRow(
@@ -3710,7 +3750,7 @@ fun bluebirdDesktopContextMenu(
                 ) {
                     Surface(
                         modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRow("Large icons",  viewMode == DesktopIconSize.LARGE,  tc, accent) { onViewChange(DesktopIconSize.LARGE) }
@@ -3733,7 +3773,7 @@ fun bluebirdDesktopContextMenu(
                 ) {
                     Surface(
                         modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             // "None" — the default, matching real Windows (sort isn't on until you
@@ -3765,7 +3805,7 @@ fun bluebirdDesktopContextMenu(
                 ) {
                     Surface(
                         modifier = Modifier.width(220.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRowIcon(FluentIcon.Folder,      "Folder",                     Color(0xFFFFC107), tc) { onNewFolder();       onDismiss() }
@@ -3811,10 +3851,10 @@ fun bluebirdIconContextMenu(
     onProperties: () -> Unit
 ) {
     val menuW    = 220
-    val bg       = if (isDark) DS.surfaceDark else DS.surfaceLight
+    val bg       = desktopSurfaceFill(isDark)
     val tc       = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val tcDim    = tc.copy(alpha = 0.55f)
-    val divColor = if (isDark) DS.borderDark else DS.borderLight
+    val divColor = desktopSurfaceBorder(isDark)
     val danger   = Color(0xFFE81123)
 
     var openSub by remember { mutableStateOf<String?>(null) }
@@ -3825,7 +3865,7 @@ fun bluebirdIconContextMenu(
             shape           = RoundedCornerShape(8.dp),
             color           = bg,
             shadowElevation = 16.dp,
-            border          = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+            border          = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
         ) {
             Column(Modifier.padding(vertical = 5.dp)) {
                 // Quick action row
@@ -3856,7 +3896,7 @@ fun bluebirdIconContextMenu(
                 ) {
                     Surface(
                         modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, if (isDark) DS.borderDark else DS.borderLight)
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRowIcon(FluentIcon.Open, "Choose app", tc.copy(0.8f), tc) { onOpenWith(); onDismiss() }
@@ -4030,10 +4070,15 @@ fun SmartNewItemDialog(
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf(suggested) }
+    val isDark = LocalIsDarkTheme.current
+    val surface = desktopSurfaceFill(isDark)
+    val textPrimary = desktopTextPrimary(isDark)
+
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor   = surface,
         shape            = RoundedCornerShape(8.dp),
-        title            = { Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp) },
+        title            = { Text(title, color = textPrimary, fontWeight = FontWeight.Medium, fontSize = 15.sp) },
         text             = {
             OutlinedTextField(
                 value         = name,
@@ -4065,9 +4110,9 @@ private fun Windows11ShortcutDialog(
     var label by remember(initialLabel) { mutableStateOf(initialLabel) }
     var isFolder by remember(initialTarget, initialIsFolder) { mutableStateOf(initialIsFolder) }
 
-    val bg = if (isDark) Color(0xFF202020) else Color(0xFFF9F9F9)
-    val tc = if (isDark) Color.White else Color(0xFF1A1A1A)
-    val dim = if (isDark) Color.White.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.62f)
+    val bg = desktopSurfaceFill(isDark)
+    val tc = desktopTextPrimary(isDark)
+    val dim = desktopTextSecondary(isDark)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4151,8 +4196,8 @@ fun AppPickerDialog(
     var searchQuery by remember { mutableStateOf("") }
     var isLoading   by remember { mutableStateOf(true) }
 
-    val bg = if (isDark) Color(0xFF202020) else Color.White
-    val tc = if (isDark) Color.White else Color.Black
+    val bg = desktopSurfaceFill(isDark)
+    val tc = desktopTextPrimary(isDark)
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -4198,13 +4243,13 @@ fun AppPickerDialog(
                             "Browser" to LauncherScreen.BROWSER,
                             "Calculator" to LauncherScreen.CALCULATOR,
                             "Calendar" to LauncherScreen.CALENDAR,
-                            "Photos" to LauncherScreen.PHOTOS,
+
                             "Media Player" to LauncherScreen.MEDIA_PLAYER,
                             "Image Viewer" to LauncherScreen.IMAGE_VIEWER,
                             "Word Impress" to LauncherScreen.WORD_IMPRESS,
                             "Text Editor" to LauncherScreen.PremiumTextEditorScreen,
                             "Terminal" to LauncherScreen.TERMINAL,
-                            "Task Manager" to LauncherScreen.TASK_MANAGER,
+
                             "Recycle Bin" to LauncherScreen.RECYCLE_BIN,
                             "Bluebird Store" to LauncherScreen.BLUEBIRD_STORE,
                             "Program Manager" to LauncherScreen.PROGRAM_MANAGER
@@ -4301,8 +4346,8 @@ private fun DesktopIconRender(
 // ─────────────────────────────────────────────────────────────────
 @Composable
 fun PropertiesDialog(item: DesktopFileInfo, isDark: Boolean, onDismiss: () -> Unit) {
-    val bg  = if (isDark) DS.surfaceDark else DS.surfaceLight
-    val tc  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val bg  = desktopSurfaceFill(isDark)
+    val tc  = desktopTextPrimary(isDark)
     val tcm = tc.copy(alpha = 0.55f)
 
     var fileSize by remember { mutableStateOf(0L) }

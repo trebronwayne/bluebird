@@ -41,8 +41,7 @@ fun builtInAppDisplayName(screen: io.github.norbertweb.bluebird.LauncherScreen):
         io.github.norbertweb.bluebird.LauncherScreen.WORD_IMPRESS -> "Word Impress"
         io.github.norbertweb.bluebird.LauncherScreen.FILE_EXPLORER -> "Files"
         io.github.norbertweb.bluebird.LauncherScreen.BROWSER -> "Browser"
-        io.github.norbertweb.bluebird.LauncherScreen.PHOTOS -> "Photos"
-        io.github.norbertweb.bluebird.LauncherScreen.TASK_MANAGER -> "Tasks"
+
         io.github.norbertweb.bluebird.LauncherScreen.MEDIA_PLAYER -> "Media Player"
         io.github.norbertweb.bluebird.LauncherScreen.RECYCLE_BIN -> "Recycle Bin"
         io.github.norbertweb.bluebird.LauncherScreen.IMAGE_VIEWER -> "Image Viewer"
@@ -66,8 +65,7 @@ fun builtInAppDisplayNameForWindowKey(key: String): String? =
         io.github.norbertweb.bluebird.WindowIconKey.WORD_IMPRESS -> "Word Impress"
         io.github.norbertweb.bluebird.WindowIconKey.FILE_EXPLORER -> "Files"
         io.github.norbertweb.bluebird.WindowIconKey.BROWSER -> "Browser"
-        io.github.norbertweb.bluebird.WindowIconKey.PHOTOS -> "Photos"
-        io.github.norbertweb.bluebird.WindowIconKey.TASK_MANAGER -> "Tasks"
+
         io.github.norbertweb.bluebird.WindowIconKey.MEDIA_PLAYER -> "Media Player"
         io.github.norbertweb.bluebird.WindowIconKey.RECYCLE_BIN -> "Recycle Bin"
         io.github.norbertweb.bluebird.WindowIconKey.IMAGE_VIEWER -> "Image Viewer"

@@ -30,7 +30,6 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import io.github.norbertweb.bluebird.data.NotificationListener
 import io.github.norbertweb.bluebird.ui.screens.DesktopScreen
 import io.github.norbertweb.bluebird.ui.screens.SetupScreen
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
@@ -78,13 +77,6 @@ class MainActivity : ComponentActivity() {
                     1001
                 )
             }
-        }
-
-        NotificationListener.onNotificationPosted = { notification ->
-            viewModel.addNotification(notification)
-        }
-        NotificationListener.onNotificationRemoved = { key ->
-            viewModel.dismissNotification(key)
         }
 
         setContent {
@@ -141,11 +133,7 @@ class MainActivity : ComponentActivity() {
                             if (!uiState.hasCompletedSetup) {
                                 SetupScreen(
                                     viewModel = viewModel,
-                                    onRequestNotificationAccess = {
-                                        startActivity(
-                                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                        )
-                                    }
+
                                 )
                             } else {
                                 DesktopScreen(viewModel = viewModel)

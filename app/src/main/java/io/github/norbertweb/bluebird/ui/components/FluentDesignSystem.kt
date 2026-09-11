@@ -1,11 +1,5 @@
 package io.github.norbertweb.bluebird.ui.components
 
-import android.content.Context
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -18,9 +12,15 @@ import androidx.compose.ui.unit.dp
 // SearchOverlay.kt each defined their own colors/corner radii, which is
 // why they visually drifted apart. Everything now reads from here.
 //
-// Also owns the new user-controllable "surface opacity" setting
-// (Settings > Personalization > Transparency), persisted the same way
-// size mode already was.
+// Glass/material tinting used to live here too, as a user-controllable
+// "surface opacity" slider (Settings > Personalization > Transparency).
+// That's gone — no UI ever actually called its setter, so in practice
+// every panel was just a fixed 0.85 alpha anyway, and a flat alpha over
+// raw blurred wallpaper is exactly what made the old blur look "too
+// bright"/washed out with no relation to the actual wallpaper's tone.
+// Materials are now real Fluent Mica/Acrylic (see HazeBlurSetup.kt),
+// tinted dynamically from Bluebird's own active wallpaper (see
+// WallpaperAccent.kt) instead of a manual slider.
 // ─────────────────────────────────────────────────────────
 object DS {
     // ── Premium palette — deep slate + refined indigo ──
@@ -30,24 +30,18 @@ object DS {
     // surfaces instead of one flat plane with a faint outline — this is
     // what gives light and dark mode each their own distinct, deliberate
     // tone instead of one palette with alpha tweaks.
-    val surfaceDark  = Color(0xFF1B1E26)
-    val surfaceLight = Color(0xFFF3F5F8)
-    val borderDark   = Color(0xFF2E323C)
-    val borderLight  = Color(0xFFDCE1E8)
-    val accentStart  = Color(0xFF4C63D9)
-    val accentEnd    = Color(0xFF33409F)
+    val surfaceDark  = Color(0xFF202020)
+    val surfaceLight = Color(0xFFF7F7F7)
+    val borderDark   = Color(0xFF3A3A3A)
+    val borderLight  = Color(0xFFD8D8D8)
+    val accentStart  = Color(0xFF0078D4)
+    val accentEnd    = Color(0xFF005FB8)
     val hoverDark    = Color(0x1AFFFFFF)
     val hoverLight   = Color(0x0A1B1E26)
     val pressedDark  = Color(0x26FFFFFF)
     val pressedLight = Color(0x141B1E26)
     val badgeRed     = Color(0xFFD6564C)
     val successGreen = Color(0xFF3EA66D)
-
-    // Base (fully-opaque) glass tint — the alpha applied on top of this is
-    // driven by `opacity`, so every glass surface in the app tracks the
-    // same slider instead of each screen hardcoding its own alpha.
-    private val glassDarkBase  = Color(0xFF14161C)
-    private val glassLightBase = Color(0xFFF8F9FB)
 
     val menuWidthCompact   = 560.dp
     val menuWidthExpanded  = 780.dp
@@ -58,9 +52,9 @@ object DS {
     // Start Menu used 8dp for the same kind of flyout surface. Unified here.
     val cornerRadius  = 8.dp   // Windows 11 flyout/menu corner radius
     val sectionCorner = 8.dp
-    val tileCorner    = 4.dp   // Fluent 2 control-corner-radius, small icon tiles
+    val tileCorner    = 6.dp   // Fluent 2 control-corner-radius, small icon tiles
     val chipCorner    = 6.dp
-    val overlayCorner = 12.dp  // Search Overlay's card radius (was 16dp, standardized down)
+    val overlayCorner = 20.dp  // Shared shell flyout radius
 
     val accentBrushValue: Brush = Brush.linearGradient(
         colors = listOf(accentStart, accentEnd),
@@ -68,58 +62,60 @@ object DS {
     )
     fun accentBrush() = accentBrushValue
 
-    // ── Opacity (Personalization setting) ──────────────────────────
-    // Range 0.55–1.0. Below 0.55 text contrast against wallpaper suffers,
-    // so the slider UI should clamp to this range.
-    const val OPACITY_MIN = 0.55f
-    const val OPACITY_MAX = 1.0f
-    const val OPACITY_DEFAULT = 0.85f
+    // ── Tonal elevation — "same material, different depth" ────────────
+    // This is the piece Start Menu was missing. Real Fluent 2 never gives a
+    // zone (search box, card, footer) its own flat color — every one of
+    // those "fill" tokens (ControlFillColorDefault, CardBackgroundFillColor,
+    // …) is a translucent white-or-black scrim layered ON TOP OF whatever
+    // Mica/Acrylic is already there. Dark theme lifts a surface by adding a
+    // hint of WHITE (nothing to reflect, so light = "closer to camera");
+    // light theme recedes a surface by adding a hint of BLACK (nothing to
+    // absorb, so dark = "further from camera"). Same base material either
+    // way — only the direction and strength of the scrim change.
+    //
+    // Use these as a `.background(...)` painted on top of a parent that
+    // already has `.hazeMaterial(...)` applied — never as a replacement for
+    // it, and never as an opaque color. A zone with no scrim at all (alpha
+    // 0) is exactly as "elevated" as the raw panel — that's `flat` below,
+    // used for the body/content area which should feel like it's sitting
+    // directly on the Acrylic, not floating above or sunk below it.
+    fun controlFill(isDark: Boolean, strength: Float = 1f): Color =
+        if (isDark) Color.White.copy(alpha = 0.16f * strength)
+        else Color.Black.copy(alpha = 0.06f * strength)
 
-    /** Glass surface color with the current user opacity applied. */
-    fun glass(isDark: Boolean, opacity: Float): Color =
-        (if (isDark) glassDarkBase else glassLightBase).copy(alpha = opacity.coerceIn(OPACITY_MIN, OPACITY_MAX))
+    /** Focused/active state of [controlFill] — same direction, ~1.4x stronger. */
+    fun controlFillFocused(isDark: Boolean): Color = controlFill(isDark, strength = 1.4f)
 
-    /** Secondary/dock surface — slightly lower alpha than the main glass panel. */
-    fun surfaceGlass(isDark: Boolean, opacity: Float): Color =
-        (if (isDark) surfaceDark else surfaceLight).copy(alpha = (opacity * 0.6f).coerceIn(OPACITY_MIN * 0.5f, OPACITY_MAX))
+    /** For the body/content zone — deliberately zero, see note above. */
+    val surfaceFlat: Color = Color.Transparent
 
-    // Fixed-opacity convenience accessors for minor chrome (dropdown
-    // backgrounds, thin borders) that isn't wired to the live opacity
-    // slider — those call sites don't have a Context/opacity value handy
-    // and the transparency there is cosmetic, not the user-facing control.
-    // The main Start Menu panel and Mobile Home use DS.glass(isDark, opacity)
-    // directly with the live value instead.
-    val glassDark: Color get() = glass(isDark = true, opacity = OPACITY_DEFAULT)
-    val glassLight: Color get() = glass(isDark = false, opacity = OPACITY_DEFAULT)
-}
+    /** Footer/bottom-bar zone. Unlike controlFill, this is BLACK in both
+     *  themes, not white-in-dark — a footer is structural chrome receding
+     *  into shadow (like Windows 11's taskbar, which is denser Mica, not
+     *  the lighter Acrylic flyouts float on), not an interactive control
+     *  lifting toward the user. Strong enough in dark theme that the
+     *  wallpaper blur underneath mostly disappears — that's intentional,
+     *  it's what reads as "a different, denser material" rather than "the
+     *  same panel with a tint." */
+    fun footerFill(isDark: Boolean): Color =
+        if (isDark) Color.Black.copy(alpha = 0.55f)
+        else Color.Black.copy(alpha = 0.15f)
 
-// ─────────────────────────────────────────────────────────
-// Persistence for the opacity setting (mirrors getSavedSizeMode/saveSizeMode
-// pattern already used for Start Menu size).
-// ─────────────────────────────────────────────────────────
-private const val PERSONALIZATION_PREFS = "bluebird_personalization_prefs"
-
-fun getSavedOpacity(context: Context): Float {
-    val prefs = context.getSharedPreferences(PERSONALIZATION_PREFS, Context.MODE_PRIVATE)
-    return prefs.getFloat("surface_opacity", DS.OPACITY_DEFAULT)
-        .coerceIn(DS.OPACITY_MIN, DS.OPACITY_MAX)
-}
-
-fun saveOpacity(context: Context, opacity: Float) {
-    val prefs = context.getSharedPreferences(PERSONALIZATION_PREFS, Context.MODE_PRIVATE)
-    prefs.edit().putFloat("surface_opacity", opacity.coerceIn(DS.OPACITY_MIN, DS.OPACITY_MAX)).apply()
-}
-
-/**
- * Remembers the current opacity setting, reading the persisted value once.
- * Call `setOpacity` from the Personalization slider to update + persist.
- */
-@Composable
-fun rememberOpacity(context: Context): Pair<Float, (Float) -> Unit> {
-    var opacity by remember { mutableFloatStateOf(getSavedOpacity(context)) }
-    val setOpacity: (Float) -> Unit = { newValue ->
-        opacity = newValue.coerceIn(DS.OPACITY_MIN, DS.OPACITY_MAX)
-        saveOpacity(context, opacity)
+    // ── Spacing scale ────────────────────────────────────────────────
+    // Fluent 2 uses a 4px base grid. Before this, padding across the
+    // shell was ad hoc — e.g. Taskbar alone mixed 4/6/8/10/12/14dp for
+    // paddings serving the same visual role (icon inset, row padding,
+    // panel edge) depending on which line happened to write it. This is
+    // the same 4/8/12/16/24 rhythm Windows 11's own Fluent components use;
+    // new code should reach for these instead of a bare `.dp` literal.
+    object Spacing {
+        val xxs = 2.dp   // hairline gaps (icon-to-badge, chip internals)
+        val xs  = 4.dp   // tight icon padding, dense list rows
+        val sm  = 8.dp   // default gap between related controls
+        val md  = 12.dp  // row padding, standard control inset
+        val lg  = 16.dp  // section padding, panel edge inset
+        val xl  = 24.dp  // panel outer margin, major section gaps
+        val xxl = 32.dp  // page-level margins (Settings, full-screen panels)
     }
-    return opacity to setOpacity
 }
+

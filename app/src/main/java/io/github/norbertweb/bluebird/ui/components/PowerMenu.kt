@@ -31,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
-import io.github.norbertweb.bluebird.system.BluebirdAccessibilityService
 
 // ─────────────────────────────────────────────────────────
 // POWER MENU — scoped to Bluebird itself, not the device.
@@ -47,7 +46,11 @@ import io.github.norbertweb.bluebird.system.BluebirdAccessibilityService
 //   • Shut Down — closes the Bluebird app
 // ─────────────────────────────────────────────────────────
 @Composable
-fun PowerMenuButton(isDark: Boolean, textPrimary: androidx.compose.ui.graphics.Color) {
+fun PowerMenuButton(
+    isDark: Boolean,
+    textPrimary: androidx.compose.ui.graphics.Color,
+    onBluebirdLock: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var showPowerMenu by remember { mutableStateOf(false) }
 
@@ -71,23 +74,21 @@ fun PowerMenuButton(isDark: Boolean, textPrimary: androidx.compose.ui.graphics.C
             expanded = showPowerMenu,
             onDismissRequest = { showPowerMenu = false },
             modifier = Modifier
-                .background(if (isDark) DS.surfaceDark else DS.glassLight, RoundedCornerShape(DS.sectionCorner))
-                .border(1.dp, if (isDark) DS.borderDark else DS.borderLight, RoundedCornerShape(DS.sectionCorner))
+                .background(DS.controlFill(isDark, strength = 1.15f), RoundedCornerShape(10.dp))
+                .border(0.5.dp, if (isDark) DS.borderDark.copy(alpha = 0.72f) else DS.borderLight.copy(alpha = 0.72f), RoundedCornerShape(10.dp))
         ) {
             PowerMenuItem(label = "Lock screen", icon = FluentIcon.Accessibility, isDark = isDark) {
                 showPowerMenu = false
-                if (!BluebirdAccessibilityService.lockScreen()) {
-                    BluebirdAccessibilityService.openAccessibilitySettings(context)
-                }
+                // Lock only the Bluebird desktop overlay; never touch Android system state.
+                onBluebirdLock?.invoke()
             }
             PowerMenuItem(label = "Turn off screen", icon = FluentIcon.Power, isDark = isDark) {
                 showPowerMenu = false
                 // Android exposes device screen locking as the public
                 // accessibility global action. Keep this separate in the
                 // Bluebird UI so the requested power-menu semantics remain clear.
-                if (!BluebirdAccessibilityService.lockScreen()) {
-                    BluebirdAccessibilityService.openAccessibilitySettings(context)
-                }
+                // Lock only the Bluebird desktop overlay; never touch Android system state.
+                onBluebirdLock?.invoke()
             }
             PowerMenuItem(label = "Restart", icon = FluentIcon.ArrowSync, isDark = isDark) {
                 showPowerMenu = false
@@ -131,7 +132,7 @@ private fun PowerMenuItem(label: String, icon: ImageVector, isDark: Boolean, onC
     Row(
         modifier = Modifier
             .width(150.dp)
-            .clip(RoundedCornerShape(DS.chipCorner))
+            .clip(RoundedCornerShape(8.dp))
             .background(if (pressed) (if (isDark) DS.pressedDark else DS.pressedLight) else androidx.compose.ui.graphics.Color.Transparent)
             .pointerInput(Unit) {
                 detectTapGestures(

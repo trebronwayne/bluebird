@@ -2,48 +2,74 @@ package io.github.norbertweb.bluebird.ui.components
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings as AndroidSettings
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-// Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
-// the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
-// Dependency (module build.gradle.kts):
-//     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.github.norbertweb.bluebird.LauncherScreen
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.RealNotification
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
-import io.github.norbertweb.bluebird.system.BluebirdAccessibilityService
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
-// ─── Remote Notification Model ────────────────────────────────────────────────
-
+// Remote Bluebird notification model. This is intentionally kept as the one
+// non-system notification source in Action Center; it is populated by the
+// existing LauncherViewModel refresh path.
 data class BluebirdRemoteNotification(
     val id: String,
-    val type: String,           // "announcement" | "update" | "warning"
-    val priority: String,       // "normal" | "high"
+    val type: String,
+    val priority: String,
     val title: String,
     val body: String,
     val timestamp: String,
@@ -53,638 +79,233 @@ data class BluebirdRemoteNotification(
     val badgeColor: String = "#4C63D9"
 )
 
-// ─── Text Scale Steps ─────────────────────────────────────────────────────────
-
-private val TEXT_SCALE_STEPS = listOf(
-    0.8f  to "Small",
-    1.0f  to "Default",
-    1.15f to "Large",
-    1.3f  to "XL"
-)
-
-private fun Float.toTextScaleLabel(): String =
-    TEXT_SCALE_STEPS.minByOrNull { kotlin.math.abs(it.first - this) }?.second ?: "Default"
-
-// Reused across every notification card instead of allocating a new
-// SimpleDateFormat on every recomposition/drag frame.
-private val notifTimeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-
-// ─── Main ActionCenter ────────────────────────────────────────────────────────
+private val notifTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
 
 @Composable
 fun ActionCenter(
     uiState: LauncherUiState,
     viewModel: LauncherViewModel,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val textScale = LocalTextScale.current
+    val isDark = LocalIsDarkTheme.current
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val subColor = textColor.copy(alpha = 0.56f)
+    val divColor = if (isDark) DS.borderDark else DS.borderLight
 
-    // Remote (Bluebird team) notifications live in the ViewModel, which
-    // deliberately does NOT poll on a background timer — see the "Remote
-    // (Bluebird team) announcements" writeup above refreshRemoteNotificationsIfDue()
-    // in LauncherViewModel. Opening this panel is one of the two triggers
-    // that ask for a fresh copy of notify.json; the call is throttled
-    // internally (currently every 2h) so opening/closing Action Center
-    // repeatedly never causes more than one real network request per
-    // interval.
+    // Refresh whenever the panel enters composition. The ViewModel owns the
+    // network/throttle policy; this UI does not invent its own polling loop.
     LaunchedEffect(Unit) {
-        viewModel.refreshRemoteNotificationsIfDue()
+        runCatching { viewModel.refreshRemoteNotificationsIfDue() }
     }
 
-    val remoteNotifications = uiState.remoteNotifications
-    val dismissedRemoteIds  = uiState.dismissedRemoteNotificationIds
+    val remoteNotifications = remember(uiState.remoteNotifications, uiState.dismissedRemoteNotificationIds) {
+        uiState.remoteNotifications.filter { it.id !in uiState.dismissedRemoteNotificationIds }.take(3)
+    }
 
-    val isDark     = LocalIsDarkTheme.current
-    val textColor  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val subColor   = textColor.copy(alpha = 0.55f)
-    val divColor   = if (isDark) DS.borderDark else DS.borderLight
-
-    // Local, self-contained state for toggles that aren't (yet) modeled in
-    // LauncherUiState/LauncherViewModel. Wire each of these to real
-    // ViewModel state + Android system APIs when available — see the
-    // "TODO(wire)" comments below on each tile. Keeping them local means
-    // this panel works standalone today and is a drop-in once the
-    // corresponding state/actions exist upstream.
-    var touchKeyboardOn by rememberSaveable { mutableStateOf(false) }
-    var nightLightOn    by rememberSaveable { mutableStateOf(false) }
-    var hotspotOn       by rememberSaveable { mutableStateOf(false) }
-    var rotationLocked  by rememberSaveable { mutableStateOf(false) }
-    var nfcOn           by rememberSaveable { mutableStateOf(false) }
-    var energySaverOn   by rememberSaveable { mutableStateOf(false) }
-    val accessibilityOn = BluebirdAccessibilityService.isEnabled(context)
-    var expanded         by rememberSaveable { mutableStateOf(false) }
-
+    // One compact Windows-style flyout. It shares Start's exact neutral
+    // surface/border language through AcrylicSurface + DS/bluebirdColors.
     AcrylicSurface(
         modifier = modifier
-            .width(380.dp)
-            .wrapContentHeight(),
-        isDark       = isDark,
-        alpha        = 0.97f,
-        cornerRadius = 16.dp
+            .fillMaxWidth(0.86f)
+            .widthIn(min = 300.dp, max = 420.dp)
+            .heightIn(min = 360.dp, max = 620.dp),
+        isDark = isDark,
+        accent = accent,
+        cornerRadius = 12.dp,
+        hazeState = hazeState
     ) {
         Column(
             modifier = Modifier
-                // Subtle top mica sheen — mirrors the soft specular highlight
-                // Windows 11 flyouts get along their top edge over acrylic.
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            (if (isDark) Color.White else Color.White).copy(alpha = if (isDark) 0.045f else 0.35f),
-                            Color.Transparent
-                        ),
-                        endY = 140f
-                    )
-                )
-                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .fillMaxSize()
+                .background(if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8), RoundedCornerShape(12.dp))
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-
-            // ── Header ────────────────────────────────────────────────────────
+            // ── Compact header ───────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text       = "Quick Settings",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize   = (15 * textScale).sp,
-                    color      = textColor
+                    "Quick Settings",
+                    color = textColor,
+                    fontSize = (14f * textScale).sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // DND toggle (header pill)
-                    DndPill(
-                        enabled  = uiState.dndEnabled,
-                        isDark   = isDark,
-                        onClick  = { viewModel.setDndEnabled(!uiState.dndEnabled) },
-                        textScale = textScale
-                    )
-                    // Settings shortcut
-                    SmallIconButton(isDark = isDark, onClick = {
-                        viewModel.openWindow(io.github.norbertweb.bluebird.LauncherScreen.SETTINGS)
-                    }) {
-                        Icon(imageVector = FluentIcon.Settings, contentDescription = "Settings",
-                            tint = textColor, modifier = Modifier.size(16.dp))
+                SmallActionIcon(
+                    icon = FluentIcon.Settings,
+                    contentDescription = "Settings",
+                    isDark = isDark,
+                    onClick = { viewModel.openWindow(LauncherScreen.SETTINGS) }
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Static reference tiles: no fake On/Off/Connected labels. Taps
+            // only navigate to a real Android/Bluebird destination where one
+            // exists; the tile itself never pretends to own system state.
+            val quickRefs = listOf(
+                "Wi-Fi" to { viewModel.openWifiSettings(context) },
+                "Bluetooth" to { viewModel.openBluetoothSettings(context) },
+                "Airplane" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
+                "Focus" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
+                "Data" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
+                "Settings" to { viewModel.openWindow(LauncherScreen.SETTINGS) }
+            )
+            val quickIcons = listOf(
+                FluentIcon.Wifi,
+                FluentIcon.Bluetooth,
+                FluentIcon.Airplane,
+                FluentIcon.Prohibited,
+                FluentIcon.DataUsage,
+                FluentIcon.Settings
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                quickRefs.chunked(3).forEachIndexed { rowIndex, row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        row.forEachIndexed { colIndex, (label, action) ->
+                            ReferenceQuickTile(
+                                label = label,
+                                icon = quickIcons[rowIndex * 3 + colIndex],
+                                isDark = isDark,
+                                textScale = textScale,
+                                modifier = Modifier.weight(1f),
+                                onClick = action
+                            )
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // ── Quick Toggle Grid (Win11-style: primary 2×3 grid + an
-            //    expandable second page for the long tail of toggles,
-            //    exactly like clicking the chevron in the real Quick
-            //    Settings flyout) ────────────────────────────────────────
-            val primaryToggles = listOf(
-                // NOTE: Wi-Fi/Bluetooth still route straight to the system
-                // settings page on tap (as in the original), since Android
-                // 10+ apps generally can't flip these radios directly without
-                // extra permissions. onLongClick is wired the same way so
-                // both gestures are safe no-ops-into-settings until/unless
-                // viewModel exposes real in-place toggle methods.
-                ToggleData(
-                    label    = if (uiState.isWifiOn) "Wi-Fi" else "Wi-Fi Off",
-                    subLabel = if (uiState.isWifiOn) "Connected" else "Disconnected",
-                    icon     = if (uiState.isWifiOn) FluentIcon.Wifi else FluentIcon.WifiOff,
-                    active   = uiState.isWifiOn,
-                    onClick  = { viewModel.openWifiSettings(context) },
-                    onLongClick = { viewModel.openWifiSettings(context) }
-                ),
-                ToggleData(
-                    label    = "Bluetooth",
-                    subLabel = if (uiState.isBluetoothOn) "On" else "Off",
-                    icon     = FluentIcon.Bluetooth,
-                    active   = uiState.isBluetoothOn,
-                    onClick  = { viewModel.openBluetoothSettings(context) },
-                    onLongClick = { viewModel.openBluetoothSettings(context) }
-                ),
-                ToggleData(
-                    label    = "Airplane",
-                    subLabel = if (uiState.isAirplaneMode) "On" else "Off",
-                    icon     = FluentIcon.Airplane,
-                    active   = uiState.isAirplaneMode,
-                    onClick  = { viewModel.toggleAirplaneMode() }
-                ),
-                ToggleData(
-                    label    = if (isDark) "Dark Mode" else "Light Mode",
-                    subLabel = "System setting",
-                    icon     = if (isDark) FluentIcon.Moon else FluentIcon.WeatherSunny,
-                    active   = true,
-                    // Bluebird follows the system theme now (see Theme.kt /
-                    // LocalIsDarkTheme) — there's no in-app toggle to flip
-                    // anymore, so this tile does what the Wi-Fi/Bluetooth
-                    // tiles already do: hand off to the real system setting.
-                    onClick  = {
-                        try {
-                            context.startActivity(
-                                Intent(AndroidSettings.ACTION_DISPLAY_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        } catch (e: Exception) { e.printStackTrace() }
-                    }
-                ),
-                ToggleData(
-                    label    = "Focus Assist",
-                    subLabel = if (uiState.focusAssist) "On" else "Off",
-                    icon     = FluentIcon.Prohibited,
-                    active   = uiState.focusAssist,
-                    onClick  = { viewModel.setFocusAssist(!uiState.focusAssist) }
-                ),
-                ToggleData(
-                    label    = "Data Saver",
-                    subLabel = if (uiState.dataSaver) "On" else "Off",
-                    icon     = FluentIcon.DataUsage,
-                    active   = uiState.dataSaver,
-                    onClick  = { viewModel.setDataSaver(!uiState.dataSaver) }
-                )
-            )
-
-            // Second page — Bluebird's extra system actions and controls.
-            // Actions with a public Android global API use the shared
-            // BluebirdAccessibilityService instead of fake local state.
-            val secondaryToggles = listOf(
-                ToggleData(
-                    label    = "Night Light",
-                    subLabel = if (nightLightOn) "On" else "Off",
-                    icon     = FluentIcon.NightLight,
-                    active   = nightLightOn,
-                    onClick  = { nightLightOn = !nightLightOn }
-                ),
-                ToggleData(
-                    label    = "Hotspot",
-                    subLabel = if (hotspotOn) "On" else "Off",
-                    icon     = FluentIcon.Hotspot,
-                    active   = hotspotOn,
-                    onClick  = {
-                        hotspotOn = !hotspotOn
-                        try {
-                            context.startActivity(
-                                Intent(AndroidSettings.ACTION_WIRELESS_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        } catch (e: Exception) { e.printStackTrace() }
-                    }
-                ),
-                ToggleData(
-                    label    = "Cast",
-                    subLabel = "Connect",
-                    icon     = FluentIcon.Cast,
-                    active   = false,
-                    onClick  = {
-                        try {
-                            context.startActivity(
-                                Intent(AndroidSettings.ACTION_CAST_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        } catch (e: Exception) { e.printStackTrace() }
-                    }
-                ),
-                ToggleData(
-                    label    = "Rotation",
-                    subLabel = if (rotationLocked) "Locked" else "Auto",
-                    icon     = if (rotationLocked) FluentIcon.RotationLock else FluentIcon.AutoRotate,
-                    active   = !rotationLocked,
-                    onClick  = { rotationLocked = !rotationLocked }
-                ),
-                ToggleData(
-                    label    = "Touch KB",
-                    subLabel = if (touchKeyboardOn) "Hidden" else "Auto",
-                    icon     = FluentIcon.Keyboard,
-                    active   = !touchKeyboardOn,
-                    onClick  = {
-                        if (!BluebirdAccessibilityService.isEnabled(context)) {
-                            BluebirdAccessibilityService.openAccessibilitySettings(context)
-                        } else if (BluebirdAccessibilityService.toggleTouchKeyboard()) {
-                            touchKeyboardOn = !touchKeyboardOn
-                        }
-                    }
-                ),
-                ToggleData(
-                    label    = "NFC",
-                    subLabel = if (nfcOn) "On" else "Off",
-                    icon     = FluentIcon.Nfc,
-                    active   = nfcOn,
-                    onClick  = {
-                        nfcOn = !nfcOn
-                        try {
-                            context.startActivity(
-                                Intent(AndroidSettings.ACTION_NFC_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        } catch (e: Exception) { e.printStackTrace() }
-                    }
-                ),
-                ToggleData(
-                    label    = "Energy Saver",
-                    subLabel = if (energySaverOn) "On" else "Off",
-                    icon     = FluentIcon.EnergySaver,
-                    active   = energySaverOn,
-                    onClick  = { energySaverOn = !energySaverOn }
-                ),
-                ToggleData(
-                    label    = "Accessibility",
-                    subLabel = if (accessibilityOn) "On" else "Off",
-                    icon     = FluentIcon.Accessibility,
-                    active   = accessibilityOn,
-                    onClick  = { BluebirdAccessibilityService.openAccessibilitySettings(context) }
-                ),
-                ToggleData(
-                    label    = "Screenshot",
-                    subLabel = if (accessibilityOn) "Capture" else "Enable service",
-                    icon     = FluentIcon.Flash,
-                    active   = accessibilityOn,
-                    onClick  = {
-                        if (!BluebirdAccessibilityService.screenshot()) {
-                            BluebirdAccessibilityService.openAccessibilitySettings(context)
-                        }
-                    }
-                ),
-                ToggleData(
-                    label    = "Notifications",
-                    subLabel = if (accessibilityOn) "Open" else "Enable service",
-                    icon     = FluentIcon.Alert,
-                    active   = accessibilityOn,
-                    onClick  = {
-                        if (!BluebirdAccessibilityService.openNotifications()) {
-                            BluebirdAccessibilityService.openAccessibilitySettings(context)
-                        }
-                    }
-                ),
-                ToggleData(
-                    label    = "Quick Settings",
-                    subLabel = if (accessibilityOn) "Open" else "Enable service",
-                    icon     = FluentIcon.Settings,
-                    active   = accessibilityOn,
-                    onClick  = {
-                        if (!BluebirdAccessibilityService.openQuickSettings()) {
-                            BluebirdAccessibilityService.openAccessibilitySettings(context)
-                        }
-                    }
-                )
-            )
-
-            QuickToggleGrid(
-                toggles   = primaryToggles,
-                isDark    = isDark,
-                textScale = textScale
-            )
-
-            // ── Second page — shown/hidden instantly, no expand/fade animation ──
-            if (expanded) {
-                Column {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    QuickToggleGrid(
-                        toggles   = secondaryToggles,
-                        isDark    = isDark,
-                        textScale = textScale
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Expand/collapse chevron — matches the real Quick Settings
-            // flyout's "show more" affordance.
-            ExpandChevronRow(
-                expanded  = expanded,
-                isDark    = isDark,
-                textScale = textScale,
-                onClick   = { expanded = !expanded }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(Modifier.height(9.dp))
 
-            // ── Volume ────────────────────────────────────────────────────────
-            SliderSection(
-                label     = "Volume",
-                value     = uiState.volume,
-                percent   = "${(uiState.volume * 100).toInt()}%",
-                isDark    = isDark,
-                textColor = textColor,
-                subColor  = subColor,
-                textScale = textScale,
-                leadIcon  = {
-                    Icon(
-                        imageVector = when {
-                                uiState.volume < 0.01f -> FluentIcon.SpeakerMute
-                                uiState.volume < 0.5f  -> FluentIcon.Speaker1
-                                else                   -> FluentIcon.Speaker2
-                            },
-                        contentDescription = "Volume",
-                        tint     = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight,
-                        modifier = Modifier.size(20.dp)
-                    )
+            // ── Real controls, compactly represented ─────────────────────────
+            CompactSliderSection(
+                icon = when {
+                    uiState.volume < 0.01f -> FluentIcon.SpeakerMute
+                    uiState.volume < 0.5f -> FluentIcon.Speaker1
+                    else -> FluentIcon.Speaker2
                 },
+                label = "Volume",
+                value = uiState.volume,
+                isDark = isDark,
+                textColor = textColor,
+                textScale = textScale,
                 onValueChange = { viewModel.setVolume(it, context) }
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // ── Brightness ────────────────────────────────────────────────────
-            SliderSection(
-                label     = "Brightness",
-                value     = uiState.brightness,
-                percent   = "${(uiState.brightness * 100).toInt()}%",
-                isDark    = isDark,
+            Spacer(Modifier.height(5.dp))
+            CompactSliderSection(
+                icon = FluentIcon.BrightnessHigh,
+                label = "Brightness",
+                value = uiState.brightness,
+                isDark = isDark,
                 textColor = textColor,
-                subColor  = subColor,
                 textScale = textScale,
-                leadIcon  = {
-                    Icon(
-                        imageVector            = FluentIcon.BrightnessHigh,
-                        contentDescription = "Brightness",
-                        tint     = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
                 onValueChange = { viewModel.setBrightness(it, context) }
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(Modifier.height(9.dp))
             HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(Modifier.height(9.dp))
 
-            // ── Text Size ─────────────────────────────────────────────────────
-            TextScaleSection(
-                currentScale = uiState.textScale,
-                isDark       = isDark,
-                textColor    = textColor,
-                subColor     = subColor,
-                textScale    = textScale,
-                onScaleChange = { viewModel.setTextScale(it) }
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-            HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // ── Battery ───────────────────────────────────────────────────────
-            BatterySection(
-                level     = uiState.batteryLevel,
-                charging  = uiState.isCharging,
-                isDark    = isDark,
+            // ── Windows-style compact calendar ────────────────────────────────
+            CompactCalendar(
+                isDark = isDark,
                 textColor = textColor,
-                subColor  = subColor,
+                accent = bluebirdColors.AccentBlue,
                 textScale = textScale
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
-            HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // ── Bluebird Team Notifications ───────────────────────────────────
             if (remoteNotifications.isNotEmpty()) {
-                Text(
-                    text       = "From Bluebird",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize   = (13 * textScale).sp,
-                    color      = bluebirdColors.AccentBlue
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                remoteNotifications
-                    .filter { it.id !in dismissedRemoteIds }
-                    .forEach { notif ->
-                        BluebirdRemoteNotifCard(
-                            notif     = notif,
-                            isDark    = isDark,
-                            textScale = textScale,
-                            onDismiss = { viewModel.dismissRemoteNotification(notif.id) },
-                            onAction  = { url ->
-                                try {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    )
-                                } catch (e: Exception) { e.printStackTrace() }
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(9.dp))
                 HorizontalDivider(color = divColor, thickness = 0.5.dp)
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(Modifier.height(9.dp))
+                Text(
+                    "From Bluebird",
+                    color = bluebirdColors.AccentBlue,
+                    fontSize = (12f * textScale).sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(6.dp))
+                remoteNotifications.forEach { notif ->
+                    BluebirdRemoteNotifCard(
+                        notif = notif,
+                        isDark = isDark,
+                        textScale = textScale,
+                        onDismiss = { viewModel.dismissRemoteNotification(notif.id) },
+                        onAction = { url ->
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        }
+                    )
+                    Spacer(Modifier.height(5.dp))
+                }
             }
 
-            // ── System Notifications ──────────────────────────────────────────
+            Spacer(Modifier.height(9.dp))
+            HorizontalDivider(color = divColor, thickness = 0.5.dp)
+            Spacer(Modifier.height(9.dp))
+
+            // ── Real device notifications ────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text       = "Notifications",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize   = (15 * textScale).sp,
-                    color      = textColor
+                    "Notifications",
+                    color = textColor,
+                    fontSize = (13f * textScale).sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 if (uiState.notifications.isNotEmpty()) {
                     TextButton(
                         onClick = viewModel::dismissAllNotifications,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)
                     ) {
-                        Text(
-                            "Clear all",
-                            color    = bluebirdColors.AccentBlue,
-                            fontSize = (12 * textScale).sp
-                        )
+                        Text("Clear all", color = bluebirdColors.AccentBlue, fontSize = (10f * textScale).sp)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(Modifier.height(5.dp))
             if (uiState.notifications.isEmpty()) {
                 EmptyNotificationsPlaceholder(isDark = isDark, textColor = subColor, textScale = textScale)
             } else {
-                // Group once per notification-list identity instead of rebuilding the map
-                // on unrelated recompositions (theme, text scale, quick toggles, etc.).
-                val grouped = remember(uiState.notifications) {
-                    uiState.notifications.groupBy { it.appName }
-                }
+                val grouped = remember(uiState.notifications) { uiState.notifications.groupBy { it.appName } }
                 grouped.forEach { (appName, notifs) ->
                     NotificationGroup(
-                        appName   = appName,
-                        notifs    = notifs,
-                        isDark    = isDark,
+                        appName = appName,
+                        notifs = notifs,
+                        isDark = isDark,
                         textColor = textColor,
                         textScale = textScale,
                         onDismiss = { id -> viewModel.dismissNotification(id) },
-                        onOpen    = { packageName ->
-                            try {
-                                val pm     = context.packageManager
-                                val intent = pm.getLaunchIntentForPackage(packageName)
+                        onOpen = { packageName ->
+                            runCatching {
+                                context.packageManager.getLaunchIntentForPackage(packageName)
                                     ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                if (intent != null) context.startActivity(intent)
-                            } catch (e: Exception) { e.printStackTrace() }
+                                    ?.let(context::startActivity)
+                            }
                         }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
-// ─── DND Pill ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DndPill(
-    enabled: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit,
-    textScale: Float
-) {
-    val bg = if (enabled) bluebirdColors.AccentBlue else
-        (if (isDark) DS.surfaceDark else DS.surfaceLight)
-    val fg = if (enabled) Color.White else
-        if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val haptics = LocalHapticFeedback.current
-
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(bg)
-            .clickable(
-                interactionSource = interactionSource,
-                // No ripple indication here — avoids the deprecated
-                // rememberRipple API (this project's Material3 version
-                // doesn't ship the newer ripple() replacement either).
-                indication        = null,
-                onClick           = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onClick()
-                }
-            )
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Icon(
-            imageVector = FluentIcon.Prohibited, contentDescription = "DND",
-            tint = fg, modifier = Modifier.size(13.dp)
-        )
-        Text(
-            text     = if (enabled) "DND On" else "DND",
-            color    = fg,
-            fontSize = (11 * textScale).sp,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-// ─── Small Icon Button ────────────────────────────────────────────────────────
-
-@Composable
-private fun SmallIconButton(
-    isDark: Boolean,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isDark) DS.surfaceDark else DS.surfaceLight)
-            .clickable(
-                interactionSource = interactionSource,
-                indication        = null,
-                onClick           = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) { content() }
-}
-
-// ─── Toggle Data ──────────────────────────────────────────────────────────────
-
-private data class ToggleData(
-    val label: String,
-    val subLabel: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val active: Boolean,
-    val onClick: () -> Unit,
-    // Windows 11 pattern: tapping the tile flips the toggle; long-pressing
-    // (or clicking the label text on desktop) jumps to the relevant system
-    // settings page. Optional — tiles that have no deeper settings page
-    // just omit it.
-    val onLongClick: (() -> Unit)? = null
-)
-
-// ─── Quick Toggle Grid (2×3) ──────────────────────────────────────────────────
-
-@Composable
-private fun QuickToggleGrid(
-    toggles: List<ToggleData>,
-    isDark: Boolean,
-    textScale: Float
-) {
-    // 3 columns, N rows — matches Windows 11's Quick Settings tile grid.
-    val rows = remember(toggles) { toggles.chunked(3) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                row.forEach { toggle ->
-                    QuickToggleTile(
-                        data      = toggle,
-                        isDark    = isDark,
-                        textScale = textScale,
-                        modifier  = Modifier.weight(1f)
-                    )
-                }
-                // fill remainder if row is short
-                repeat(3 - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(Modifier.height(5.dp))
                 }
             }
         }
@@ -692,109 +313,152 @@ private fun QuickToggleGrid(
 }
 
 @Composable
-private fun QuickToggleTile(
-    data: ToggleData,
+private fun SmallActionIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
     isDark: Boolean,
-    textScale: Float,
-    modifier: Modifier = Modifier
-) {
-    val activeBg   = bluebirdColors.AccentBlue.copy(alpha = 0.18f)
-    val inactiveBg = if (isDark) DS.surfaceDark else DS.surfaceLight
-    val bg         = if (data.active) activeBg else inactiveBg
-    val iconTint   = if (data.active) bluebirdColors.AccentBlue else
-        if (isDark) bluebirdColors.TextSecondary else bluebirdColors.TextSecondaryLight
-    val textColor  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val subColor   = textColor.copy(alpha = 0.5f)
-    val haptics    = LocalHapticFeedback.current
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val borderAlpha = if (data.active) 0.4f else 0f
-
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg)
-            .border(
-                width = 1.dp,
-                color = bluebirdColors.AccentBlue.copy(alpha = borderAlpha),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication        = null,
-                onClick           = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    data.onClick()
-                },
-                onLongClick       = data.onLongClick?.let { action ->
-                    {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        action()
-                    }
-                }
-            )
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Icon(
-            imageVector            = data.icon,
-            contentDescription = data.label,
-            tint               = iconTint,
-            modifier           = Modifier.size(20.dp)
-        )
-        Text(
-            text       = data.label,
-            color      = textColor,
-            fontSize   = (11 * textScale).sp,
-            fontWeight = FontWeight.Medium,
-            maxLines   = 1,
-            overflow   = TextOverflow.Ellipsis
-        )
-        Text(
-            text     = data.subLabel,
-            color    = subColor,
-            fontSize = (10 * textScale).sp,
-            maxLines = 1
-        )
-    }
-}
-
-// ─── Expand/Collapse Chevron Row ──────────────────────────────────────────────
-// The little pill-with-chevron Windows 11 shows beneath the quick-toggle
-// grid to reveal a second page of tiles.
-
-@Composable
-private fun ExpandChevronRow(
-    expanded: Boolean,
-    isDark: Boolean,
-    textScale: Float,
     onClick: () -> Unit
 ) {
-    val tint = if (isDark) bluebirdColors.TextSecondary else bluebirdColors.TextSecondaryLight
-
     Box(
         modifier = Modifier
-            .fillMaxWidth(),
+            .size(26.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.035f))
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .clickable { onClick() }
-                .padding(horizontal = 20.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (expanded) FluentIcon.ChevronUp else FluentIcon.ChevronDown,
-                contentDescription = if (expanded) "Show fewer quick actions" else "Show more quick actions",
-                tint     = tint,
-                modifier = Modifier.size(16.dp)
+        Icon(icon, contentDescription, tint = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight, modifier = Modifier.size(15.dp))
+    }
+}
+
+@Composable
+private fun ReferenceQuickTile(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isDark: Boolean,
+    textScale: Float,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    Column(
+        modifier = modifier
+            .height(42.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.032f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.82f), modifier = Modifier.size(16.dp))
+        Text(label, color = textColor.copy(alpha = 0.82f), fontSize = (10f * textScale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun CompactSliderSection(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: Float,
+    isDark: Boolean,
+    textColor: Color,
+    textScale: Float,
+    onValueChange: (Float) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.84f), modifier = Modifier.size(17.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = textColor, fontSize = (10.5f * textScale).sp, fontWeight = FontWeight.Medium)
+                Text("${(value * 100).toInt()}%", color = textColor.copy(alpha = 0.44f), fontSize = (9.5f * textScale).sp)
+            }
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth().height(23.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = bluebirdColors.AccentBlue,
+                    activeTrackColor = bluebirdColors.AccentBlue,
+                    inactiveTrackColor = if (isDark) DS.borderDark else DS.borderLight
+                )
             )
         }
     }
 }
 
-// ─── Slider Section ───────────────────────────────────────────────────────────
+@Composable
+private fun CompactCalendar(
+    isDark: Boolean,
+    textColor: Color,
+    accent: Color,
+    textScale: Float
+) {
+    val today = remember { Calendar.getInstance() }
+    val monthName = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(today.time) }
+    val first = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+    }
+    val firstDayOffset = remember {
+        // Monday-first, matching the compact Windows calendar rhythm.
+        ((first.get(Calendar.DAY_OF_WEEK) + 5) % 7)
+    }
+    val daysInMonth = remember { today.getActualMaximum(Calendar.DAY_OF_MONTH) }
+    val weekDays = listOf("M", "T", "W", "T", "F", "S", "S")
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(monthName, color = textColor, fontSize = (12f * textScale).sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text("Today", color = accent, fontSize = (9.5f * textScale).sp, fontWeight = FontWeight.Medium)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            weekDays.forEach { day ->
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(day, color = textColor.copy(alpha = 0.42f), fontSize = (8.5f * textScale).sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+        Spacer(Modifier.height(3.dp))
+
+        val totalCells = ((firstDayOffset + daysInMonth + 6) / 7) * 7
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            repeat(totalCells / 7) { rowIndex ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    repeat(7) { colIndex ->
+                        val cell = rowIndex * 7 + colIndex
+                        val day = cell - firstDayOffset + 1
+                        val isCurrent = day == today.get(Calendar.DAY_OF_MONTH) && day in 1..daysInMonth
+                        Box(
+                            modifier = Modifier.weight(1f).height(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (day in 1..daysInMonth) {
+                                Box(
+                                    modifier = if (isCurrent) Modifier.size(21.dp).clip(CircleShape).background(accent) else Modifier.size(21.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        day.toString(),
+                                        color = if (isCurrent) Color.White else textColor.copy(alpha = 0.78f),
+                                        fontSize = (9.5f * textScale).sp,
+                                        fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SliderSection(
@@ -841,101 +505,6 @@ private fun SliderSection(
 
 // ─── Text Scale Section ───────────────────────────────────────────────────────
 
-@Composable
-private fun TextScaleSection(
-    currentScale: Float,
-    isDark: Boolean,
-    textColor: Color,
-    subColor: Color,
-    textScale: Float,
-    onScaleChange: (Float) -> Unit
-) {
-    val steps = TEXT_SCALE_STEPS
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = FluentIcon.TextFont,
-                    contentDescription = "Text Size",
-                    tint     = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    "Text Size",
-                    color      = textColor,
-                    fontSize   = (12 * textScale).sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Text(
-                currentScale.toTextScaleLabel(),
-                color    = bluebirdColors.AccentBlue,
-                fontSize = (12 * textScale).sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        // Step buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            steps.forEach { (scale, label) ->
-                val selected = kotlin.math.abs(scale - currentScale) < 0.05f
-                val bg       = if (selected) bluebirdColors.AccentBlue
-                else if (isDark) DS.surfaceDark else DS.surfaceLight
-                val fg       = if (selected) Color.White
-                else if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(bg)
-                        .border(
-                            width = if (selected) 0.dp else 0.5.dp,
-                            color = if (isDark) DS.borderDark else DS.borderLight,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onScaleChange(scale) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        label,
-                        color      = fg,
-                        fontSize   = (11 * textScale).sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            }
-        }
-
-        // Preview text
-        val previewBg = if (isDark) DS.surfaceDark else DS.surfaceLight
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(previewBg)
-                .padding(10.dp)
-        ) {
-            Text(
-                text     = "Preview: The quick brown fox jumps over the lazy dog.",
-                color    = subColor,
-                fontSize = (13 * currentScale).sp
-            )
-        }
-    }
-}
 
 // ─── Battery Section ──────────────────────────────────────────────────────────
 
@@ -1255,6 +824,9 @@ private fun NotifActionButton(
 
 // ─── Bluebird Remote Notif Card ───────────────────────────────────────────────
 
+
+// ─── Bluebird Remote Notif Card ───────────────────────────────────────────────
+
 @Composable
 private fun BluebirdRemoteNotifCard(
     notif: BluebirdRemoteNotification,
@@ -1337,6 +909,7 @@ private fun BluebirdRemoteNotifCard(
         }
     }
 }
+
 
 // ─── Empty Placeholder ────────────────────────────────────────────────────────
 

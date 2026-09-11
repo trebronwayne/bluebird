@@ -215,19 +215,10 @@ import java.util.TimeZone
 // ─────────────────────────────────────────────────────────────────────────────
 
 private enum class SettingsCategory(val label: String, val icon: ImageVector) {
-    SYSTEM          ("System",              FluentIcons.Regular.Settings),
-    SOUND           ("Sound",               FluentIcons.Regular.Speaker2),
-    BLUETOOTH       ("Bluetooth & devices", FluentIcons.Regular.Bluetooth),
-    NETWORK         ("Network & internet",  FluentIcons.Regular.Bluetooth),
     APPEARANCE      ("Appearance",          FluentIcons.Regular.PaintBrush),
-    TASKBAR         ("Taskbar",             FluentIcons.Regular.Apps),
     GESTURES        ("Gestures",            FluentIcons.Regular.SwipeRight),
     APPS            ("Apps",                FluentIcons.Regular.Apps),
     ACCOUNTS        ("Accounts",            FluentIcons.Regular.PersonCircle),
-    TIME_LANGUAGE   ("Time & language",     FluentIcons.Regular.LocalLanguage),
-    GAMING          ("Gaming",              FluentIcons.Regular.Games),
-    ACCESSIBILITY   ("Accessibility",       FluentIcons.Regular.Accessibility),
-    PRIVACY         ("Privacy & security",  FluentIcons.Regular.LockClosedKey),
     BACKUP          ("Backup & restore",    FluentIcons.Regular.CloudArrowUp),
     SEARCH          ("Search",              FluentIcons.Regular.Search),
     UPDATE          ("Launcher Update",     FluentIcons.Regular.ArrowClockwise),
@@ -287,7 +278,7 @@ fun SettingsScreen(
                 ?.let { name -> SettingsCategory.entries.find { it.name == name } }
                 ?: DesktopPreferences(context).consumeSettingsStartCategory()
                     ?.let { name -> SettingsCategory.entries.find { it.name == name } }
-                ?: SettingsCategory.SYSTEM
+                ?: SettingsCategory.APPEARANCE
         )
     }
     var navSearch by remember { mutableStateOf("") }
@@ -440,19 +431,10 @@ fun SettingsScreen(
                 scale = uiState?.textScale ?: 1f)
 
             when (selectedCategoryState.value) {
-                SettingsCategory.SYSTEM       -> SystemSettings(args)
-                SettingsCategory.SOUND        -> SoundSettings(args)
-                SettingsCategory.BLUETOOTH    -> BluetoothSettings(args)
-                SettingsCategory.NETWORK      -> NetworkSettings(args)
                 SettingsCategory.APPEARANCE   -> AppearanceSettings(args)
-                SettingsCategory.TASKBAR      -> TaskbarSettingsCategory(args)
                 SettingsCategory.GESTURES     -> GestureSettings(args)
                 SettingsCategory.APPS         -> AppsSettings(args)
                 SettingsCategory.ACCOUNTS     -> AccountsSettings(args)
-                SettingsCategory.TIME_LANGUAGE-> TimeLanguageSettings(args)
-                SettingsCategory.GAMING       -> GamingSettings(args)
-                SettingsCategory.ACCESSIBILITY-> AccessibilitySettings(args)
-                SettingsCategory.PRIVACY      -> PrivacySecuritySettings(args)
                 SettingsCategory.BACKUP       -> BackupRestoreSettings(args)
                 SettingsCategory.SEARCH       -> SearchSettings(args)
                 SettingsCategory.UPDATE       -> LauncherUpdateSettings(args)
@@ -1310,56 +1292,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
 // instead of opening its own panel.
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun TaskbarSettingsCategory(a: ScreenArgs) {
-    SettingsGroup("Taskbar", a) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(FluentIcons.Regular.Apps, null, tint = a.textColor.copy(alpha = 0.4f), modifier = Modifier.size(28.dp))
-            Text(
-                "Taskbar settings are moving here",
-                color = a.textColor, fontSize = (13 * a.scale).sp, fontWeight = FontWeight.Medium
-            )
-            Text(
-                "This section will hold the same controls that used to live in the taskbar's own settings popup — items, appearance, icon overflow, and system tray.",
-                color = a.textColor.copy(alpha = 0.55f), fontSize = (11 * a.scale).sp, textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
 private fun AppearanceSettings(a: ScreenArgs) {
-
-    // ── Theme ────────────────────────────────────────────────────────────────
-    // The launcher no longer ships its own theme skins (System/For You/Dark/
-    // Light/Special). It now always follows the Android system's own light/dark
-    // setting and, on Android 12+, the system's Material You dynamic color
-    // palette — exactly like the real Settings app and every other system
-    // surface. This is informational only, not a control: Settings only shows
-    // things Bluebird itself manages, and theme isn't one of those anymore, so
-    // there's no button/link to Android's Display settings here either.
-    SettingsGroup("Theme", a) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(FluentIcons.Regular.WeatherMoon, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Follows system theme", color = a.textColor, fontSize = (14 * (a.scale)).sp)
-                Text(
-                    if (a.isDark) "Currently dark, matching your device's display setting"
-                    else "Currently light, matching your device's display setting",
-                    color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp
-                )
-            }
-        }
-    }
 
     // ── Personalization ─────────────────────────────────────────────────────
     // Everything that used to live in Desktop.kt's own right-click "Personalise"
@@ -1934,10 +1867,6 @@ private fun SearchSettings(a: ScreenArgs) {
         SToggle(FluentIcons.Regular.Apps, "Apps",
             "Show installed apps in search results",
             a, a.uiState?.searchIncludeApps ?: true) { a.vm?.setSearchIncludeApps(!(a.uiState?.searchIncludeApps ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.People, "Contacts",
-            "Show contacts in search results",
-            a, a.uiState?.searchIncludeContacts ?: true) { a.vm?.setSearchIncludeContacts(!(a.uiState?.searchIncludeContacts ?: true)) }
         Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
         SToggle(FluentIcons.Regular.Settings, "Settings",
             "Show settings pages in search results",

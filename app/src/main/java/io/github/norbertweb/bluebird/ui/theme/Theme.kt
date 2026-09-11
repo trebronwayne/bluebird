@@ -40,20 +40,20 @@ val SelawikFontFamily = FontFamily(
 val LocalIsDarkTheme = staticCompositionLocalOf { true }
 
 object bluebirdColors {
-    val GlassLight = Color(0xFF4C63D9)
+    val GlassLight = Color(0xFF0F6CBD)
 
 
-    val AccentBlue = Color(0xFF4C63D9)
-    val AccentBlueLight = Color(0xFF7C8FEA)
-    val AccentBlueDark = Color(0xFF33409F)
-    val Surface = Color(0xFF14161C)
-    val SurfaceLight = Color(0xFFF8F9FB)
-    val SurfaceContainer = Color(0xFF1B1E26)
-    val SurfaceContainerLight = Color(0xFFF3F5F8)
-    val TextPrimary = Color(0xFFF5F6F8)
-    val TextPrimaryLight = Color(0xFF171A21)
-    val TextSecondary = Color(0xFFA3A9B4)
-    val TextSecondaryLight = Color(0xFF5B6270)
+    val AccentBlue = Color(0xFF0F6CBD)
+    val AccentBlueLight = Color(0xFF479EF5)
+    val AccentBlueDark = Color(0xFF115EA3)
+    val Surface = Color(0xFF1C1C1C)
+    val SurfaceLight = Color(0xFFF7F7F7)
+    val SurfaceContainer = Color(0xFF242424)
+    val SurfaceContainerLight = Color(0xFFFFFFFF)
+    val TextPrimary = Color(0xFFF3F3F3)
+    val TextPrimaryLight = Color(0xFF1A1A1A)
+    val TextSecondary = Color(0xFFB3B3B3)
+    val TextSecondaryLight = Color(0xFF616161)
     val TaskbarBg = Color(0xCC14161C)
     val TaskbarBgLight = Color(0xCCF3F5F8)
     val GlassBg = Color(0x4D14161C)
@@ -80,8 +80,8 @@ object bluebirdColors {
     val HoverBg = Color(0x1AFFFFFF)
     val HoverBgLight = Color(0x0A171A21)
 
-    val WidgetBg = Color(0xFF1B1E26)
-    val WidgetBgLight = Color(0xFFF3F5F8)
+    val WidgetBg = Color(0xFF242424)
+    val WidgetBgLight = Color(0xFFFFFFFF)
 
     val Separator = Color(0x33FFFFFF)
     val SeparatorLight = Color(0x26171A21)
@@ -90,8 +90,8 @@ object bluebirdColors {
     val Warning = Color(0xFFE0A82E)
     val Error = Color(0xFFD6564C)
 
-    val BlueGradientStart = Color(0xFF4C63D9)
-    val BlueGradientEnd = Color(0xFF7C8FEA)
+    val BlueGradientStart = Color(0xFF0F6CBD)
+    val BlueGradientEnd = Color(0xFF479EF5)
 
     val WallpaperOverlay = Color(0x99000000)
 

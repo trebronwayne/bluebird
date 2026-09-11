@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import dev.chrisbanes.haze.HazeState
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 
 @Composable
@@ -39,28 +40,53 @@ fun GlassCard(
     )
 }
 
+/**
+ * Shared "floating glass panel" surface — used by Action Center, Widgets
+ * Panel, and Notification Toasts.
+ *
+ * Uses real Windows 11 Acrylic (see HazeBlurSetup.kt's windowsAcrylic —
+ * Haze's FluentMaterials, values from Microsoft's own WinUI 3 Figma spec)
+ * tinted by [accent] — a muted color sampled from Bluebird's own active
+ * wallpaper (see WallpaperAccent.kt), the same as every other flyout.
+ *
+ * Pass [hazeState] (the shared one from DesktopScreen) to opt a caller
+ * into the real backdrop blur + soft floating shadow. Callers that don't
+ * have a HazeState handy (or don't want the blur cost — e.g. a toast
+ * that's on/off screen fast) can omit it; they get a flat but still
+ * accent-tinted fallback color instead of a fixed hardcoded palette.
+ */
 @Composable
 fun AcrylicSurface(
     modifier: Modifier = Modifier,
     isDark: Boolean = true,
-    alpha: Float = 0.85f,
+    accent: Color = DS.accentStart,
     cornerRadius: Dp = 8.dp,
+    hazeState: HazeState? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val baseColor = if (isDark)
-        Color(0xFF202020).copy(alpha = alpha)
-    else
-        Color(0xFFF5F5F5).copy(alpha = alpha)
+    val shape = RoundedCornerShape(cornerRadius)
+    val borderColor = if (isDark) DS.borderDark else DS.borderLight
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(baseColor)
-            .border(
-                width = 0.5.dp,
-                color = if (isDark) Color(0x25FFFFFF) else Color(0x25000000),
-                shape = RoundedCornerShape(cornerRadius)
-            ),
+            .then(
+                if (hazeState != null)
+                    Modifier.softShadow(cornerRadius = cornerRadius, blurRadius = 28.dp, alpha = 0.24f, offsetY = 10.dp)
+                else Modifier
+            )
+            .then(
+                if (hazeState != null)
+                    Modifier.hazeMaterial(hazeState, windowsAcrylic(accent, isDark), shape)
+                else {
+                    // No HazeState: flat fallback, still tonally tied to the wallpaper
+                    // accent (blended toward the neutral surface base) instead of a
+                    // fixed hardcoded color.
+                    val base = if (isDark) DS.surfaceDark else DS.surfaceLight
+                    val fallback = lerp(base, accent, 0.12f).copy(alpha = if (isDark) 0.92f else 0.94f)
+                    Modifier.clip(shape).background(fallback)
+                }
+            )
+            .border(width = 0.5.dp, color = borderColor, shape = shape),
         content = content
     )
 }

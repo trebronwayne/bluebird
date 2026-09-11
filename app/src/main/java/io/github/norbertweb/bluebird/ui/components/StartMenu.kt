@@ -1,5 +1,12 @@
 package io.github.norbertweb.bluebird.ui.components
 
+// Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
+// the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
+// Dependency (module build.gradle.kts):
+//     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
+// All icons used by this file are centralized in the `FluentIcon` object —
+// if a name doesn't exist in the version you pull in, Android Studio's
+// FluentIcons.Regular.… autocomplete will show the closest real name.
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -7,10 +14,9 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import android.provider.Settings
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +37,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -38,50 +45,42 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-// Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
-// the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
-// Dependency (module build.gradle.kts):
-//     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
-// All icons used by this file are centralized in the `FluentIcon` object —
-// if a name doesn't exist in the version you pull in, Android Studio's
-// FluentIcons.Regular.… autocomplete will show the closest real name.
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,12 +91,13 @@ import io.github.norbertweb.bluebird.AppInfo
 import io.github.norbertweb.bluebird.LauncherScreen
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
+import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Calendar
 
@@ -125,11 +125,6 @@ enum class LayoutMode {
     MOBILE_HOME
 }
 
-// Start Menu window size. Persisted across opens (see getSavedSizeMode/saveSizeMode) —
-// previously this was a plain `remember { mutableStateOf(false) }` boolean which reset
-// to compact every time the Start Menu left composition (i.e. every time it was closed).
-enum class StartMenuSizeMode { COMPACT, EXPANDED, FULLSCREEN }
-
 enum class AppCategory {
     PINNED, RECENT, SYSTEM, FREQUENT, ALL
 }
@@ -147,7 +142,10 @@ data class LayoutPreferences(
 // ─────────────────────────────────────────────────────────
 // App usage persistent tracker functions
 // ─────────────────────────────────────────────────────────
-private fun getAppOpenCount(context: Context, packageName: String): Int {
+// Was file-private — MobileHomeView.kt (different file, same module) needs
+// this for its new "most-launched" Recent row, so widened to internal
+// rather than duplicating the read logic against the same prefs file.
+internal fun getAppOpenCount(context: Context, packageName: String): Int {
     val prefs = context.getSharedPreferences("start_menu_usage_prefs", Context.MODE_PRIVATE)
     return prefs.getInt("open_cnt_$packageName", 0)
 }
@@ -216,35 +214,9 @@ internal fun unpinInstalledAppFromStart(context: Context, packageName: String) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Persisted Start Menu size + layout preference
-// (fixes: size choice previously reset every time the Start Menu closed)
+// Start Menu preferences
 // ─────────────────────────────────────────────────────────
 private const val START_MENU_PREFS = "start_menu_layout_prefs"
-
-private fun getSavedSizeMode(context: Context): StartMenuSizeMode {
-    val prefs = context.getSharedPreferences(START_MENU_PREFS, Context.MODE_PRIVATE)
-    // Default changed from COMPACT to EXPANDED per updated design spec.
-    val name = prefs.getString("size_mode", StartMenuSizeMode.EXPANDED.name)
-    return runCatching { StartMenuSizeMode.valueOf(name ?: "COMPACT") }
-        .getOrDefault(StartMenuSizeMode.EXPANDED)
-}
-
-private fun saveSizeMode(context: Context, mode: StartMenuSizeMode) {
-    context.getSharedPreferences(START_MENU_PREFS, Context.MODE_PRIVATE)
-        .edit().putString("size_mode", mode.name).apply()
-}
-
-private fun getSavedLayoutMode(context: Context): LayoutMode {
-    val prefs = context.getSharedPreferences(START_MENU_PREFS, Context.MODE_PRIVATE)
-    val name = prefs.getString("layout_mode", LayoutMode.COMPACT_GRID.name)
-    return runCatching { LayoutMode.valueOf(name ?: "COMPACT_GRID") }
-        .getOrDefault(LayoutMode.COMPACT_GRID)
-}
-
-private fun saveLayoutMode(context: Context, mode: LayoutMode) {
-    context.getSharedPreferences(START_MENU_PREFS, Context.MODE_PRIVATE)
-        .edit().putString("layout_mode", mode.name).apply()
-}
 
 // ─────────────────────────────────────────────────────────
 // Design Tokens — Professional Blue / Enterprise
@@ -252,20 +224,14 @@ private fun saveLayoutMode(context: Context, mode: LayoutMode) {
 // `DS` (design tokens) now lives in FluentDesignSystem.kt and is shared with
 // SearchOverlay.kt — this used to be a private copy that had drifted from
 // SearchOverlay's own hardcoded colors/corner-radius, which is why the two
-// surfaces looked like different apps. Glass alpha is now driven by the
-// user's opacity setting (DS.glass / DS.surfaceGlass) instead of a fixed
-// 0xCC baked into the color literal.
+// surfaces looked like different apps. Glass material is now real Fluent
+// Acrylic (see HazeBlurSetup.kt) tinted by Bluebird's own wallpaper accent
+// (see WallpaperAccent.kt), not a manual opacity setting.
 
 // Icon lookups now come from the shared `FluentIcon` object in FluentIcon.kt,
 // used by every UI file in this package (Start Menu, Desktop, TaskBar, Settings).
 
 private enum class StartMenuTab { PINNED, ALL_APPS, RECENT, SEARCH }
-
-private val SIZE_MODE_LABELS = listOf(
-    StartMenuSizeMode.COMPACT to "Compact",
-    StartMenuSizeMode.EXPANDED to "Expanded",
-    StartMenuSizeMode.FULLSCREEN to "Full Screen"
-)
 
 private fun timeGreeting(): String {
     return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
@@ -288,8 +254,6 @@ internal val builtInApps = listOf(
     Triple("Files",        FluentIcon.Folder,       LauncherScreen.FILE_EXPLORER),
     Triple("Browser",      FluentIcon.Globe,        LauncherScreen.BROWSER),
 
-    Triple("Photos",       FluentIcon.ImageMultiple, LauncherScreen.PHOTOS),
-    Triple("Tasks",        FluentIcon.TaskList,      LauncherScreen.TASK_MANAGER),
 
 
     Triple("Media Player", FluentIcon.PlayCircle, LauncherScreen.MEDIA_PLAYER),
@@ -304,428 +268,574 @@ internal val builtInApps = listOf(
 )
 
 // ─────────────────────────────────────────────────────────
-// MAIN START MENU
+// MAIN START MENU — WINDOWS 11 STYLE
+// The Start surface deliberately follows the Windows 11 visual hierarchy:
+// search at the top, pinned apps as the primary content, a lightweight
+// All apps switch, and account/power controls at the bottom. Launcher-only
+// controls such as layout mode, phone mode, size selectors and edit buttons
+// are intentionally removed from the visible surface.
 // ─────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun StartMenu(
     uiState: LauncherUiState,
     viewModel: LauncherViewModel,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
-    // Installed-app discovery is intentionally lazy: the launcher shell can start
-    // without PackageManager/icon enumeration. Start it only when Start Menu is visible.
+    // Load installed apps only when Start becomes visible. This keeps launcher
+    // startup light while still making All apps and pinning immediately useful.
     LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
 
-    var activeTab by remember { mutableStateOf(StartMenuTab.PINNED) }
-    // Persisted (not just `remember`ed) so the size survives the Start Menu being closed/reopened.
-    var sizeMode by remember { mutableStateOf(getSavedSizeMode(context)) }
-    var editMode by remember { mutableStateOf(false) }
-    var layoutPrefs by remember { mutableStateOf(LayoutPreferences(mode = getSavedLayoutMode(context))) }
-    var showLayoutMenu by remember { mutableStateOf(false) }
-    var showSizeMenu by remember { mutableStateOf(false) }
-    var showOpacityMenu by remember { mutableStateOf(false) }
-    // User-controllable surface transparency (Settings > Personalization).
-    // Previously there was no variable here at all — every glass alpha was
-    // a fixed value baked into the DS color literal.
-    val (opacity, setOpacity) = rememberOpacity(context)
-
-    fun changeSizeMode(mode: StartMenuSizeMode) {
-        sizeMode = mode
-        saveSizeMode(context, mode)
-    }
-
-    fun changeLayoutMode(mode: LayoutMode) {
-        layoutPrefs = layoutPrefs.copy(
-            mode = mode,
-            columns = when (mode) {
-                LayoutMode.COMPACT_GRID -> 6
-                LayoutMode.LARGE_GRID -> 4
-                else -> 6
-            }
-        )
-        saveLayoutMode(context, mode)
-        // Mobile home screen needs the whole screen to feel like a phone launcher.
-        if (mode == LayoutMode.MOBILE_HOME && sizeMode != StartMenuSizeMode.FULLSCREEN) {
-            changeSizeMode(StartMenuSizeMode.FULLSCREEN)
-        }
-    }
-
-    val isMobileHome = layoutPrefs.mode == LayoutMode.MOBILE_HOME
-    val isFullscreen = sizeMode == StartMenuSizeMode.FULLSCREEN
-
-    val menuWidth  = when (sizeMode) {
-        StartMenuSizeMode.COMPACT    -> DS.menuWidthCompact
-        StartMenuSizeMode.EXPANDED   -> DS.menuWidthExpanded
-        StartMenuSizeMode.FULLSCREEN -> DS.menuWidthExpanded // ignored, fillMaxSize used instead
-    }
-    val menuHeight = when (sizeMode) {
-        StartMenuSizeMode.COMPACT    -> DS.menuHeightCompact
-        StartMenuSizeMode.EXPANDED   -> DS.menuHeightExpanded
-        StartMenuSizeMode.FULLSCREEN -> DS.menuHeightExpanded // ignored, fillMaxSize used instead
-    }
-    // Fullscreen reads as a real "home screen" rather than a floating panel, so drop the
-    // rounded corners/border in that mode.
-    val cornerRadius = if (isFullscreen) 0.dp else 28.dp
-
-    // Bluebird no longer carries its own light/dark toggle — it follows the
-    // device's system theme, read from the single source of truth in
-    // Theme.kt (bluebirdTheme() → LocalIsDarkTheme) instead of asking the
-    // system independently, so every screen agrees with every other screen.
-    val isDark       = LocalIsDarkTheme.current
-    val bgColor      = DS.glass(isDark, opacity) // live opacity setting, not a fixed 0xCC alpha
-    val borderColor  = if (isDark) DS.borderDark else DS.borderLight
-    val textPrimary  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
+    var activeTab by rememberSaveable { mutableStateOf(StartMenuTab.PINNED) }
     var localSearchQuery by rememberSaveable { mutableStateOf(uiState.searchQuery) }
+    val isDark = LocalIsDarkTheme.current
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val textSecondary = textPrimary.copy(alpha = 0.62f)
+    val panelShape = RoundedCornerShape(12.dp)
+    val controlShape = RoundedCornerShape(6.dp)
 
     LaunchedEffect(uiState.searchQuery) {
         if (uiState.searchQuery != localSearchQuery) localSearchQuery = uiState.searchQuery
     }
 
     LaunchedEffect(localSearchQuery) {
-        delay(120)
-        if (localSearchQuery != uiState.searchQuery) {
-            viewModel.updateSearchQuery(localSearchQuery)
-        }
+        delay(100)
+        if (localSearchQuery != uiState.searchQuery) viewModel.updateSearchQuery(localSearchQuery)
     }
 
     Box(
         modifier = modifier
-            .then(
-                if (isFullscreen) Modifier.fillMaxSize()
-                else Modifier.width(menuWidth).height(menuHeight)
+            .fillMaxWidth(0.94f)
+            .fillMaxHeight(0.82f)
+            .widthIn(min = 320.dp, max = 640.dp)
+            .heightIn(min = 520.dp, max = 760.dp)
+            .softShadow(
+                cornerRadius = 12.dp,
+                blurRadius = 34.dp,
+                alpha = 0.30f,
+                offsetY = 10.dp
             )
-            // Was Modifier.shadow(24.dp, ...) — Android's default system shadow
-            // (small blur radius, fairly dark). softShadow() draws a much wider,
-            // lower-opacity blur instead, which reads as "floating" rather than
-            // "card with a dropshadow" — see SoftUI.kt.
-            .then(
-                if (isFullscreen) Modifier
-                else Modifier.softShadow(cornerRadius = cornerRadius, blurRadius = 40.dp, alpha = 0.28f, offsetY = 14.dp)
-            )
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(bgColor)
+            .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), panelShape)
             .background(
-                // Windows 11 Mica/Acrylic materials carry a faint light-to-transparent
-                // sheen near the top edge — this reproduces that without extra draw calls.
-                Brush.verticalGradient(
-                    colors = listOf(
-                        if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.35f),
-                        Color.Transparent
-                    ),
-                    endY = 220f
-                )
+                if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8),
+                panelShape
             )
-            .then(
-                if (isFullscreen) Modifier else Modifier.border(1.dp, borderColor, RoundedCornerShape(cornerRadius))
+            .border(
+                1.dp,
+                if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f),
+                panelShape
             )
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-            Spacer(Modifier.height(16.dp))
-
-            // ── Top Bar: Search + Layout + Expand ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+                    // Do not run a second Haze effect with the same HazeState
+                    // inside the already blurred Start surface. That creates a
+                    // feedback/self-capture effect and is what made the middle
+                    // of the menu look transparently broken on both themes.
+                    // The outer Acrylic material already blurs the wallpaper;
+                    // this layer is only a very subtle tonal veil on top.
+                    // Intentionally no inner background here.
+                    // The content must remain on the same continuous Acrylic
+                    // material as the rest of Start. A rounded translucent
+                    // body veil creates the visible "blur region" boundary
+                    // that Windows 11 does not have.
             ) {
-                PremiumSearchBar(
+                // Windows 11 search: the search field is the dominant control.
+                Windows11StartSearchBar(
                     query = localSearchQuery,
+                    isDark = isDark,
                     onQueryChange = {
                         localSearchQuery = it
-                        activeTab = if (it.isNotEmpty()) StartMenuTab.SEARCH else StartMenuTab.PINNED
-                    },
-                    isDark = isDark,
-                    modifier = Modifier.weight(1f)
+                        activeTab = if (it.isBlank()) StartMenuTab.PINNED else StartMenuTab.SEARCH
+                    }
                 )
 
-                // Layout mode picker
-                Box {
-                    IconToggleButton(
-                        checked = showLayoutMenu,
-                        onCheckedChange = { showLayoutMenu = it },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(DS.chipCorner))
-                            .background(
-                                if (showLayoutMenu) DS.accentStart.copy(alpha = 0.15f)
-                                else Color.Transparent
-                            )
-                    ) {
-                        Icon(
-                            imageVector = when (layoutPrefs.mode) {
-                                    LayoutMode.COMPACT_GRID, LayoutMode.LARGE_GRID -> FluentIcon.Grid
-                                    LayoutMode.LIST_VIEW -> FluentIcon.List
-                                    else -> FluentIcon.Apps
-                                },
-                            contentDescription = "Layout: ${layoutPrefs.mode.name}",
-                            tint = if (showLayoutMenu) DS.accentStart else textPrimary.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
+                Spacer(Modifier.height(22.dp))
+
+                if (activeTab == StartMenuTab.SEARCH) {
+                    SearchResultsView(
+                        query = localSearchQuery,
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        isDark = isDark,
+                        onClearSearch = {
+                            localSearchQuery = ""
+                            activeTab = StartMenuTab.PINNED
+                        },
+                        context = context,
+                        layoutPrefs = LayoutPreferences(
+                            mode = LayoutMode.COMPACT_GRID,
+                            columns = 5,
+                            iconSize = 40,
+                            showLabels = true
                         )
-                    }
-
-                    DropdownMenu(
-                        expanded = showLayoutMenu,
-                        onDismissRequest = { showLayoutMenu = false },
-                        modifier = Modifier
-                            .background(
-                                if (isDark) DS.surfaceDark else DS.glassLight,
-                                RoundedCornerShape(DS.sectionCorner)
-                            )
-                            .border(1.dp, borderColor, RoundedCornerShape(DS.sectionCorner))
-                    ) {
-                        LayoutMode.entries.forEach { mode ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        changeLayoutMode(mode)
-                                        showLayoutMenu = false
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                if (layoutPrefs.mode == mode) {
-                                    Icon(FluentIcon.Checkmark, null, tint = DS.accentStart, modifier = Modifier.size(14.dp))
-                                } else {
-                                    Spacer(Modifier.size(14.dp))
-                                }
-                                Text(
-                                    when (mode) {
-                                        LayoutMode.COMPACT_GRID     -> "Compact Grid (6 cols)"
-                                        LayoutMode.LARGE_GRID       -> "Large Grid (4 cols)"
-                                        LayoutMode.LIST_VIEW        -> "List View"
-                                        LayoutMode.HORIZONTAL_SCROLL -> "Horizontal Strip"
-                                        LayoutMode.FAVORITES_BAR    -> "Favorites Bar"
-                                        LayoutMode.MOBILE_HOME      -> "Mobile Layout (phone-style)"
-                                    },
-                                    fontSize = 12.sp,
-                                    color = if (isDark) Color.White else Color.Black,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (mode == LayoutMode.MOBILE_HOME) {
-                                    Icon(
-                                        FluentIcon.PhoneAndroid,
-                                        null,
-                                        tint = (if (isDark) Color.White else Color.Black).copy(alpha = 0.45f),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Personalization: surface transparency — previously there was no
-                // control for this anywhere; every glass alpha was hardcoded.
-                Box {
-                    IconToggleButton(
-                        checked = showOpacityMenu,
-                        onCheckedChange = { showOpacityMenu = it },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(DS.chipCorner))
-                            .background(
-                                if (showOpacityMenu) DS.accentStart.copy(alpha = 0.15f)
-                                else Color.Transparent
-                            )
-                    ) {
-                        Icon(
-                            FluentIcon.Color,
-                            contentDescription = "Transparency",
-                            tint = if (showOpacityMenu) DS.accentStart else textPrimary.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showOpacityMenu,
-                        onDismissRequest = { showOpacityMenu = false },
-                        modifier = Modifier
-                            .width(220.dp)
-                            .background(
-                                if (isDark) DS.surfaceDark else DS.glassLight,
-                                RoundedCornerShape(DS.sectionCorner)
-                            )
-                            .border(1.dp, borderColor, RoundedCornerShape(DS.sectionCorner))
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                            Text(
-                                "Transparency",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (isDark) Color.White else Color.Black
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            androidx.compose.material3.Slider(
-                                value = opacity,
-                                onValueChange = { setOpacity(it) },
-                                valueRange = DS.OPACITY_MIN..DS.OPACITY_MAX,
-                                colors = androidx.compose.material3.SliderDefaults.colors(
-                                    thumbColor = DS.accentStart,
-                                    activeTrackColor = DS.accentStart
-                                )
-                            )
-                            Text(
-                                "${(opacity * 100).toInt()}% opaque",
-                                fontSize = 10.sp,
-                                color = textPrimary.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
-
-                // Size picker: Compact / Expanded / Full Screen — replaces the old
-                // two-state expand toggle and is now persisted (see changeSizeMode()).
-                if (!isMobileHome) {
-                    Box {
-                        IconToggleButton(
-                            checked = showSizeMenu,
-                            onCheckedChange = { showSizeMenu = it },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(DS.chipCorner))
-                                .background(
-                                    if (sizeMode != StartMenuSizeMode.COMPACT) DS.accentStart.copy(alpha = 0.15f)
-                                    else Color.Transparent
-                                )
-                        ) {
-                            Icon(
-                                imageVector = when (sizeMode) {
-                                        StartMenuSizeMode.COMPACT    -> FluentIcon.FullScreenMax
-                                        StartMenuSizeMode.EXPANDED   -> FluentIcon.Resize
-                                        StartMenuSizeMode.FULLSCREEN -> FluentIcon.FullScreenMin
-                                    },
-                                contentDescription = "Window size: ${sizeMode.name}",
-                                tint = if (sizeMode != StartMenuSizeMode.COMPACT) DS.accentStart else textPrimary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showSizeMenu,
-                            onDismissRequest = { showSizeMenu = false },
-                            modifier = Modifier
-                                .background(
-                                    if (isDark) DS.surfaceDark else DS.glassLight,
-                                    RoundedCornerShape(DS.sectionCorner)
-                                )
-                                .border(1.dp, borderColor, RoundedCornerShape(DS.sectionCorner))
-                        ) {
-                            SIZE_MODE_LABELS.forEach { (mode, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            changeSizeMode(mode)
-                                            showSizeMenu = false
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    if (sizeMode == mode) {
-                                        Icon(FluentIcon.Checkmark, null, tint = DS.accentStart, modifier = Modifier.size(14.dp))
-                                    } else {
-                                        Spacer(Modifier.size(14.dp))
-                                    }
-                                    Text(label, fontSize = 12.sp, color = if (isDark) Color.White else Color.Black)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Bug fix: this used to be a plain `if (isMobileHome)` — the top
-            // search bar could set activeTab = SEARCH while in mobile mode,
-            // but nothing here checked activeTab, so search silently did
-            // nothing on the phone-style layout. Falling through to the
-            // existing tab-content branch (below) when a search is active
-            // reuses the same SearchResultsView desktop mode already uses.
-            if (isMobileHome && activeTab != StartMenuTab.SEARCH) {
-                // ── Mobile-style home screen: full-bleed paginated app grid + dock ──
-                MobileHomeView(
-                    uiState = uiState,
-                    viewModel = viewModel,
-                    isDark = isDark,
-                    context = context,
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                // `isExpanded` is used by the existing grid views only to pick icon/column
-                // sizing, so any non-compact size counts as "expanded" for that purpose.
-                val isExpandedLayout = sizeMode != StartMenuSizeMode.COMPACT
-
-                // ── Tab Navigation (hidden during search) ──
-                if (activeTab != StartMenuTab.SEARCH) {
-                    PremiumTabRow(
-                        activeTab = activeTab,
-                        onTabChange = { activeTab = it },
-                        isDark = isDark
                     )
-                    Spacer(Modifier.height(12.dp))
-                }
+                } else if (activeTab == StartMenuTab.ALL_APPS) {
+                    Windows11SectionHeader(
+                        title = "All apps",
+                        actionLabel = "Back",
+                        isDark = isDark,
+                        onAction = { activeTab = StartMenuTab.PINNED }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        AllAppsView(
+                            uiState = uiState,
+                            viewModel = viewModel,
+                            isDark = isDark,
+                            isExpanded = true,
+                            context = context,
+                            layoutPrefs = LayoutPreferences(
+                                mode = LayoutMode.LIST_VIEW,
+                                columns = 1,
+                                iconSize = 34,
+                                showLabels = true,
+                                enableCollapsibleGroups = true
+                            )
+                        )
+                    }
+                } else {
+                    Windows11SectionHeader(
+                        title = "Pinned",
+                        actionLabel = "All apps  ›",
+                        isDark = isDark,
+                        onAction = { activeTab = StartMenuTab.ALL_APPS }
+                    )
+                    Spacer(Modifier.height(8.dp))
 
-                // ── Content — switches instantly, no transition animation ──
-                Box(modifier = Modifier.weight(1f)) {
-                    when (activeTab) {
-                            StartMenuTab.PINNED -> PinnedView(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                isDark = isDark,
-                                isExpanded = isExpandedLayout,
-                                editMode = editMode,
-                                onEditModeToggle = { editMode = !editMode },
-                                context = context,
-                                layoutPrefs = layoutPrefs
+                    Box(Modifier.weight(1f)) {
+                        Windows11PinnedContent(
+                            uiState = uiState,
+                            viewModel = viewModel,
+                            context = context,
+                            isDark = isDark,
+                            textSecondary = textSecondary
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Windows11RecommendedRow(
+                        uiState = uiState,
+                        viewModel = viewModel,
+                        context = context,
+                        isDark = isDark,
+                        textSecondary = textSecondary
+                    )
+                }
+            }
+
+            // Windows 11 footer/chrome is a continuous full-width boundary.
+            // It should visually belong to the Start surface, not sit inside
+            // the content inset like a rounded floating card.
+            Windows11StartFooter(
+                uiState = uiState,
+                viewModel = viewModel,
+                isDark = isDark,
+                textPrimary = textPrimary,
+                controlShape = controlShape
+            )
+        }
+    }
+}
+
+@Composable
+private fun Windows11StartSearchBar(
+    query: String,
+    isDark: Boolean,
+    onQueryChange: (String) -> Unit
+) {
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val fill = if (isDark) Color.White.copy(alpha = 0.075f) else Color.White.copy(alpha = 0.82f)
+    val border = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
+
+    val searchShape = RoundedCornerShape(20.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(searchShape)
+            .background(fill)
+            .border(1.dp, border, searchShape)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_bluebird_start_search),
+                contentDescription = "Search",
+                modifier = Modifier.size(18.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = textPrimary,
+                    fontSize = 14.sp
+                ),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    if (query.isBlank()) {
+                        Text(
+                            "Search apps, settings, and documents",
+                            color = textPrimary.copy(alpha = 0.48f),
+                            fontSize = 14.sp
+                        )
+                    }
+                    inner()
+                }
+            )
+
+            if (query.isNotBlank()) {
+                Icon(
+                    FluentIcon.Dismiss,
+                    contentDescription = "Clear search",
+                    tint = textPrimary.copy(alpha = 0.55f),
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable { onQueryChange("") }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Windows11SectionHeader(
+    title: String,
+    actionLabel: String? ,
+    isDark: Boolean,
+    onAction: () -> Unit
+) {
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            title,
+            color = textPrimary,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (!actionLabel.isNullOrBlank()) {
+            TextButton(
+                onClick = onAction,
+                contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp)
+            ) {
+                Text(
+                    actionLabel,
+                    color = textPrimary.copy(alpha = 0.74f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Windows11PinnedContent(
+    uiState: LauncherUiState,
+    viewModel: LauncherViewModel,
+    context: Context,
+    isDark: Boolean,
+    textSecondary: Color
+) {
+    var pinnedBuiltInNames by remember { mutableStateOf(getPinnedBuiltInAppNames(context)) }
+    var pinnedInstalledPackages by remember { mutableStateOf(getPinnedInstalledStartPackages(context)) }
+
+    val pinnedBuiltIns = remember(pinnedBuiltInNames) {
+        builtInApps.filter { it.first in pinnedBuiltInNames }
+    }
+    val pinnedInstalled = remember(pinnedInstalledPackages, uiState.installedApps) {
+        uiState.installedApps.filter { it.packageName in pinnedInstalledPackages }
+    }
+    val bpkPinned = remember(uiState.installedBpkApps, uiState.pinnedBpkStartIds) {
+        uiState.installedBpkApps
+            .filter { it.id in uiState.pinnedBpkStartIds }
+            .map { viewModel.bpkAppInfo(it) }
+    }
+
+    val allPinned = remember(bpkPinned, pinnedInstalled) {
+        (bpkPinned + pinnedInstalled).distinctBy { it.packageName }
+    }
+
+    fun openApp(app: AppInfo) {
+        incrementAppOpenCount(context, app.packageName)
+        viewModel.openApp(context, app)
+    }
+
+    if (allPinned.isEmpty() && pinnedBuiltIns.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    FluentIcon.Pin,
+                    contentDescription = null,
+                    tint = textSecondary.copy(alpha = 0.35f),
+                    modifier = Modifier.size(34.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Pin apps to Start",
+                    color = textSecondary.copy(alpha = 0.62f),
+                    fontSize = 13.sp
+                )
+                Text(
+                    "Long-press an app and choose Add to Start",
+                    color = textSecondary.copy(alpha = 0.38f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(5),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        items(allPinned, key = { "win11_pinned_${it.packageName}" }) { app ->
+            AnimatedPinnedIcon(
+                app = app,
+                isDark = isDark,
+                editMode = false,
+                onClick = { openApp(app) },
+                onUnpin = {
+                    if (app.packageName in pinnedInstalledPackages) {
+                        unpinInstalledAppFromStart(context, app.packageName)
+                        pinnedInstalledPackages = getPinnedInstalledStartPackages(context)
+                    } else {
+                        viewModel.unpinAppFromTaskbar(app)
+                    }
+                },
+                onPinToTaskbar = { viewModel.pinAppToTaskbar(app) },
+                isPinnedToTaskbar = true,
+                iconSize = 40,
+                showLabel = true,
+                category = AppCategory.PINNED
+            )
+        }
+
+        items(pinnedBuiltIns, key = { "win11_builtin_${it.first}" }) { (name, icon, screen) ->
+            AnimatedBuiltInIcon(
+                name = name,
+                icon = icon,
+                isDark = isDark,
+                editMode = false,
+                onClick = { viewModel.openWindow(screen) },
+                onAddToDesktop = {},
+                isPinnedToStart = true,
+                onTogglePinToStart = {
+                    unpinBuiltInApp(context, name)
+                    pinnedBuiltInNames = getPinnedBuiltInAppNames(context)
+                },
+                iconSize = 40,
+                showLabel = true
+            )
+        }
+    }
+}
+
+@Composable
+private fun Windows11RecommendedRow(
+    uiState: LauncherUiState,
+    viewModel: LauncherViewModel,
+    context: Context,
+    isDark: Boolean,
+    textSecondary: Color
+) {
+    var showAllRecommended by rememberSaveable { mutableStateOf(false) }
+    val allRecommended = remember(uiState.installedApps, uiState.pinnedBpkStartIds) {
+        val ranked = uiState.installedApps
+            .map { it to getAppOpenCount(context, it.packageName) }
+            .sortedWith(compareByDescending<Pair<AppInfo, Int>> { it.second }.thenBy { it.first.name.lowercase() })
+            .map { it.first }
+
+        // Keep Recommended visible on a fresh Bluebird install too. Once usage
+        // data exists, the section is genuinely usage-ranked; before then we
+        // use the available installed apps as a sensible Windows-style seed.
+        ranked.filter { getAppOpenCount(context, it.packageName) > 0 }.ifEmpty {
+            ranked
+        }
+    }
+
+    if (allRecommended.isEmpty()) return
+
+    val visibleRecommended = if (showAllRecommended) allRecommended else allRecommended.take(6)
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+
+    Column {
+        Windows11SectionHeader(
+            title = "Recommended",
+            actionLabel = if (allRecommended.size > 6) (if (showAllRecommended) "Less  ‹" else "More  ›") else "",
+            isDark = isDark,
+            onAction = { if (allRecommended.size > 6) showAllRecommended = !showAllRecommended }
+        )
+        Spacer(Modifier.height(7.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            visibleRecommended.chunked(2).forEach { rowApps ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowApps.forEach { app ->
+                        Windows11RecommendedCard(
+                            app = app,
+                            isDark = isDark,
+                            textSecondary = textSecondary,
+                            onClick = {
+                                incrementAppOpenCount(context, app.packageName)
+                                viewModel.openApp(context, app)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(2 - rowApps.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Windows11RecommendedCard(
+    app: AppInfo,
+    isDark: Boolean,
+    textSecondary: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val fill = if (isDark) Color.White.copy(alpha = 0.055f) else Color.Black.copy(alpha = 0.035f)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(fill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        AsyncImage(
+            model = app.icon,
+            contentDescription = app.name,
+            modifier = Modifier.size(30.dp),
+            contentScale = ContentScale.Fit
+        )
+        Text(
+            app.name,
+            color = textSecondary,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun Windows11StartFooter(
+    uiState: LauncherUiState,
+    viewModel: LauncherViewModel,
+    isDark: Boolean,
+    textPrimary: Color,
+    controlShape: RoundedCornerShape
+) {
+    val topBorder = if (isDark) Color.White.copy(alpha = 0.075f) else Color.Black.copy(alpha = 0.075f)
+    val footerFill = if (isDark) Color.Black.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.035f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            // One continuous footer plane, with a straight full-width divider
+            // instead of a rounded inner-card boundary. This matches the way
+            // the Windows 11 Start footer reads as structural chrome.
+            .background(footerFill)
+            .drawBehind {
+                drawRect(
+                    color = topBorder,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(size.width, 1.dp.toPx())
+                )
+            }
+            .padding(horizontal = 24.dp, vertical = 9.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { viewModel.openWindow(LauncherScreen.SETTINGS) }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (uiState.userProfile.profilePicturePath.isNotEmpty()) {
+                        AsyncImage(
+                            model = Uri.parse(uiState.userProfile.profilePicturePath),
+                            contentDescription = "User profile",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(DS.accentStart),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                uiState.userProfile.userName.firstOrNull()?.uppercase() ?: "U",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
                             )
-                            StartMenuTab.ALL_APPS -> AllAppsView(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                isDark = isDark,
-                                isExpanded = isExpandedLayout,
-                                context = context,
-                                layoutPrefs = layoutPrefs
-                            )
-                            StartMenuTab.RECENT -> RecentAppsView(
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                isDark = isDark,
-                                context = context,
-                                layoutPrefs = layoutPrefs
-                            )
-                            StartMenuTab.SEARCH -> SearchResultsView(
-                                query = localSearchQuery,
-                                uiState = uiState,
-                                viewModel = viewModel,
-                                isDark = isDark,
-                                onClearSearch = {
-                                    localSearchQuery = ""
-                                    activeTab = StartMenuTab.PINNED
-                                },
-                                context = context,
-                                layoutPrefs = layoutPrefs
-                            )
+                        }
                     }
                 }
-
-                // ── Bottom User Bar ──
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = borderColor, thickness = 0.5.dp)
-                Spacer(Modifier.height(8.dp))
-                BottomUserBar(
-                    uiState = uiState,
-                    viewModel = viewModel,
-                    isDark = isDark
+                Text(
+                    uiState.userProfile.userName.ifBlank { "User" },
+                    color = textPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(14.dp))
             }
+
+            PowerMenuButton(
+                isDark = isDark,
+                textPrimary = textPrimary
+            )
         }
     }
 }
@@ -740,37 +850,54 @@ private fun PremiumTabRow(
     isDark: Boolean
 ) {
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val tabs = listOf(
+        StartMenuTab.PINNED   to "Pinned",
+        StartMenuTab.ALL_APPS to "All Apps",
+        StartMenuTab.RECENT   to "Recent"
+    )
+    val density = LocalDensity.current
+    // Was a fixed 40dp/16dp indicator width regardless of label — under
+    // "All Apps" (longest label) that fixed width sat well short of center,
+    // reading as if it belonged to "Recent" next to it. Each Text now
+    // reports its own real x-position + width via onGloballyPositioned, so
+    // the indicator is placed under the label it actually belongs to.
+    val tabBounds = remember { mutableStateMapOf<StartMenuTab, Pair<Float, Float>>() }
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        listOf(
-            StartMenuTab.PINNED   to "Pinned",
-            StartMenuTab.ALL_APPS to "All Apps",
-            StartMenuTab.RECENT   to "Recent"
-        ).forEach { (tab, label) ->
-            val isActive = activeTab == tab
-            val indicatorColor = if (isActive) DS.accentStart else Color.Transparent
-            val indicatorWidth = if (isActive) 40.dp else 16.dp
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clickable { onTabChange(tab) }
-                    .padding(end = 24.dp, bottom = 0.dp)
-            ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            tabs.forEach { (tab, label) ->
+                val isActive = activeTab == tab
                 Text(
                     label,
                     fontSize = 12.sp,
                     fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     color = if (isActive) DS.accentStart else textPrimary.copy(alpha = 0.55f),
-                    letterSpacing = 0.3.sp
-                )
-                Spacer(Modifier.height(6.dp))
-                Box(
+                    letterSpacing = 0.3.sp,
                     modifier = Modifier
-                        .width(indicatorWidth)
-                        .height(2.dp)
-                        .background(indicatorColor, RoundedCornerShape(1.dp))
+                        .clickable { onTabChange(tab) }
+                        .onGloballyPositioned { coords ->
+                            tabBounds[tab] = coords.positionInParent().x to coords.size.width.toFloat()
+                        }
+                        .padding(vertical = 4.dp)
                 )
             }
+        }
+        Spacer(Modifier.height(6.dp))
+        val bounds = tabBounds[activeTab]
+        if (bounds != null) {
+            val targetX = with(density) { bounds.first.toDp() }
+            val targetW = with(density) { bounds.second.toDp() }
+            val animX by animateDpAsState(targetValue = targetX, label = "tabIndicatorX")
+            val animW by animateDpAsState(targetValue = targetW, label = "tabIndicatorW")
+            Box(
+                modifier = Modifier
+                    .offset(x = animX)
+                    .width(animW)
+                    .height(2.dp)
+                    .background(DS.accentStart, RoundedCornerShape(1.dp))
+            )
+        } else {
+            Spacer(Modifier.height(2.dp))
         }
     }
     HorizontalDivider(
@@ -1568,7 +1695,12 @@ fun PremiumSearchBar(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isDark) DS.surfaceDark else DS.surfaceLight
+    // Was a flat, fully opaque DS.surfaceDark/Light — a solid color glued on
+    // top of the panel's translucent Acrylic, which is why it looked like a
+    // different surface instead of a recessed control on the *same* one.
+    // controlFill() is a translucent scrim over whatever's already blurred
+    // behind it (the panel's hazeMaterial), so the search box reads as the
+    // same material, just sunk a level — the Windows 11 search-box look.
     val borderColor = if (isDark) DS.borderDark else DS.borderLight
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     var isFocused by remember { mutableStateOf(false) }
@@ -1576,10 +1708,10 @@ fun PremiumSearchBar(
         modifier = modifier
             .height(36.dp)
             .clip(RoundedCornerShape(DS.sectionCorner))
-            .background(bgColor)
+            .background(if (isFocused) DS.controlFillFocused(isDark) else DS.controlFill(isDark))
             .border(
                 width = 1.dp,
-                color = if (isFocused) DS.accentStart else borderColor,
+                color = if (isFocused) DS.accentStart else borderColor.copy(alpha = 0.6f),
                 shape = RoundedCornerShape(DS.sectionCorner)
             )
     ) {
@@ -1895,7 +2027,9 @@ private fun AllAppsRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(app.name, fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(app.packageName, fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Was app.packageName (e.g. "com.android.chrome") — not
+                // something an end user needs to see in a launcher list row.
+                Text("App", fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -2059,7 +2193,7 @@ private fun BottomUserBar(
                         .size(9.dp)
                         .align(Alignment.BottomEnd)
                         .background(DS.successGreen, CircleShape)
-                        .border(1.5.dp, if (isDark) DS.glassDark else DS.glassLight, CircleShape)
+                        .border(1.5.dp, if (isDark) DS.surfaceDark else DS.surfaceLight, CircleShape)
                 )
             }
             Column {

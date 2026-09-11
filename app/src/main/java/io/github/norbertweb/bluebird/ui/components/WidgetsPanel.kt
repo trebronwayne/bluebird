@@ -1,47 +1,93 @@
 package io.github.norbertweb.bluebird.ui.components
 
+// Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
+// the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
+// Dependency (module build.gradle.kts):
+//     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
 import android.Manifest
 import android.app.AlarmManager
 import android.app.AppOpsManager
 import android.appwidget.AppWidgetHost
-import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Bundle
 import android.media.session.MediaSessionManager
 import android.net.TrafficStats
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.CalendarContract
 import android.provider.MediaStore
 import android.provider.Settings
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-// Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
-// the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
-// Dependency (module build.gradle.kts):
-//     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,40 +95,52 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.coerceIn
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
+import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlin.math.roundToInt
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -174,12 +232,13 @@ private fun saveWidgetOrder(context: Context, order: List<String>) {
 }
 
 private fun loadWidgetOrder(context: Context): List<String> {
-    val default = listOf("clock","weather","music","steps","stocks","news","calendar","photos","todo","notes","alarm","network","screentime")
+    val default = listOf("clock","photos","todo","notes","alarm","network")
     val saved = context.widgetPrefs().getString("widget_order", null) ?: return default
     val savedList = saved.split(",").filter { it.isNotBlank() }
-    // merge: keep saved order, append any new ones not yet in list (external
-    // "ext:<id>" widget entries are appended to this same list, never to `default`)
-    return (savedList + default.filter { it !in savedList })
+    val allowedBuiltIns = default.toSet()
+    val cleaned = savedList.filter { it.startsWith("ext:") || it in allowedBuiltIns }
+    // Keep saved order, remove retired built-ins, and append newly available ones.
+    return (cleaned + default.filter { it !in cleaned })
 }
 
 // ─── External (third-party) app widgets ────────────────────────────────────
@@ -235,36 +294,12 @@ private fun saveDynamicColorEnabled(context: Context, enabled: Boolean) {
 private fun loadDynamicColorEnabled(context: Context): Boolean =
     context.widgetPrefs().getBoolean("dynamic_color_enabled", true)
 
-private fun saveWorldClocks(context: Context, clocks: List<WorldClock>) {
-    val json = org.json.JSONArray().apply {
-        clocks.forEach { c -> put(JSONObject().apply { put("label", c.label); put("tz", c.tz) }) }
-    }
-    context.widgetPrefs().edit().putString("world_clocks", json.toString()).apply()
-}
-
-private fun loadWorldClocks(context: Context): List<WorldClock> {
-    val raw = context.widgetPrefs().getString("world_clocks", null) ?: return listOf(
-        WorldClock("New York", "America/New_York"),
-        WorldClock("London",   "Europe/London"),
-        WorldClock("Tokyo",    "Asia/Tokyo"),
-    )
-    return try {
-        val arr = org.json.JSONArray(raw)
-        (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i); WorldClock(o.getString("label"), o.getString("tz"))
-        }
-    } catch (e: Exception) { emptyList() }
-}
-
-// ─── Data classes ─────────────────────────────────────────────────────────────
-
 private enum class TaskPriority(val label: String, val color: Color) {
     NONE("No priority", Color(0xFF9E9E9E)),
     LOW("Low", Color(0xFF66BB6A)),
     MEDIUM("Medium", Color(0xFFFFA726)),
     HIGH("High", Color(0xFFEF5350));
 
-    /** Cycles NONE → LOW → MEDIUM → HIGH → NONE, used by the quick priority tap. */
     fun next(): TaskPriority = values()[(ordinal + 1) % values().size]
 }
 
@@ -276,7 +311,6 @@ private data class TodoTask(
     val dueAt: Long? = null
 )
 
-private data class WorldClock(val label: String, val tz: String)
 private data class WeatherData(
     val city: String, val condition: String, val temp: Int,
     val high: Int, val low: Int, val forecast: List<DayForecast>
@@ -307,31 +341,59 @@ private fun stickyColor(hex: String): Color = try {
     Color(android.graphics.Color.parseColor(hex))
 } catch (e: Exception) { Color(0xFFFFF9C4) }
 
+/** Shared divider tone used inside widget cards. */
+private fun widgetDividerColor(textColor: Color): Color = textColor.copy(alpha = 0.10f)
+
+@Composable
+private fun WidgetHeader(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    textColor: Color,
+    textScale: Float
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = textColor.copy(alpha = 0.78f),
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                title,
+                color = textColor,
+                fontSize = (14 * textScale).sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 // ─── Widget IDs ───────────────────────────────────────────────────────────────
 
 // Built-in widget ids. Third-party app widgets bound via AppWidgetHost are
 // represented separately as "ext:<appWidgetId>" entries inside widgetOrder —
 // they don't need a fixed slot here since their count is dynamic.
 private val ALL_WIDGET_IDS = listOf(
-    "clock", "weather", "music", "steps", "stocks",
-    "news", "calendar", "photos",
-    "todo", "notes", "alarm", "network", "screentime"
+    "clock", "photos", "todo", "notes", "alarm", "network"
 )
 
 private val WIDGET_LABELS = mapOf(
-    "clock"      to "Clock & World Time",
-    "weather"    to "Weather",
-    "music"      to "Now Playing",
-    "steps"      to "Steps",
-    "stocks"     to "Markets",
-    "news"       to "News",
-    "calendar"   to "Calendar",
+    "clock"      to "Clock",
     "photos"     to "Photos",
     "todo"       to "To Do",
     "notes"      to "Sticky Notes",
     "alarm"      to "Next Alarm",
-    "network"    to "Network Speed",
-    "screentime" to "Screen Time"
+    "network"    to "Network Speed"
 )
 
 // ─────────────────────────────────────────────────────────
@@ -346,12 +408,14 @@ private const val BLUEBIRD_APPWIDGET_HOST_ID = 1042
 fun WidgetsPanel(
     uiState: LauncherUiState,
     viewModel: LauncherViewModel,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
     val context    = LocalContext.current
     // Follows the system's light/dark setting directly instead of the app's
     // own theme toggle, so this panel always matches the rest of Android.
-    val isDark     = isSystemInDarkTheme()
+    val isDark     = LocalIsDarkTheme.current
     val textColor  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val scope      = rememberCoroutineScope()
     val textScale  = LocalTextScale.current
@@ -359,24 +423,13 @@ fun WidgetsPanel(
     var isRefreshing  by remember { mutableStateOf(false) }
     var editMode      by remember { mutableStateOf(false) }
     var widgetOrder   by remember { mutableStateOf(loadWidgetOrder(context)) }
-    var hiddenWidgets by remember { mutableStateOf(loadHiddenWidgets(context)) }
+    var hiddenWidgets by remember { mutableStateOf(loadHiddenWidgets(context).filter { it in ALL_WIDGET_IDS || it.startsWith("ext:") }.toSet()) }
     var externalIds   by remember { mutableStateOf(loadExternalWidgetIds(context)) }
-    var pinnedWidgets by remember { mutableStateOf(loadPinnedWidgets(context)) }
-    var isCompact     by remember { mutableStateOf(loadCompactDensity(context)) }
-    var dynamicColorEnabled by remember { mutableStateOf(loadDynamicColorEnabled(context)) }
-
-    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    // The accent every widget renders with. Falls back to the fixed brand
-    // blue on API <31 or when the person has turned this off.
-    val accentColor = remember(isDark, dynamicColorEnabled, dynamicColorSupported) {
-        if (dynamicColorEnabled && dynamicColorSupported) {
-            val scheme = if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            scheme.primary
-        } else {
-            bluebirdColors.AccentBlue
-        }
-    }
-    val density = if (isCompact) WidgetDensity.COMPACT else WidgetDensity.COMFORTABLE
+    var pinnedWidgets by remember { mutableStateOf(loadPinnedWidgets(context).filter { it in ALL_WIDGET_IDS || it.startsWith("ext:") }.toSet()) }
+    // Widgets stay on Bluebird's own Fluent accent so system wallpaper colors
+    // cannot unexpectedly recolor the shell's tonal hierarchy.
+    val accentColor = bluebirdColors.AccentBlue
+    val density = WidgetDensity.COMPACT
 
     // ── AppWidgetHost: lets this panel embed widgets from other installed apps ──
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
@@ -477,16 +530,17 @@ fun WidgetsPanel(
     // so widget cards (and any hosted third-party widget) get more breathing
     // room on larger phones/foldables, clamped to a sane range either way.
     BoxWithConstraints(modifier.fillMaxHeight()) {
-        val panelWidth = (maxWidth * 0.34f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
+        val panelWidth = if (maxWidth > 900.dp) (maxWidth * 0.50f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH) else (maxWidth * 0.92f).coerceIn(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
         AcrylicSurface(
             modifier = Modifier.width(panelWidth).fillMaxHeight(),
-            isDark = isDark, alpha = 0.96f, cornerRadius = PANEL_CORNER
+            isDark = isDark, accent = accent, cornerRadius = PANEL_CORNER,
+            hazeState = hazeState
         ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(density.itemSpacing)
         ) {
             // ── Header ────────────────────────────────────────────────────────
@@ -497,8 +551,8 @@ fun WidgetsPanel(
             ) {
                 Text(
                     "Widgets",
-                    style      = MaterialTheme.typography.headlineMedium,
-                    color      = textColor,
+                    color = textColor,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -541,9 +595,6 @@ fun WidgetsPanel(
                     isDark      = isDark,
                     textColor   = textColor,
                     textScale   = textScale,
-                    isCompact   = isCompact,
-                    dynamicColorEnabled = dynamicColorEnabled,
-                    dynamicColorSupported = dynamicColorSupported,
                     onToggle    = { id ->
                         hiddenWidgets = if (id in hiddenWidgets)
                             hiddenWidgets - id else hiddenWidgets + id
@@ -559,41 +610,20 @@ fun WidgetsPanel(
                         saveWidgetOrder(context, newOrder)
                     },
                     onRemoveExternal = { id -> removeExternalWidget(id) },
-                    onAddWidget = { launchWidgetPicker() },
-                    onToggleCompact = { isCompact = it; saveCompactDensity(context, it) },
-                    onToggleDynamicColor = { dynamicColorEnabled = it; saveDynamicColorEnabled(context, it) }
+                    onAddWidget = { launchWidgetPicker() }
                 )
             }
 
             // ── Render widgets in saved order (pinned first) ──────────────────
             visibleWidgetIds.forEachIndexed { index, id ->
                 key(id) {
-                    if (id in pinnedWidgets && (index == 0)) {
-                        Text(
-                            "PINNED",
-                            color = textColor.copy(alpha = 0.35f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                    if (id !in pinnedWidgets && index > 0 && visibleWidgetIds[index - 1] in pinnedWidgets) {
-                        Spacer(Modifier.height(2.dp))
-                    }
                     when {
                         id == "clock"      -> ClockWidget(isDark, context, effectiveTextScale)
-                        id == "weather"    -> WeatherWidget(isDark, context, effectiveTextScale, refreshTick)
-                        id == "music"      -> NowPlayingWidget(isDark, context, effectiveTextScale)
-                        id == "steps"      -> StepsWidget(isDark, context, effectiveTextScale)
-                        id == "stocks"     -> StockWidget(isDark, effectiveTextScale, refreshTick)
-                        id == "news"       -> NewsWidget(isDark, effectiveTextScale, refreshTick)
-                        id == "calendar"   -> CalendarWidget(isDark, context, effectiveTextScale)
                         id == "photos"     -> PhotosWidget(isDark, context, effectiveTextScale)
                         id == "todo"       -> TodoWidget(isDark, context, effectiveTextScale)
                         id == "notes"      -> StickyNotesWidget(isDark, context, effectiveTextScale)
                         id == "alarm"      -> AlarmWidget(isDark, context, effectiveTextScale)
                         id == "network"    -> NetworkSpeedWidget(isDark, effectiveTextScale)
-                        id == "screentime" -> ScreenTimeWidget(isDark, context, effectiveTextScale)
                         id.startsWith("ext:") -> {
                             val widgetId = id.removePrefix("ext:").toIntOrNull()
                             if (widgetId != null) {
@@ -678,16 +708,11 @@ private fun WidgetEditPanel(
     isDark: Boolean,
     textColor: Color,
     textScale: Float,
-    isCompact: Boolean,
-    dynamicColorEnabled: Boolean,
-    dynamicColorSupported: Boolean,
     onToggle: (String) -> Unit,
     onTogglePin: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
     onRemoveExternal: (Int) -> Unit,
     onAddWidget: () -> Unit,
-    onToggleCompact: (Boolean) -> Unit,
-    onToggleDynamicColor: (Boolean) -> Unit
 ) {
     val bg     = if (isDark) bluebirdColors.WidgetBg else bluebirdColors.WidgetBgLight
     val border = if (isDark) DS.borderDark else DS.borderLight
@@ -881,55 +906,13 @@ private fun WidgetEditPanel(
             modifier = Modifier.padding(vertical = 8.dp),
             color = widgetDividerColor(textColor), thickness = 0.5.dp
         )
-
-        // ── Panel-wide settings ──
-        SettingsToggleRow(
-            icon = FluentIcon.Resize, label = "Compact view", textColor = textColor, textScale = textScale,
-            checked = isCompact, onCheckedChange = onToggleCompact
-        )
-        if (dynamicColorSupported) {
-            SettingsToggleRow(
-                icon = FluentIcon.Color, label = "Match wallpaper colors", textColor = textColor, textScale = textScale,
-                checked = dynamicColorEnabled, onCheckedChange = onToggleDynamicColor
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsToggleRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    textColor: Color,
-    textScale: Float,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = textColor.copy(alpha = 0.5f), modifier = Modifier.size(17.dp))
-        Text(
-            label, color = textColor,
-            fontSize = (13 * textScale).sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors  = SwitchDefaults.colors(checkedThumbColor = LocalWidgetAccent.current),
-            modifier = Modifier.size(36.dp, 21.dp)
-        )
     }
 }
 
 // Shared corner radius for every widget-panel surface (cards, edit sheet,
 // external widget frames) so the whole panel reads as one consistent shape
 // language instead of the previous 12–14dp mismatch.
-private val WIDGET_CORNER = 20.dp
+private val WIDGET_CORNER = 7.dp
 
 // Outer panel shape/sizing. The panel used to be a hard 380dp with a square
 // (0dp) outer boundary — square against the rest of a UI that's otherwise
@@ -939,14 +922,11 @@ private val WIDGET_CORNER = 20.dp
 // silhouette of a docked panel reads better slightly more rounded than the
 // cards sitting inside it (same relationship as a phone's home-screen widget
 // tray vs. the widgets inside it).
-private val PANEL_CORNER = 24.dp
-private val PANEL_MIN_WIDTH = 380.dp
-private val PANEL_MAX_WIDTH = 460.dp
+private val PANEL_CORNER = 12.dp
+private val PANEL_MIN_WIDTH = 420.dp
+private val PANEL_MAX_WIDTH = 640.dp
 
-// ── Dynamic (Material You) accent, threaded via CompositionLocal so every
-// widget — most of which only take `isDark` — picks it up without a signature
-// change. Falls back to the fixed brand blue when dynamic color is off or
-// unavailable (pre-Android 12).
+// Fixed Bluebird Fluent accent shared by the widget shell.
 private val LocalWidgetAccent = staticCompositionLocalOf { bluebirdColors.AccentBlue }
 
 // ── Compact/comfortable density, same CompositionLocal approach. Comfortable
@@ -968,69 +948,19 @@ private fun WidgetCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val base   = if (isDark) bluebirdColors.WidgetBg else bluebirdColors.WidgetBgLight
-    val border = if (isDark) DS.borderDark else DS.borderLight
-    val shape  = RoundedCornerShape(WIDGET_CORNER)
+    val border = if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
+    val shape = RoundedCornerShape(7.dp)
     val density = LocalWidgetDensity.current
-    // A very slight top-to-bottom tonal gradient instead of one flat fill —
-    // this is what reads as "premium" rather than a plain filled rectangle,
-    // without needing any actual elevation/shadow animation.
-    val surfaceBrush = Brush.verticalGradient(
-        colors = listOf(
-            base.copy(alpha = 1f).let { if (isDark) lighten(it, 0.035f) else lighten(it, 0.5f) },
-            base
-        )
-    )
+    val surfaceColor = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.06f),
-                spotColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.06f)
-            )
             .clip(shape)
-            .background(surfaceBrush)
+            .background(surfaceColor)
             .border(1.dp, border, shape)
     ) {
         Column(modifier = Modifier.padding(density.cardPadding), content = content)
-    }
-}
-
-/** Nudges a color slightly toward white — used for the card's subtle top gradient. */
-private fun lighten(color: Color, amount: Float): Color = Color(
-    red   = (color.red + (1f - color.red) * amount).coerceIn(0f, 1f),
-    green = (color.green + (1f - color.green) * amount).coerceIn(0f, 1f),
-    blue  = (color.blue + (1f - color.blue) * amount).coerceIn(0f, 1f),
-    alpha = color.alpha
-)
-
-/** Shared, tone-balanced divider color for widget-internal separators. */
-private fun widgetDividerColor(textColor: Color) = textColor.copy(alpha = 0.10f)
-
-@Composable
-private fun WidgetHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, textColor: Color, textScale: Float) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            title,
-            color      = textColor,
-            fontSize   = (15 * textScale).sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(LocalWidgetAccent.current.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(17.dp))
-        }
     }
 }
 
@@ -1066,12 +996,11 @@ private fun ExpandToggle(expanded: Boolean, textScale: Float, onToggle: () -> Un
 }
 
 // ─────────────────────────────────────────────────────────
-// 1. Clock & World Time Widget (NEW)
+// 1. Clock Widget (NEW)
 // ─────────────────────────────────────────────────────────
 @Composable
 private fun ClockWidget(isDark: Boolean, context: Context, textScale: Float) {
     val textColor  = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val worldClocks by remember { mutableStateOf(loadWorldClocks(context)) }
     val windowRuntime = LocalWindowRuntime.current
 
     // A hidden widget does not need second-by-second Compose invalidations.
@@ -1108,28 +1037,7 @@ private fun ClockWidget(isDark: Boolean, context: Context, textScale: Float) {
             )
         }
 
-        if (worldClocks.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = widgetDividerColor(textColor), thickness = 0.5.dp)
-            Spacer(Modifier.height(10.dp))
-            // World clocks
-            worldClocks.forEach { wc ->
-                val tz   = TimeZone.getTimeZone(wc.tz)
-                val sdf  = SimpleDateFormat("h:mm a", Locale.getDefault()).apply { timeZone = tz }
-                val time = remember(now) { sdf.format(Date(now)) }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = FluentIcon.Globe, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(14.dp))
-                        Text(wc.label, color = textColor.copy(alpha = 0.7f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
-                    }
-                    Text(time, color = textColor, fontSize = (13 * textScale).sp, fontWeight = FontWeight.Medium)
-                }
-            }
-        }
+
     }
 }
 
@@ -1483,81 +1391,7 @@ private fun NowPlayingWidget(isDark: Boolean, context: Context, textScale: Float
 }
 
 // ─────────────────────────────────────────────────────────
-// 4. Step Counter Widget — NEW
-// ─────────────────────────────────────────────────────────
-@Composable
-private fun StepsWidget(isDark: Boolean, context: Context, textScale: Float) {
-    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    var steps by remember { mutableStateOf(0) }
-    val goal  = 10000
-
-    val hasSensor = remember {
-        val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
-    }
-
-    DisposableEffect(Unit) {
-        if (!hasSensor) return@DisposableEffect onDispose {}
-        val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        var baseline = -1
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(e: SensorEvent) {
-                val total = e.values[0].toInt()
-                if (baseline < 0) baseline = total
-                steps = total - baseline
-            }
-            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
-        }
-        sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-        onDispose { sm.unregisterListener(listener) }
-    }
-
-    WidgetCard(isDark) {
-        WidgetHeader("Steps", FluentIcon.WalkingIcon, textColor, textScale)
-        Spacer(Modifier.height(12.dp))
-
-        if (!hasSensor) {
-            Text("Step counter not available on this device", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Ring progress
-                Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
-                    val accentColor = LocalWidgetAccent.current
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val sweep = (steps.toFloat() / goal).coerceIn(0f, 1f) * 360f
-                        drawArc(color = widgetDividerColor(textColor),
-                            startAngle = -90f, sweepAngle = 360f, useCenter = false,
-                            style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
-                        drawArc(color = accentColor,
-                            startAngle = -90f, sweepAngle = sweep, useCenter = false,
-                            style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("$steps", color = textColor, fontSize = (14 * textScale).sp, fontWeight = FontWeight.Bold)
-                        Text("steps", color = textColor.copy(alpha = 0.5f), fontSize = (9 * textScale).sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Goal: $goal steps", color = textColor.copy(alpha = 0.6f), fontSize = (11 * textScale).sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(4.dp))
-                    val pct = (steps.toFloat() / goal * 100).toInt().coerceIn(0, 100)
-                    LinearProgressIndicator(
-                        progress = { steps.toFloat() / goal },
-                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                        color      = LocalWidgetAccent.current,
-                        trackColor = widgetDividerColor(textColor)
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text("$pct% of daily goal", color = textColor.copy(alpha = 0.5f), fontSize = (10 * textScale).sp, fontWeight = FontWeight.Medium)
-                }
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────
-// 5. Stock / Markets Widget (real quotes via Stooq's public CSV endpoint —
+// 4. Stock / Markets Widget (real quotes via Stooq's public CSV endpoint —
 //    no API key required; delayed data, refreshed on demand)
 // ─────────────────────────────────────────────────────────
 private val TRACKED_SYMBOLS = listOf("msft.us", "aapl.us", "googl.us", "amzn.us", "tsla.us", "nvda.us", "meta.us", "nflx.us")
@@ -1669,7 +1503,6 @@ private fun NewsWidget(isDark: Boolean, textScale: Float, refreshTick: Int) {
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     var articles  by remember { mutableStateOf<List<NewsArticle>>(emptyList()) }
     var loading   by remember { mutableStateOf(true) }
-    var usedFallback by remember { mutableStateOf(false) }
     var expanded  by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshTick) {
@@ -1678,9 +1511,9 @@ private fun NewsWidget(isDark: Boolean, textScale: Float, refreshTick: Int) {
             try { parseRssFeed(URL(NEWS_RSS_URL).readText()) } catch (e: Exception) { null }
         }
         if (fetched.isNullOrEmpty()) {
-            if (articles.isEmpty()) { articles = fallbackNews(); usedFallback = true }
+            if (articles.isEmpty()) { articles = emptyList() }
         } else {
-            articles = fetched; usedFallback = false
+            articles = fetched
         }
         loading = false
     }
@@ -1716,10 +1549,6 @@ private fun NewsWidget(isDark: Boolean, textScale: Float, refreshTick: Int) {
         if (articles.size > NEWS_COLLAPSED_COUNT) {
             ExpandToggle(expanded, textScale) { expanded = !expanded }
         }
-        if (usedFallback) {
-            Spacer(Modifier.height(4.dp))
-            Text("Offline — showing saved headlines", color = textColor.copy(alpha = 0.4f), fontSize = (9 * textScale).sp, fontWeight = FontWeight.Medium)
-        }
     }
 }
 
@@ -1736,14 +1565,6 @@ private fun parseRssFeed(xml: String): List<NewsArticle> {
     }
 }
 
-// Kept only as an offline fallback if the live RSS fetch fails — no longer
-// the primary data path.
-private fun fallbackNews() = listOf(
-    NewsArticle("AI Revolution reshapes global technology landscape", "TechCrunch", "https://techcrunch.com"),
-    NewsArticle("Markets soar on positive economic data", "Reuters", "https://reuters.com"),
-    NewsArticle("Space mission captures stunning images of distant galaxy", "NASA", "https://nasa.gov"),
-    NewsArticle("New Android features you should try today", "Android Central", "https://androidcentral.com"),
-)
 
 
 // ─────────────────────────────────────────────────────────

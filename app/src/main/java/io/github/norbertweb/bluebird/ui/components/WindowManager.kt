@@ -4,6 +4,7 @@ package io.github.norbertweb.bluebird.ui.components
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
 //     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -21,6 +22,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -42,6 +46,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -73,7 +80,6 @@ import io.github.norbertweb.bluebird.ui.screens.MediaPlayerScreen
 import io.github.norbertweb.bluebird.ui.screens.MessagesScreen
 import io.github.norbertweb.bluebird.ui.screens.RecycleBinScreen
 import io.github.norbertweb.bluebird.ui.screens.SettingsScreen
-import io.github.norbertweb.bluebird.ui.screens.TaskManagerScreen
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import io.github.norbertweb.bluebird.wordprocessor.PhoneScreen
@@ -137,7 +143,7 @@ private fun defaultSizeFor(screen: LauncherScreen): Pair<Float, Float> = when (s
     LauncherScreen.CALENDAR        -> 560f to 480f
     LauncherScreen.TERMINAL        -> 700f to 480f
     LauncherScreen.PROGRAM_MANAGER -> 760f to 560f
-    LauncherScreen.COPY_PROGRESS   -> 420f to 280f
+    LauncherScreen.COPY_PROGRESS   -> 360f to 300f
     else                           -> 750f to 520f
 }
 
@@ -992,8 +998,6 @@ fun WindowContent(
                 LauncherScreen.BROWSER       -> BrowserScreen(isDark)
                 LauncherScreen.CALCULATOR    -> CalculatorScreen(isDark)
                 LauncherScreen.CALENDAR      -> CalendarScreen(isDark)
-                //LauncherScreen.PHOTOS        -> PhotosScreen(isDark)
-                LauncherScreen.TASK_MANAGER  -> TaskManagerScreen(isDark)
                 LauncherScreen.MEDIA_PLAYER  -> {
                     val filePath = remember(windowState.id) { extras["filePath"] ?: "" }
                     MediaPlayerScreen(isDark, filePath)
@@ -1267,9 +1271,14 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
             key(job.id) {
                 val verb = if (job.operation == CopyOpType.MOVE) "Moving" else "Copying"
                 val destName = File(job.destDir).name.ifBlank { "Desktop" }
-                val progress = if (job.totalBytes > 0) (job.copiedBytes.toFloat() / job.totalBytes).coerceIn(0f, 1f) else 0f
+                val rawProgress = if (job.totalBytes > 0) (job.copiedBytes.toFloat() / job.totalBytes).coerceIn(0f, 1f) else 0f
+                val progress by animateFloatAsState(
+                    targetValue = rawProgress,
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    label = "copyProgress"
+                )
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = FluentIcon.Copy,
@@ -1316,9 +1325,70 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         CopyJobStatus.RUNNING -> {
                             LinearProgressIndicator(
                                 progress = { progress },
-                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
                                 color = DS.accentStart
                             )
+
+                            if (job.speedHistory.size >= 2) {
+                                val history = job.speedHistory
+                                val maxSpeed = history.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(58.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(DS.accentStart.copy(alpha = if (isDark) 0.045f else 0.035f))
+                                ) {
+                                    val step = size.width / (history.size - 1).coerceAtLeast(1)
+                                    val fillPath = Path()
+                                    val linePath = Path()
+                                    history.forEachIndexed { index, speed ->
+                                        val x = index * step
+                                        val y = size.height * (1f - speed.toFloat() / maxSpeed.toFloat())
+                                        if (index == 0) {
+                                            fillPath.moveTo(x, y)
+                                            linePath.moveTo(x, y)
+                                        } else {
+                                            fillPath.lineTo(x, y)
+                                            linePath.lineTo(x, y)
+                                        }
+                                    }
+                                    fillPath.lineTo(size.width, size.height)
+                                    fillPath.lineTo(0f, size.height)
+                                    fillPath.close()
+                                    drawPath(
+                                        fillPath,
+                                        brush = Brush.verticalGradient(
+                                            listOf(DS.accentStart.copy(alpha = 0.24f), DS.accentStart.copy(alpha = 0f))
+                                        )
+                                    )
+                                    drawPath(
+                                        linePath,
+                                        color = DS.accentStart,
+                                        style = Stroke(width = 1.5f)
+                                    )
+                                    listOf(0.25f, 0.5f, 0.75f).forEach { frac ->
+                                        drawLine(
+                                            color = DS.accentStart.copy(alpha = 0.10f),
+                                            start = Offset(0f, size.height * frac),
+                                            end = Offset(size.width, size.height * frac),
+                                            strokeWidth = 0.5f
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "Throughput", color = tcDim, fontSize = 9.sp
+                                    )
+                                    Text(
+                                        "${formatBytesShort(job.speedBytesPerSec)}/s", color = DS.accentStart, fontSize = 9.sp
+                                    )
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween

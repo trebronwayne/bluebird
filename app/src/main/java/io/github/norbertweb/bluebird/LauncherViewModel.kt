@@ -7,10 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -23,15 +22,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import io.github.norbertweb.bluebird.ui.components.BluebirdRemoteNotification
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
-import io.github.norbertweb.bluebird.ui.components.DesktopFileInfo
+import io.github.norbertweb.bluebird.ui.components.BluebirdRemoteNotification
 import io.github.norbertweb.bluebird.ui.components.BpkPackageManager
-import io.github.norbertweb.bluebird.ui.components.InstalledBpkApp
+import io.github.norbertweb.bluebird.ui.components.DesktopFileInfo
 import io.github.norbertweb.bluebird.ui.components.DesktopItemType
+import io.github.norbertweb.bluebird.ui.components.InstalledBpkApp
 import io.github.norbertweb.bluebird.ui.components.ToastNotifData
 import io.github.norbertweb.bluebird.ui.components.toToastData
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +39,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -47,9 +46,11 @@ import java.io.File
 import java.io.IOException
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.atomic.AtomicLong
+import java.util.Calendar
+import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
 
 // ─── Remote (Bluebird team) announcements — config ────────────────────────────
@@ -113,8 +114,8 @@ data class DesktopShortcutOld(
 enum class PowerAction { SLEEP, LOCK, RESTART, SHUTDOWN }
 
 enum class LauncherScreen {
-    DESKTOP, SETTINGS, FILE_EXPLORER, BROWSER, TASK_MANAGER,
-    CALCULATOR, CALENDAR, PHOTOS, MEDIA_PLAYER, IMAGE_VIEWER,
+    DESKTOP, SETTINGS, FILE_EXPLORER, BROWSER,
+    CALCULATOR, CALENDAR, MEDIA_PLAYER, IMAGE_VIEWER,
     WORD_IMPRESS, BLUEBIRD_STORE, RECYCLE_BIN, PremiumTextEditorScreen,
     TERMINAL, PROGRAM_MANAGER, WEB_APP_VIEWER, COPY_PROGRESS
 }
@@ -139,6 +140,8 @@ data class CopyJob(
     val currentFileName: String = "",
     val status: CopyJobStatus = CopyJobStatus.SCANNING,
     val speedBytesPerSec: Long = 0L,
+    /** Recent transfer-rate samples used by the animated throughput chart. */
+    val speedHistory: List<Long> = emptyList(),
     val error: String? = null,
     val startTime: Long = System.currentTimeMillis()
 )
@@ -190,8 +193,6 @@ object WindowIconKey {
     const val BROWSER       = "public"
     const val CALCULATOR    = "calculate"
     const val CALENDAR      = "calendar_today"
-    const val PHOTOS        = "photo_library"
-    const val TASK_MANAGER  = "monitor"
     const val MEDIA_PLAYER  = "music_note"
     const val IMAGE_VIEWER  = "image"
     const val BLUEBIRD_STORE         = "NightsStay"
@@ -499,7 +500,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun toggleBgAnimation(type: BgAnimationType) {
         val current = _uiState.value.backgroundEffects
         val updated = if (type in current.activeAnimations) current.activeAnimations - type
-                      else current.activeAnimations + type
+        else current.activeAnimations + type
         _uiState.value = _uiState.value.copy(
             backgroundEffects = current.copy(activeAnimations = updated, liveWallpaper = LiveWallpaperType.NONE)
         )
@@ -968,32 +969,32 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val allApps = apps + bpkInfos
 
             val pinnedPackagesJson = prefs.getString("pinned_taskbar_apps", "[]") ?: "[]"
-                val savedPackages      = try {
-                    val type = object : TypeToken<List<String>>() {}.type
-                    gson.fromJson<List<String>>(pinnedPackagesJson, type)
-                } catch (e: Exception) { emptyList() }
+            val savedPackages      = try {
+                val type = object : TypeToken<List<String>>() {}.type
+                gson.fromJson<List<String>>(pinnedPackagesJson, type)
+            } catch (e: Exception) { emptyList() }
 
-                val pinnedAndroid = if (savedPackages.isEmpty()) {
-                    val defaults = listOf("com.android.chrome", "com.google.android.gm",
-                        "com.android.calculator2", "com.google.android.youtube")
-                    allApps.filter { it.packageName in defaults }.take(5)
-                } else {
-                    savedPackages.asSequence()
-                        .distinct()
-                        .mapNotNull { pkg -> allApps.find { it.packageName == pkg } }
-                        .distinctBy { it.packageName }
-                        .toList()
-                }
-                // Start pins are independent from Taskbar pins. A BPK selected for
-                // Start must not silently appear on the Taskbar.
-                val pinned = pinnedAndroid.distinctBy { it.packageName }
-                _uiState.value = _uiState.value.copy(pinnedTaskbarApps = pinned)
+            val pinnedAndroid = if (savedPackages.isEmpty()) {
+                val defaults = listOf("com.android.chrome", "com.google.android.gm",
+                    "com.android.calculator2", "com.google.android.youtube")
+                allApps.filter { it.packageName in defaults }.take(5)
+            } else {
+                savedPackages.asSequence()
+                    .distinct()
+                    .mapNotNull { pkg -> allApps.find { it.packageName == pkg } }
+                    .distinctBy { it.packageName }
+                    .toList()
+            }
+            // Start pins are independent from Taskbar pins. A BPK selected for
+            // Start must not silently appear on the Taskbar.
+            val pinned = pinnedAndroid.distinctBy { it.packageName }
+            _uiState.value = _uiState.value.copy(pinnedTaskbarApps = pinned)
 
-                val recentAppsJson = prefs.getString("recent_apps", "[]") ?: "[]"
-                val recentAppsSaved: List<AppInfoSaved> = try {
-                    val type = object : TypeToken<List<AppInfoSaved>>() {}.type
-                    gson.fromJson(recentAppsJson, type)
-                } catch (e: Exception) { emptyList() }
+            val recentAppsJson = prefs.getString("recent_apps", "[]") ?: "[]"
+            val recentAppsSaved: List<AppInfoSaved> = try {
+                val type = object : TypeToken<List<AppInfoSaved>>() {}.type
+                gson.fromJson(recentAppsJson, type)
+            } catch (e: Exception) { emptyList() }
             val recent = recentAppsSaved.mapNotNull { saved -> allApps.find { it.packageName == saved.packageName } }
 
             // Publish the complete app snapshot once.  Previously this method emitted
@@ -1766,10 +1767,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             LauncherScreen.SETTINGS      -> "Settings"
             LauncherScreen.FILE_EXPLORER -> extras["path"]?.let { File(it).name.ifBlank { "File Explorer" } } ?: "File Explorer"
             LauncherScreen.BROWSER       -> "Bluebird Surfer Browser"
-            LauncherScreen.TASK_MANAGER  -> "Task Manager"
             LauncherScreen.CALCULATOR    -> "Calculator"
             LauncherScreen.CALENDAR      -> "Calendar"
-            LauncherScreen.PHOTOS        -> "Photos"
             LauncherScreen.MEDIA_PLAYER  -> "Media Player"
             LauncherScreen.IMAGE_VIEWER  -> extras["fileName"] ?: "Image Viewer"
             LauncherScreen.WORD_IMPRESS         -> "Word Impress"
@@ -1796,8 +1795,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             LauncherScreen.BROWSER       -> WindowIconKey.BROWSER
             LauncherScreen.CALCULATOR    -> WindowIconKey.CALCULATOR
             LauncherScreen.CALENDAR      -> WindowIconKey.CALENDAR
-            LauncherScreen.PHOTOS        -> WindowIconKey.PHOTOS
-            LauncherScreen.TASK_MANAGER  -> WindowIconKey.TASK_MANAGER
             LauncherScreen.MEDIA_PLAYER  -> WindowIconKey.MEDIA_PLAYER
             LauncherScreen.IMAGE_VIEWER  -> WindowIconKey.IMAGE_VIEWER
             LauncherScreen.WORD_IMPRESS         -> WindowIconKey.WORD_IMPRESS
@@ -2317,7 +2314,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val invalidSource = sources.firstOrNull { src ->
                 val sourceCanonical = src.canonicalFile
                 sourceCanonical == destCanonical ||
-                    (src.isDirectory && destCanonical.path.startsWith(sourceCanonical.path + File.separator))
+                        (src.isDirectory && destCanonical.path.startsWith(sourceCanonical.path + File.separator))
             }
             if (invalidSource != null) {
                 throw IOException("Cannot copy or move an item into itself")
@@ -2441,7 +2438,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                                     it.copy(
                                         copiedBytes = copiedBytes,
                                         currentFileName = from.name,
-                                        speedBytesPerSec = speed
+                                        speedBytesPerSec = speed,
+                                        speedHistory = (it.speedHistory + speed).takeLast(60)
                                     )
                                 }
                             }

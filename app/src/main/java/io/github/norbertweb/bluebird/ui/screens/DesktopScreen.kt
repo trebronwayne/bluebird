@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow // Crucial import for .shadow() modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -34,6 +35,8 @@ import coil.compose.AsyncImage
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.WallpaperTarget
 import io.github.norbertweb.bluebird.PowerAction // Imported enum type safely
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import io.github.norbertweb.bluebird.ui.components.*
 import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
@@ -52,6 +55,18 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
     // height/rounded-corner setting the user has chosen, without this file needing to
     // know about TaskbarPrefs at all.
     var taskbarHeightPx by remember { mutableStateOf(0f) }
+
+    // ── Real Acrylic/Mica backdrop blur (see HazeBlurSetup.kt) ──
+    // One HazeState for the whole screen: Desktop + open Windows are the
+    // blur *source* (.hazeSource below), every floating panel — Taskbar,
+    // Start Menu, Search, Action Center, Widgets, Power Menu — reads from
+    // it via .hazeMaterial(). Materials are tinted by wallpaperAccent, a
+    // muted color sampled from Bluebird's own currently-active wallpaper
+    // (see WallpaperAccent.kt/Desktop's onWallpaperAccent callback below)
+    // — the same way real Windows 11 Mica/Acrylic follow the desktop
+    // background, instead of a manual opacity slider.
+    val hazeState = rememberBluebirdHazeState()
+    var wallpaperAccent by remember { mutableStateOf(DS.accentStart) }
 
     // Floating bluebird-style toast popups — fed by the ViewModel's one-shot
     // toastEvents flow (fires exactly once per new device notification).
@@ -100,14 +115,21 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             }
     ) {
         // ── 1. Desktop ──
+        // .hazeSource marks this (wallpaper + icons) as content that glass
+        // panels drawn later (Taskbar, Start Menu, …) should blur through.
         Desktop(
             wallpaper = uiState.wallpaper,
             viewModel = viewModel,
-            modifier = Modifier.fillMaxSize(),
-            bottomSafeAreaPx = if (uiState.isTaskbarVisible) taskbarHeightPx else 0f
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
+            bottomSafeAreaPx = if (uiState.isTaskbarVisible) taskbarHeightPx else 0f,
+            onWallpaperAccent = { wallpaperAccent = it }
         )
 
         // ── 2. Windows ──
+        // Also a haze source — a panel opened over a maximized app window
+        // should blur that window's content too, not just the wallpaper.
         WindowManager(
             windows = uiState.openWindows,
             activeWindowId = uiState.activeWindowId,
@@ -116,6 +138,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp)
+                .hazeSource(state = hazeState)
         )
 
         // ── 3. Scrim ──
@@ -147,7 +170,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     .padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp)
                     .pointerInput(Unit) { detectTapGestures { /* consume */ } }
             ) {
-                WidgetsPanel(uiState = uiState, viewModel = viewModel)
+                WidgetsPanel(uiState = uiState, viewModel = viewModel, hazeState = hazeState, accent = wallpaperAccent)
             }
         }
 
@@ -163,7 +186,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     .padding(bottom = if (uiState.isTaskbarVisible) 54.dp else 8.dp)
                     .pointerInput(Unit) { detectTapGestures { /* consume */ } }
             ) {
-                StartMenu(uiState = uiState, viewModel = viewModel)
+                StartMenu(uiState = uiState, viewModel = viewModel, hazeState = hazeState, accent = wallpaperAccent)
             }
         }
 
@@ -182,6 +205,8 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             ) {
                 PowerMenu(
                     isDark = uiState.isDarkTheme,
+                    hazeState = hazeState,
+                    accent = wallpaperAccent,
                     onAction = { action ->
                         viewModel.dismissAllOverlays()
                         viewModel.performPowerAction(context, action)
@@ -203,7 +228,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     .padding(end = 8.dp)
                     .pointerInput(Unit) { detectTapGestures { /* consume */ } }
             ) {
-                ActionCenter(uiState = uiState, viewModel = viewModel)
+                ActionCenter(uiState = uiState, viewModel = viewModel, hazeState = hazeState, accent = wallpaperAccent)
             }
         }
 
@@ -219,7 +244,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     .padding(bottom = if (uiState.isTaskbarVisible) 54.dp else 8.dp)
                     .pointerInput(Unit) { detectTapGestures { /* consume */ } }
             ) {
-                SearchOverlay(uiState = uiState, viewModel = viewModel)
+                SearchOverlay(uiState = uiState, viewModel = viewModel, hazeState = hazeState, accent = wallpaperAccent)
             }
         }
 
@@ -233,6 +258,8 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             bluebirdTaskbar(
                 uiState = uiState,
                 viewModel = viewModel,
+                hazeState = hazeState,
+                accent = wallpaperAccent,
                 // Was previously forced to a hardcoded 44.dp here regardless of the
                 // user's actual taskbar height setting (Compact/Normal/Large all have
                 // different real heights) — that mismatch meant Compact left dead
@@ -337,23 +364,30 @@ private fun UndoToast(
 }
 
 // ── 11. Custom Windows 11 Power Menu Layout ──
+//
+// Previously fully hand-rolled: flat hex colors (#252B32/#E8ECF0), a plain
+// Modifier.shadow(), no relation at all to DS/StartMenu/SearchOverlay. It
+// was the most visibly "different app" surface in Bluebird — now it shares
+// the same glass material, corner radius language, and soft-shadow as
+// every other flyout.
 @Composable
 fun PowerMenu(
     isDark: Boolean,
+    hazeState: HazeState,
+    accent: Color,
     onAction: (PowerAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isDark) Color(0xFF252B32) else Color(0xFFE8ECF0)
-    val borderColor = if (isDark) Color(0xFF373E47) else Color(0xFFCDD5DF)
-    val textColor = if (isDark) Color.White else Color.Black
+    val cornerRadius = 12.dp
+    val borderColor = if (isDark) DS.borderDark else DS.borderLight
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
 
-    Surface(
+    Box(
         modifier = modifier
-            .width(140.dp)
-            .shadow(elevation = 12.dp, shape = RoundedCornerShape(8.dp)), // Resolved with explicit import
-        shape = RoundedCornerShape(8.dp),
-        color = bgColor,
-        border = BorderStroke(1.dp, borderColor)
+            .width(150.dp)
+            .softShadow(cornerRadius = cornerRadius, blurRadius = 24.dp, alpha = 0.24f, offsetY = 8.dp)
+            .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), RoundedCornerShape(cornerRadius))
+            .border(1.dp, borderColor, RoundedCornerShape(cornerRadius))
     ) {
         Column(
             modifier = Modifier.padding(vertical = 4.dp)
@@ -387,18 +421,35 @@ private fun PowerMenuItem(
     textColor: Color,
     onClick: () -> Unit
 ) {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = Motion.micro(),
+        label = "powerMenuItemPress"
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(6.dp))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        tryAwaitRelease()
+                        pressed = false
+                    },
+                    onTap = { onClick() }
+                )
+            }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = textColor.copy(alpha = 0.7f),
+            tint = textColor.copy(alpha = 0.75f),
             modifier = Modifier.size(16.dp)
         )
         Text(

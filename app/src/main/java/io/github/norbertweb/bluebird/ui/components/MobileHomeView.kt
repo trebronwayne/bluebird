@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -43,21 +44,32 @@ import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 
 // ─────────────────────────────────────────────────────────
-// MOBILE HOME VIEW — v3
+// MOBILE HOME VIEW — v4
 //
-// Was a paginated, side-swiped HorizontalPager grid + a separate fixed
-// bottom dock. That's gone: this is now one continuous, down-scrolling
-// list (LazyColumn), matching what was asked for — no side paging.
+// v3 painted a near-opaque flat color across the whole screen
+// (`background(lerp(surface, accent, 0.12f))`) which completely hid the
+// real Acrylic blur the parent StartMenu Box already applies via
+// hazeMaterial()/windowsAcrylic() — mobile mode was rendering on top of a
+// blurred panel but you'd never know it. That flat background is gone.
+// This view is now transparent by default and lets the parent's blur show
+// through, the same way the desktop Start Menu body does; icon tiles use
+// DS.controlFill() (a translucent scrim over the blur) instead of a flat
+// opaque surface color, for the same "same material, different depth"
+// reason described in FluentDesignSystem.kt. No gradients anywhere here —
+// tone comes from alpha layering only, not from a manufactured light source.
+//
+// New: a "Recent" row at the top of the list, showing up to 6 apps ranked
+// by open count — reuses the same open-count tracking StartMenu.kt's
+// desktop "Recent" tab already reads (getAppOpenCount, now `internal` so
+// this file can call it), so the two "Recent"s agree. (Not scroll-sticky —
+// this project's Compose Foundation version doesn't resolve stickyHeader —
+// so it stays as the first section rather than floating over the rest.)
 //
 // Sections, top to bottom:
-//   • Pinned    — pinned apps + pinned system apps (same "Add to Start"
-//                 pin used on desktop's All Apps / Pinned tab)
-//   • System    — Bluebird's built-in apps (Settings, Terminal, etc.),
-//                 with custom icons via rememberBuiltInIconResourceId
+//   • Recent    — max 6, most-launched apps (new)
+//   • Pinned    — pinned apps + pinned system apps
+//   • System    — Bluebird's built-in apps
 //   • All Apps  — every installed app, alphabetically grouped
-//
-// "Recent" and the quick-action shortcuts never existed on this screen
-// and still don't. No animations anywhere in this file.
 // ─────────────────────────────────────────────────────────
 @Composable
 fun MobileHomeView(
@@ -65,11 +77,9 @@ fun MobileHomeView(
     viewModel: LauncherViewModel,
     isDark: Boolean,
     context: Context,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
-    val (opacity, _) = rememberOpacity(context)
-    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
     val sortedApps = remember(uiState.installedApps) {
         uiState.installedApps.sortedBy { it.name.lowercase() }
     }
@@ -83,18 +93,36 @@ fun MobileHomeView(
     }
     val pinnedApps = uiState.pinnedTaskbarApps
 
+    // Most-launched, capped at 6 — recalculated when the app list or open
+    // counts change (open counts aren't observable state, so this re-reads
+    // on every open-count bump via the `recentTick` trick below).
+    var recentTick by remember { mutableStateOf(0) }
+    val recentApps = remember(uiState.installedApps, recentTick) {
+        uiState.installedApps
+            .map { it to getAppOpenCount(context, it.packageName) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .take(6)
+            .map { it.first }
+    }
+
     fun openApp(app: AppInfo) {
         incrementMobileHomeOpenCount(context, app.packageName)
         viewModel.openApp(context, app)
+        recentTick++
     }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(DS.glass(isDark, opacity)),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        if (recentApps.isNotEmpty()) {
+            item(key = "recent_sticky") {
+                MobileRecentBar(recentApps, isDark, onClick = { openApp(it) })
+            }
+        }
+
         if (pinnedApps.isNotEmpty() || pinnedBuiltInApps.isNotEmpty()) {
             item { MobileSectionHeader("Pinned", isDark) }
             items(pinnedApps.chunked(4), key = { "pinned_row_" + it.joinToString { a -> a.packageName } }) { row ->
@@ -131,6 +159,42 @@ fun MobileHomeView(
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
+}
+
+// ─────────────────────────────────────────────────────────
+// Recent — sticky top bar, max 6 apps by open count
+// ─────────────────────────────────────────────────────────
+@Composable
+private fun MobileRecentBar(apps: List<AppInfo>, isDark: Boolean, onClick: (AppInfo) -> Unit) {
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    // Its own background (not just the parent's blur) so it reads as a
+    // distinct "Recent" strip up top — controlFill() (the same "recessed
+    // control" scrim the desktop search bar uses) at a slightly stronger
+    // strength gives it enough separation without a hard edge.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DS.controlFill(isDark, strength = 1.15f), RoundedCornerShape(10.dp))
+            .padding(vertical = 10.dp, horizontal = 4.dp)
+    ) {
+        Text(
+            "Recent",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = textPrimary.copy(alpha = 0.7f),
+            letterSpacing = 0.4.sp,
+            modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            apps.forEach { app ->
+                Box(modifier = Modifier.weight(1f)) {
+                    MobileAppIcon(app = app, isDark = isDark, iconSize = 48, onClick = { onClick(app) })
+                }
+            }
+            repeat(6 - apps.size) { Spacer(modifier = Modifier.weight(1f)) }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
 }
 
 @Composable
@@ -200,7 +264,10 @@ private fun MobileAppIcon(
             modifier = Modifier
                 .size(iconSize.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(if (isDark) DS.surfaceDark else DS.surfaceLight),
+                // Was a flat opaque DS.surfaceDark/Light — same fix as the
+                // desktop search bar: a translucent scrim over the blur
+                // instead of a solid color that hides it.
+                .background(if (pressed) DS.controlFillFocused(isDark) else DS.controlFill(isDark)),
             contentAlignment = Alignment.Center
         ) {
             if (bitmap != null) {
@@ -249,13 +316,16 @@ private fun MobileBuiltInAppIcon(
     ) {
         if (customIconResId != 0) {
             Box(
-                modifier = Modifier.size(iconSize.dp).clip(RoundedCornerShape(16.dp)),
+                modifier = Modifier
+                    .size(iconSize.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (pressed) DS.controlFillFocused(isDark) else DS.controlFill(isDark)),
                 contentAlignment = Alignment.Center
             ) {
                 BuiltInAppIcon(
                     appName = name,
                     fallback = icon,
-                    tint = androidx.compose.ui.graphics.Color.White,
+                    tint = Color.White,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -267,7 +337,7 @@ private fun MobileBuiltInAppIcon(
                     .background(DS.accentStart),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, name, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size((iconSize / 2.5).dp))
+                Icon(icon, name, tint = Color.White, modifier = Modifier.size((iconSize / 2.5).dp))
             }
         }
         Spacer(Modifier.height(4.dp))

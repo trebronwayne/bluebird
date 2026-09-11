@@ -51,7 +51,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.animation.*
@@ -390,6 +393,7 @@ private fun formatTimer(sec: Long): String { val m = sec / 60; val s = sec % 60;
  */
 @Composable
 private fun fluentMenuModifier(isDark: Boolean): Modifier = Modifier
+    .shadow(10.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
     .clip(RoundedCornerShape(8.dp))
     .background(if (isDark) FTV.Surface else FTV.LSurface)
     .border(1.dp, if (isDark) FTV.Border else FTV.LBorder, RoundedCornerShape(8.dp))
@@ -400,6 +404,7 @@ private fun fluentMenuModifier(isDark: Boolean): Modifier = Modifier
  * fullscreen-video overlay, regardless of the app's light/dark setting.
  */
 private fun fluentFlyoutOnScrimModifier(): Modifier = Modifier
+    .shadow(10.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.4f))
     .clip(RoundedCornerShape(8.dp))
     .background(Color(0xFF242424))
     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
@@ -920,6 +925,21 @@ fun MediaPlayerScreen(
 
     }
 
+    // ── B-13: B-08's per-window brightness override is only ever written,
+    // never cleared — the gesture in VideoPlayerArea/FullscreenVideoView sets
+    // window.attributes.screenBrightness but nothing restored it, so the real
+    // screen stayed stuck at whatever brightness you left it at even after
+    // closing this virtual window entirely. Reset to "follow system" on exit.
+    DisposableEffect(Unit) {
+        onDispose {
+            (ctx as? Activity)?.let { activity ->
+                val lp = activity.window.attributes
+                lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                activity.window.attributes = lp
+            }
+        }
+    }
+
     // ── Connect to PlaybackService via MediaController ───────────────
     DisposableEffect(Unit) {
         val token = SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))
@@ -1269,6 +1289,7 @@ private fun FullscreenVideoView(
             }
             .pointerInput(Unit) { detectTapGestures(onTap = { state.showControls = !state.showControls }) }
     ) {
+        state.currentTrack?.let { VideoPoster(it, ctx, Modifier.fillMaxSize()) }
         VideoSurface(state.controller, state.aspectRatio, Modifier.fillMaxSize())
 
         if (state.isBuffering) CircularProgressIndicator(color = FTV.Accent, modifier = Modifier.align(Alignment.Center))
@@ -1327,7 +1348,7 @@ private fun LibraryPane(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(Modifier.size(32.dp).background(FTV.Accent, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(32.dp).background(FTV.Accent, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                 Icon(FI.Movie, null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
             Column {
@@ -1361,9 +1382,10 @@ private fun LibraryPane(
             tabs.forEach { (tab, icons) ->
                 val active = state.activeTab == tab
                 val (iconRegular, iconFilled) = icons
+                val tabBg by animateColorAsState(if (active) FTV.Accent else Color.Transparent, label = "tabbg")
                 Row(
-                    Modifier.clip(RoundedCornerShape(6.dp))
-                        .background(if (active) FTV.Accent else Color.Transparent)
+                    Modifier.clip(RoundedCornerShape(8.dp))
+                        .background(tabBg)
                         .clickable { state.activeTab = tab; if (tab != MediaTab.PLAYLISTS) state.openPlaylistId = null }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -1378,7 +1400,7 @@ private fun LibraryPane(
                             MediaTab.PLAYLIST -> "Queue"; MediaTab.FOLDERS -> "Folders"
                             MediaTab.RECENTS -> "Recent"; MediaTab.FAVORITES -> "Faves"
                         },
-                        color = if (active) Color.White else tcm, fontSize = 12.5.sp,
+                        color = if (active) Color.White else tcm, fontSize = 12.sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
@@ -1430,15 +1452,15 @@ private fun LibraryPane(
                         Icon(FI.Play, null, tint = FTV.Accent, modifier = Modifier.size(18.dp))
                     }
                 } else {
-                    Text("Your playlists", color = tcs, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
+                    Text("Your playlists", color = tcs, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     Row(
-                        Modifier.clip(RoundedCornerShape(6.dp)).background(FTV.Accent)
+                        Modifier.clip(RoundedCornerShape(8.dp)).background(FTV.Accent)
                             .clickable { state.showNewPlaylistDialog = true }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(FI.Add, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                        Text("New", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text("New", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -1473,7 +1495,7 @@ private fun LibraryPane(
                     itemsIndexed(state.playlist, key = { i, t -> "${i}_${t.metaKey}" }) { idx, t ->
                         LibraryRow(
                             track = t, isActive = state.currentIndex == idx,
-                            isPlaying = state.isPlaying, isDark = isDark, tc = tc, tcs = tcs, tcm = tcm, border = border,
+                            isPlaying = state.isPlaying, isDark = isDark, tc = tc, tcs = tcs, tcm = tcm, border = border, ctx = ctx,
                             showMoveControls = true,
                             onMoveUp   = if (idx > 0) {{ state.moveInPlaylist(idx, idx - 1) }} else null,
                             onMoveDown = if (idx < state.playlist.size - 1) {{ state.moveInPlaylist(idx, idx + 1) }} else null,
@@ -1502,7 +1524,7 @@ private fun LibraryPane(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Icon(FI.PlaylistPlay, null, tint = tcm, modifier = Modifier.size(32.dp))
-                                    Text("No playlists yet", color = tcs, fontSize = 13.5.sp)
+                                    Text("No playlists yet", color = tcs, fontSize = 13.sp)
                                     Text("Tap New to create one", color = tcm, fontSize = 11.sp)
                                 }
                             }
@@ -1516,14 +1538,14 @@ private fun LibraryPane(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)).background(FTV.Accent.copy(0.15f)),
+                                Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(FTV.Accent.copy(0.15f)),
                                     contentAlignment = Alignment.Center) {
                                     Icon(FI.PlaylistPlay, null, tint = FTV.Accent, modifier = Modifier.size(20.dp))
                                 }
                                 Column(Modifier.weight(1f)) {
                                     Text(pl.name, color = tc, fontSize = 14.sp, fontWeight = FontWeight.Medium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text("${pl.trackKeys.size} tracks", color = tcm, fontSize = 12.5.sp)
+                                    Text("${pl.trackKeys.size} tracks", color = tcm, fontSize = 12.sp)
                                 }
                                 Box {
                                     Icon(FI.MoreVert, null, tint = tcm,
@@ -1559,13 +1581,13 @@ private fun LibraryPane(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("This playlist is empty", color = tcs, fontSize = 13.5.sp)
+                                    Text("This playlist is empty", color = tcs, fontSize = 13.sp)
                                     Text("Long-press or use ⋮ on any track to add it here", color = tcm, fontSize = 11.sp, textAlign = TextAlign.Center)
                                 }
                             }
                         }
                         itemsIndexed(plTracks, key = { _, t -> "${openPl.id}_${t.metaKey}" }) { idx, t ->
-                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
+                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
                                 onClick = { state.playPlaylist(openPl.id, idx) },
                                 onAddToQueue = { state.addToPlaylist(t) },
                                 onPlayNext   = { state.playNext(t) },
@@ -1588,7 +1610,7 @@ private fun LibraryPane(
                             }
                         }
                         itemsIndexed(groupTracks, key = { _, t -> t.metaKey }) { idx, t ->
-                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
+                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
                                 onClick = { state.playQueue(groupTracks, idx) },
                                 onAddToQueue = { state.addToPlaylist(t) },
                                 onPlayNext   = { state.playNext(t) },
@@ -1603,41 +1625,24 @@ private fun LibraryPane(
                     }
                 }
                 MediaTab.MUSIC -> {
-                    if (state.searchQuery.isNotEmpty()) {
-                        itemsIndexed(tracks) { idx, t ->
-                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
-                                onClick = { state.playQueue(tracks, idx) },
-                                onAddToQueue = { state.addToPlaylist(t) },
-                                onPlayNext   = { state.playNext(t) },
-                                onRemoveFromQueue = {},
-                                onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
-                                onAddToPlaylist = { state.showAddToPlaylist = t },
-                                onShare    = { shareTrack(ctx, t) },
-                                onTagEdit  = { state.showTagEditor = t },
-                                onLoadSubtitle = null
-                            )
-                        }
-                    } else {
-                        state.audioGroups.forEach { (albumName, groupTracks) ->
-                            stickyHeader(key = "album_$albumName") {
-                                GroupHeader(albumName, groupTracks.size, isDark, tc, tcm, surface, surfaceH) {
-                                    state.playQueue(groupTracks, 0)
-                                }
-                            }
-                            itemsIndexed(groupTracks, key = { _, t -> t.metaKey }) { idx, t ->
-                                LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
-                                    onClick = { state.playQueue(groupTracks, idx) },
-                                    onAddToQueue = { state.addToPlaylist(t) },
-                                    onPlayNext   = { state.playNext(t) },
-                                    onRemoveFromQueue = {},
-                                    onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
-                                    onAddToPlaylist = { state.showAddToPlaylist = t },
-                                    onShare    = { shareTrack(ctx, t) },
-                                    onTagEdit  = { state.showTagEditor = t },
-                                    onLoadSubtitle = null
-                                )
-                            }
-                        }
+                    // Deliberately flat — no per-album section headers. A wall of
+                    // dividerless rows reads calmer and more "premium" than a
+                    // library chopped into a header every 3-4 tracks (the sticky
+                    // GroupHeader treatment is kept for Folders/Videos, where
+                    // people actually think in those buckets; nobody browses
+                    // their own music by album titles they don't remember).
+                    itemsIndexed(tracks, key = { _, t -> t.metaKey }) { idx, t ->
+                        LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
+                            onClick = { state.playQueue(tracks, idx) },
+                            onAddToQueue = { state.addToPlaylist(t) },
+                            onPlayNext   = { state.playNext(t) },
+                            onRemoveFromQueue = {},
+                            onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
+                            onAddToPlaylist = { state.showAddToPlaylist = t },
+                            onShare    = { shareTrack(ctx, t) },
+                            onTagEdit  = { state.showTagEditor = t },
+                            onLoadSubtitle = null
+                        )
                     }
                 }
                 else -> {
@@ -1650,7 +1655,7 @@ private fun LibraryPane(
                                 }
                             }
                             itemsIndexed(groupTracks, key = { _, t -> t.metaKey }) { idx, t ->
-                                LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
+                                LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
                                     onClick = { state.playQueue(groupTracks, idx) },
                                     onAddToQueue = { state.addToPlaylist(t) },
                                     onPlayNext   = { state.playNext(t) },
@@ -1665,7 +1670,7 @@ private fun LibraryPane(
                         }
                     } else {
                         itemsIndexed(tracks) { idx, t ->
-                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border,
+                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
                                 onClick = { state.playQueue(tracks, idx) },
                                 onAddToQueue = { state.addToPlaylist(t) },
                                 onPlayNext   = { state.playNext(t) },
@@ -1685,7 +1690,7 @@ private fun LibraryPane(
 
         if (state.currentTrack != null) {
             Divider(color = border)
-            MiniNowPlaying(state, isDark, tc, tcs, tcm)
+            MiniNowPlaying(state, isDark, tc, tcs, tcm, ctx)
         }
     }
 }
@@ -1719,12 +1724,113 @@ private fun GroupHeader(name: String, count: Int, isDark: Boolean, tc: Color, tc
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Column(Modifier.weight(1f)) {
-            Text(name, color = tc, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(name, color = tc, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("$count track${if (count != 1) "s" else ""}", color = tcm, fontSize = 11.sp)
         }
         Box(Modifier.size(26.dp).clip(CircleShape).background(FTV.Accent.copy(0.15f)).clickable { onPlayAll() }, contentAlignment = Alignment.Center) {
             Icon(FI.Play, null, tint = FTV.Accent, modifier = Modifier.size(14.dp))
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// N-05: Video thumbnails. Audio tracks get real album-art bitmaps from
+// MediaStore via `artworkUri`, but video files essentially never have an
+// equivalent indexed thumbnail — so every video row/poster was falling
+// back to a flat colored icon while every audio one showed real art. This
+// closes that gap by pulling an actual frame out of the video itself
+// (MediaMetadataRetriever, no extra permission/dependency) the first time
+// a track is shown, and caching the decoded bitmap in memory so scrolling
+// or revisiting Now Playing never re-decodes it.
+// ─────────────────────────────────────────────────────────────────
+
+private object VideoThumbCache {
+    private val hits   = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+    private val misses = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    fun peek(key: String): Bitmap? = hits[key]
+
+    suspend fun get(ctx: Context, track: MediaTrack): Bitmap? {
+        hits[track.metaKey]?.let { return it }
+        if (track.metaKey in misses) return null
+        return withContext(Dispatchers.IO) {
+            val bmp = runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(ctx, track.contentUri)
+                    if (Build.VERSION.SDK_INT >= 27) {
+                        // Decoded pre-scaled — cheap enough to do for every row, not just Now Playing.
+                        retriever.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270)
+                    } else {
+                        retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                } finally {
+                    retriever.release()
+                }
+            }.getOrNull()
+            if (bmp != null) hits[track.metaKey] = bmp else misses.add(track.metaKey)
+            bmp
+        }
+    }
+}
+
+@Composable
+private fun rememberVideoThumbnail(ctx: Context, track: MediaTrack): Bitmap? {
+    var bmp by remember(track.metaKey) { mutableStateOf(VideoThumbCache.peek(track.metaKey)) }
+    LaunchedEffect(track.metaKey) {
+        if (bmp == null) bmp = VideoThumbCache.get(ctx, track)
+    }
+    return bmp
+}
+
+/**
+ * One shared thumbnail box for every place a track's art shows up (library
+ * rows, mini player, Now Playing poster) so audio and video get exactly the
+ * same treatment: real artwork > a real video frame > the colored icon
+ * fallback — instead of video quietly getting a worse tier than audio.
+ */
+@Composable
+private fun TrackThumbnail(
+    track: MediaTrack, ctx: Context, size: Dp, radius: Dp = 8.dp,
+    isActive: Boolean = false, isPlaying: Boolean = false
+) {
+    val videoFrame = if (track.isVideo && track.artworkUri == null) rememberVideoThumbnail(ctx, track) else null
+    when {
+        track.artworkUri != null -> AsyncImage(
+            model = track.artworkUri, contentDescription = null,
+            modifier = Modifier.size(size).clip(RoundedCornerShape(radius)),
+            contentScale = ContentScale.Crop, error = null
+        )
+        videoFrame != null -> Image(
+            bitmap = videoFrame.asImageBitmap(), contentDescription = null,
+            modifier = Modifier.size(size).clip(RoundedCornerShape(radius)),
+            contentScale = ContentScale.Crop
+        )
+        else -> Box(
+            Modifier.size(size).clip(RoundedCornerShape(radius))
+                .background(if (track.isVideo) FTV.VideoGreen.copy(0.15f) else FTV.AudioPurple.copy(0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isActive && isPlaying) AnimatedEqualizer(FTV.Accent)
+            else Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null,
+                tint = if (isActive) FTV.Accent else (if (track.isVideo) FTV.VideoGreen else FTV.AudioPurple).copy(0.7f),
+                modifier = Modifier.size(size * 0.5f))
+        }
+    }
+}
+
+/**
+ * Full-bleed variant of [TrackThumbnail] used as a backdrop behind the
+ * ExoPlayer surface in the video screens — no fixed size/crop-to-square,
+ * no icon fallback (black is the right fallback there, not a music note).
+ */
+@Composable
+private fun VideoPoster(track: MediaTrack, ctx: Context, modifier: Modifier = Modifier) {
+    val videoFrame = if (track.artworkUri == null) rememberVideoThumbnail(ctx, track) else null
+    when {
+        track.artworkUri != null -> AsyncImage(model = track.artworkUri, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
+        videoFrame != null -> Image(bitmap = videoFrame.asImageBitmap(), contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
+        else -> {}
     }
 }
 
@@ -1737,7 +1843,7 @@ private fun LibraryRow(
     track: MediaTrack,
     isActive: Boolean, isPlaying: Boolean,
     isDark: Boolean,
-    tc: Color, tcs: Color, tcm: Color, border: Color,
+    tc: Color, tcs: Color, tcm: Color, border: Color, ctx: Context,
     showMoveControls: Boolean = false,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
@@ -1763,21 +1869,7 @@ private fun LibraryRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            if (track.artworkUri != null) {
-                AsyncImage(model = track.artworkUri, contentDescription = null,
-                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(5.dp)), contentScale = ContentScale.Crop,
-                    error = null)
-            } else {
-                Box(Modifier.size(40.dp).clip(RoundedCornerShape(5.dp))
-                    .background(if (track.isVideo) FTV.VideoGreen.copy(0.15f) else FTV.AudioPurple.copy(0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isActive && isPlaying) AnimatedEqualizer(FTV.Accent)
-                    else Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null,
-                        tint = if (isActive) FTV.Accent else (if (track.isVideo) FTV.VideoGreen else FTV.AudioPurple).copy(0.7f),
-                        modifier = Modifier.size(20.dp))
-                }
-            }
+            TrackThumbnail(track, ctx, size = 40.dp, isActive = isActive, isPlaying = isPlaying)
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1787,13 +1879,13 @@ private fun LibraryRow(
                 if (track.isFavorite) Icon(FI.Star, null, tint = FTV.Gold, modifier = Modifier.size(11.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(track.displayArtist, color = tcs, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(track.displayArtist, color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (track.durationMs > 0) {
-                    Text("·", color = tcm, fontSize = 12.5.sp)
-                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 12.5.sp)
+                    Text("·", color = tcm, fontSize = 12.sp)
+                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 12.sp)
                 }
             }
-            if (track.playCount > 0) Text("Played ${track.playCount}×", color = tcm, fontSize = 10.5.sp)
+            if (track.playCount > 0) Text("Played ${track.playCount}×", color = tcm, fontSize = 11.sp)
         }
         if (showMoveControls) {
             Column(Modifier.width(20.dp)) {
@@ -1836,26 +1928,22 @@ private fun LibraryRow(
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun MiniNowPlaying(state: PlayerState, isDark: Boolean, tc: Color, tcs: Color, tcm: Color) {
+private fun MiniNowPlaying(state: PlayerState, isDark: Boolean, tc: Color, tcs: Color, tcm: Color, ctx: Context) {
     val track = state.currentTrack ?: return
     Row(
         Modifier.fillMaxWidth()
+            .shadow(6.dp, RectangleShape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f))
             .background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
             .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(5.dp))
-            .background(if (track.isVideo) FTV.VideoGreen.copy(0.2f) else FTV.AudioPurple.copy(0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (track.artworkUri != null) AsyncImage(track.artworkUri, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            else Icon(if (track.isVideo) FI.Movie else FI.MusicNoteFilled, null,
-                tint = if (track.isVideo) FTV.VideoGreen else FTV.AudioPurple, modifier = Modifier.size(16.dp))
+        Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+            TrackThumbnail(track, ctx, size = 34.dp)
         }
         Column(Modifier.weight(1f)) {
-            Text(track.displayTitle,  color = tc,  fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-            Text(track.displayArtist, color = tcm, fontSize = 10.5.sp,  maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.displayTitle,  color = tc,  fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Text(track.displayArtist, color = tcm, fontSize = 11.sp,  maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onClick = { state.togglePlayPause() }, modifier = Modifier.size(30.dp)) {
             Icon(if (state.isPlaying) FI.Pause else FI.Play, null, tint = FTV.Accent, modifier = Modifier.size(18.dp))
@@ -1902,8 +1990,8 @@ private fun PlayerPane(
                 Text(track.displayTitle, color = tc, fontSize = 14.sp, fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
                 if (track.displayArtist != "Unknown Artist") {
-                    Text("—", color = tcm, fontSize = 12.5.sp)
-                    Text(track.displayArtist, color = tcs, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp))
+                    Text("—", color = tcm, fontSize = 12.sp)
+                    Text(track.displayArtist, color = tcs, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp))
                 }
             } else Text("Films & TV", color = tcs, fontSize = 14.sp)
             Spacer(Modifier.weight(1f))
@@ -2028,6 +2116,11 @@ private fun VideoPlayerArea(state: PlayerState, track: MediaTrack, tc: Color, tc
             }
             .pointerInput(Unit) { detectTapGestures(onTap = { state.showControls = !state.showControls }) }
     ) {
+        // N-05: a real poster (art or an extracted video frame) sits behind the
+        // surface so buffering/startup shows something intentional instead of
+        // flat black — the same "always something to look at" feel audio's
+        // art card gets. It's simply covered once the decoder draws a frame.
+        VideoPoster(track, ctx, Modifier.fillMaxSize())
         VideoSurface(state.controller, state.aspectRatio, Modifier.fillMaxSize())
 
         if (state.isBuffering) CircularProgressIndicator(color = FTV.Accent, modifier = Modifier.align(Alignment.Center))
@@ -2120,12 +2213,12 @@ private fun AudioPlayerArea(
         if (state.playlist.size > 1 && state.currentIndex < state.playlist.size - 1) {
             val next = state.playlist[state.currentIndex + 1]
             Row(
-                Modifier.clip(RoundedCornerShape(10.dp)).background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
+                Modifier.clip(RoundedCornerShape(12.dp)).background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(FI.QueueMusic, null, tint = tcm, modifier = Modifier.size(14.dp))
-                Text("Up next: ${next.displayTitle}", color = tcs, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Up next: ${next.displayTitle}", color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -2164,9 +2257,9 @@ private fun ProgressBar(state: PlayerState, tc: Color, tcm: Color, accent: Color
 
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatDuration((displayedProgress * state.durationMs).toLong()), color = tcm, fontSize = 12.5.sp)
-            Text("-${formatDuration((state.durationMs - (displayedProgress * state.durationMs).toLong()).coerceAtLeast(0))}", color = tcm, fontSize = 12.5.sp)
-            Text(formatDuration(state.durationMs), color = tcm, fontSize = 12.5.sp)
+            Text(formatDuration((displayedProgress * state.durationMs).toLong()), color = tcm, fontSize = 12.sp)
+            Text("-${formatDuration((state.durationMs - (displayedProgress * state.durationMs).toLong()).coerceAtLeast(0))}", color = tcm, fontSize = 12.sp)
+            Text(formatDuration(state.durationMs), color = tcm, fontSize = 12.sp)
         }
         Spacer(Modifier.height(2.dp))
         Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
@@ -2270,10 +2363,10 @@ private fun SpeedChip(state: PlayerState, bgTint: Color, tc: Color) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.clip(RoundedCornerShape(6.dp)).background(bgTint.copy(0.12f))
+            Modifier.clip(RoundedCornerShape(8.dp)).background(bgTint.copy(0.12f))
                 .clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
-        ) { Text(speedLabel(state.playbackSpeed), color = tc, fontSize = 12.5.sp, fontWeight = FontWeight.Medium) }
+        ) { Text(speedLabel(state.playbackSpeed), color = tc, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             SPEED_STEPS.forEach { s ->
                 val active = state.playbackSpeed == s
@@ -2296,12 +2389,12 @@ private fun SleepTimerChip(state: PlayerState, bgTint: Color) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.clip(RoundedCornerShape(6.dp)).background(bgTint.copy(0.12f))
+            Modifier.clip(RoundedCornerShape(8.dp)).background(bgTint.copy(0.12f))
                 .clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(FI.Timer, null, tint = bgTint, modifier = Modifier.size(13.dp))
-            if (state.sleepTimerActive) Text(formatTimer(state.sleepTimerSeconds), color = bgTint, fontSize = 12.5.sp)
+            if (state.sleepTimerActive) Text(formatTimer(state.sleepTimerSeconds), color = bgTint, fontSize = 12.sp)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             if (state.sleepTimerActive) {
@@ -2340,8 +2433,8 @@ private fun MoreControlsSheet(
     Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.BottomCenter) {
         Column(
             Modifier.fillMaxWidth()
-                .shadow(16.dp, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .shadow(16.dp, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
                 .clickable(enabled = false) {}
                 .padding(horizontal = 20.dp, vertical = 16.dp)
@@ -2355,17 +2448,18 @@ private fun MoreControlsSheet(
             // Playback speed
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Playback speed", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                    Text(speedLabel(state.playbackSpeed), color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                    Text("Playback speed", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(speedLabel(state.playbackSpeed), color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SPEED_STEPS.forEach { s ->
                         val active = state.playbackSpeed == s
+                        val chipBg by animateColorAsState(if (active) accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh), label = "speedchip")
                         Text(
-                            speedLabel(s), color = if (active) Color.White else tc, fontSize = 13.5.sp,
+                            speedLabel(s), color = if (active) Color.White else tc, fontSize = 13.sp,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                .background(if (active) accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh))
+                                .background(chipBg)
                                 .clickable { state.setSpeed(s) }
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         )
@@ -2378,15 +2472,15 @@ private fun MoreControlsSheet(
             // Sleep timer
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sleep timer", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Sleep timer", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     if (state.sleepTimerActive) {
-                        Text(formatTimer(state.sleepTimerSeconds), color = accent, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                        Text(formatTimer(state.sleepTimerSeconds), color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.sleepTimerActive) {
                         Text(
-                            "Cancel", color = FTV.DangerRed, fontSize = 13.5.sp, fontWeight = FontWeight.Medium,
+                            "Cancel", color = FTV.DangerRed, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                             modifier = Modifier.clip(RoundedCornerShape(8.dp))
                                 .background(FTV.DangerRed.copy(0.12f))
                                 .clickable { state.sleepTimerActive = false }
@@ -2395,7 +2489,7 @@ private fun MoreControlsSheet(
                     } else {
                         SLEEP_OPTIONS.forEach { (min, label) ->
                             Text(
-                                label, color = tc, fontSize = 13.5.sp,
+                                label, color = tc, fontSize = 13.sp,
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
                                     .background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
                                     .clickable { state.sleepTimerSeconds = min * 60L; state.sleepTimerActive = true }
@@ -2410,7 +2504,7 @@ private fun MoreControlsSheet(
 
             // Volume
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Volume", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                Text("Volume", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(
                         when { state.isMuted || state.volume == 0f -> FI.VolumeOff
@@ -2430,15 +2524,16 @@ private fun MoreControlsSheet(
             if (track?.isVideo == true) {
                 Divider(color = border)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Aspect ratio", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Aspect ratio", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AspectRatio.values().forEach { ar ->
                             val active = state.aspectRatio == ar
+                            val chipBg by animateColorAsState(if (active) accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh), label = "archip")
                             Text(
-                                ar.label, color = if (active) Color.White else tc, fontSize = 13.5.sp,
+                                ar.label, color = if (active) Color.White else tc, fontSize = 13.sp,
                                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                    .background(if (active) accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh))
+                                    .background(chipBg)
                                     .clickable { state.aspectRatio = ar }
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
@@ -2461,10 +2556,10 @@ private fun AspectRatioChip(state: PlayerState, tint: Color) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         Row(
-            Modifier.clip(RoundedCornerShape(6.dp)).background(tint.copy(0.12f))
+            Modifier.clip(RoundedCornerShape(8.dp)).background(tint.copy(0.12f))
                 .clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
-        ) { Text(state.aspectRatio.label, color = tint, fontSize = 12.5.sp) }
+        ) { Text(state.aspectRatio.label, color = tint, fontSize = 12.sp) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             AspectRatio.entries.forEach { ar ->
                 val active = state.aspectRatio == ar
@@ -2493,7 +2588,7 @@ private fun SettingsSheet(
     Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f)).clickable(onClick = onDismiss), contentAlignment = Alignment.CenterEnd) {
         Column(
             Modifier.width(320.dp).fillMaxHeight()
-                .shadow(16.dp, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                .shadow(16.dp, RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
                 .clickable(enabled = false) {}
                 .padding(16.dp)
@@ -2506,14 +2601,16 @@ private fun SettingsSheet(
             }
             Divider(color = border)
 
-            Text("Theme", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            Text("Theme", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BBTheme.values().forEach { theme ->
                     val active = ThemeHolder.current == theme
+                    val swatchBg by animateColorAsState(if (active) theme.palette.accent.copy(0.15f) else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh), label = "themebg")
+                    val swatchBorder by animateColorAsState(if (active) theme.palette.accent else Color.Transparent, label = "themeborder")
                     Column(
-                        Modifier.clip(RoundedCornerShape(10.dp))
-                            .background(if (active) theme.palette.accent.copy(0.15f) else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh))
-                            .border(1.dp, if (active) theme.palette.accent else Color.Transparent, RoundedCornerShape(10.dp))
+                        Modifier.clip(RoundedCornerShape(12.dp))
+                            .background(swatchBg)
+                            .border(1.dp, swatchBorder, RoundedCornerShape(12.dp))
                             .clickable { saveTheme(ctx, theme) }
                             .padding(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -2527,23 +2624,24 @@ private fun SettingsSheet(
 
             Divider(color = border)
 
-            Text("Equalizer", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            Text("Equalizer", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EqPreset.values().forEach { preset ->
                     val active = state.eqPreset == preset
+                    val presetBg by animateColorAsState(if (active) FTV.Accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh), label = "eqbg")
                     Box(
                         Modifier.clip(RoundedCornerShape(16.dp))
-                            .background(if (active) FTV.Accent else (if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh))
+                            .background(presetBg)
                             .clickable { state.applyEqPreset(preset) }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) { Text(preset.label, color = if (active) Color.White else tc, fontSize = 13.5.sp) }
+                    ) { Text(preset.label, color = if (active) Color.White else tc, fontSize = 13.sp) }
                 }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("Bass Boost", color = tc, fontSize = 14.sp)
-                    Text("Enhance low frequencies — now applies to video too", color = tcm, fontSize = 12.5.sp)
+                    Text("Enhance low frequencies — now applies to video too", color = tcm, fontSize = 12.sp)
                 }
                 Switch(checked = state.bassBoostOn, onCheckedChange = { state.setBassBoost(it) },
                     colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = FTV.Accent))
@@ -2552,7 +2650,7 @@ private fun SettingsSheet(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("3D Virtualizer", color = tc, fontSize = 14.sp)
-                    Text("Spacious surround sound", color = tcm, fontSize = 12.5.sp)
+                    Text("Spacious surround sound", color = tcm, fontSize = 12.sp)
                 }
                 Switch(checked = state.virtualizerOn, onCheckedChange = { state.setVirtualizer(it) },
                     colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = FTV.Accent))
@@ -2560,7 +2658,7 @@ private fun SettingsSheet(
 
             Divider(color = border)
 
-            Text("Crossfade", color = tcs, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            Text("Crossfade", color = tcs, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Duration", color = tc, fontSize = 14.sp)
@@ -2603,7 +2701,7 @@ private fun TagEditorSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("Edit Tags", color = tc, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("Changes are saved in-app only (does not modify the file)", color = tcs, fontSize = 12.5.sp)
+            Text("Changes are saved in-app only (does not modify the file)", color = tcs, fontSize = 12.sp)
             Divider(color = border)
             listOf(
                 Triple("Title", title) { v: String -> title = v },
@@ -2611,7 +2709,7 @@ private fun TagEditorSheet(
                 Triple("Album", album) { v: String -> album = v }
             ).forEach { (label, value, setter) ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(label, color = tcs, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                    Text(label, color = tcs, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     OutlinedTextField(
                         value = value, onValueChange = setter,
                         modifier = Modifier.fillMaxWidth(),
@@ -2656,14 +2754,15 @@ private fun shareTrack(ctx: Context, track: MediaTrack) {
 
 @Composable
 private fun ControlBtn(icon: ImageVector, tint: Color, size: Dp, onClick: () -> Unit) {
+    val animatedTint by animateColorAsState(tint, label = "controlbtn_tint")
     Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(size))
+        Icon(icon, null, tint = animatedTint, modifier = Modifier.size(size))
     }
 }
 
 @Composable
 private fun ToolbarBtn(icon: ImageVector, tc: Color, onClick: () -> Unit) {
-    Box(Modifier.size(36.dp).clip(RoundedCornerShape(5.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tc, modifier = Modifier.size(18.dp))
     }
 }
@@ -2690,17 +2789,18 @@ private fun AddToPlaylistDialog(
     Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
         Column(
             Modifier.width(320.dp).heightIn(max = 480.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                .clip(RoundedCornerShape(16.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
-                .border(1.dp, border, RoundedCornerShape(12.dp))
+                .border(1.dp, border, RoundedCornerShape(16.dp))
                 .clickable(enabled = false) {}
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("Add to playlist", color = tc, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(track.displayTitle, color = tcs, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.displayTitle, color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) { Icon(FI.Close, null, tint = tcm, modifier = Modifier.size(16.dp)) }
             }
@@ -2708,7 +2808,7 @@ private fun AddToPlaylistDialog(
 
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 if (state.userPlaylists.isEmpty() && !showNewRow) {
-                    Text("No playlists yet — create one below", color = tcm, fontSize = 13.5.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    Text("No playlists yet — create one below", color = tcm, fontSize = 13.sp, modifier = Modifier.padding(vertical = 12.dp))
                 }
                 state.userPlaylists.forEach { pl ->
                     val alreadyIn = track.metaKey in pl.trackKeys
@@ -2722,7 +2822,7 @@ private fun AddToPlaylistDialog(
                             tint = if (alreadyIn) FTV.Accent else tcm, modifier = Modifier.size(18.dp)
                         )
                         Text(pl.name, color = tc, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text("${pl.trackKeys.size}", color = tcm, fontSize = 12.5.sp)
+                        Text("${pl.trackKeys.size}", color = tcm, fontSize = 12.sp)
                     }
                 }
             }
@@ -2737,7 +2837,7 @@ private fun AddToPlaylistDialog(
                             .padding(horizontal = 10.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
-                        if (newName.isEmpty()) Text("Playlist name…", color = tcm, fontSize = 13.5.sp)
+                        if (newName.isEmpty()) Text("Playlist name…", color = tcm, fontSize = 13.sp)
                         androidx.compose.foundation.text.BasicTextField(
                             value = newName, onValueChange = { newName = it },
                             textStyle = androidx.compose.ui.text.TextStyle(color = tc, fontSize = 14.sp),
@@ -2782,9 +2882,11 @@ private fun NamePromptDialog(
     var value by remember { mutableStateOf(initialValue) }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.width(300.dp).clip(RoundedCornerShape(12.dp))
+            Modifier.width(300.dp)
+                .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                .clip(RoundedCornerShape(16.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
-                .border(1.dp, border, RoundedCornerShape(12.dp))
+                .border(1.dp, border, RoundedCornerShape(16.dp))
                 .clickable(enabled = false) {}
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)

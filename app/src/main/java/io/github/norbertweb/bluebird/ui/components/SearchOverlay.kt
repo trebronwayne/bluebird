@@ -3,527 +3,484 @@ package io.github.norbertweb.bluebird.ui.components
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
 import io.github.norbertweb.bluebird.AppInfo
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
+import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.delay
 
-// ─────────────────────────────────────────────
-// Search filter categories (like the one for Windows 11)
-// ─────────────────────────────────────────────
 private enum class SearchFilter(val label: String, val icon: ImageVector) {
     All("All", FluentIcon.Apps),
     Apps("Apps", FluentIcon.Grid),
-    Web("Web", FluentIcon.Globe),
-    Settings("Settings", FluentIcon.Settings),
-    Files("Files", FluentIcon.FolderOpen)
+    Web("Web", FluentIcon.Globe)
 }
-
-// ─────────────────────────────────────────────
-// Panel size — now 3 steps instead of a plain expand/collapse boolean, and
-// persisted so it survives the overlay being dismissed and reopened (fixes:
-// the size previously always reset to Compact via `remember { mutableStateOf(false) }`).
-// ─────────────────────────────────────────────
-private enum class SearchSizeMode { COMPACT, EXPANDED, FULLSCREEN }
 
 private const val SEARCH_OVERLAY_PREFS = "search_overlay_prefs"
 
-private fun getSavedSearchSizeMode(context: Context): SearchSizeMode {
-    val prefs = context.getSharedPreferences(SEARCH_OVERLAY_PREFS, Context.MODE_PRIVATE)
-    val name = prefs.getString("size_mode", SearchSizeMode.EXPANDED.name) // default changed to EXPANDED per updated design spec
-    return runCatching { SearchSizeMode.valueOf(name ?: "COMPACT") }
-        .getOrDefault(SearchSizeMode.EXPANDED)
-}
-
-private fun saveSearchSizeMode(context: Context, mode: SearchSizeMode) {
-    context.getSharedPreferences(SEARCH_OVERLAY_PREFS, Context.MODE_PRIVATE)
-        .edit().putString("size_mode", mode.name).apply()
-}
-
-// Recent searches are also persisted now — previously `mutableStateListOf()` meant
-// they vanished every time the overlay closed.
 private fun loadRecentSearches(context: Context): List<String> {
     val prefs = context.getSharedPreferences(SEARCH_OVERLAY_PREFS, Context.MODE_PRIVATE)
     val raw = prefs.getString("recent_searches", null) ?: return emptyList()
-    return raw.split("\u0001").filter { it.isNotBlank() }
+    return raw.split("\u0001").filter(String::isNotBlank)
 }
 
 private fun saveRecentSearches(context: Context, searches: List<String>) {
     context.getSharedPreferences(SEARCH_OVERLAY_PREFS, Context.MODE_PRIVATE)
-        .edit().putString("recent_searches", searches.joinToString("\u0001")).apply()
+        .edit()
+        .putString("recent_searches", searches.joinToString("\u0001"))
+        .apply()
 }
 
-// ─────────────────────────────────────────────
-// SearchOverlay
-// ─────────────────────────────────────────────
 @Composable
 fun SearchOverlay(
     uiState: LauncherUiState,
     viewModel: LauncherViewModel,
+    hazeState: HazeState,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
-    // Search is an explicit app-discovery consumer; do not initialize PackageManager
-    // data while the desktop shell is merely starting.
     LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
 
     val context = LocalContext.current
-    // Single source of truth for light/dark (see Theme.kt / LocalIsDarkTheme)
-    // — was reading uiState.isDarkTheme, a flag that no longer drives theme
-    // anywhere else in the app, which is why Search Overlay had drifted out
-    // of sync with Start Menu/Taskbar/Action Center/Window Manager.
     val isDark = LocalIsDarkTheme.current
+    val configuration = LocalConfiguration.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val mutedText = textColor.copy(alpha = 0.58f)
+    val subtleText = textColor.copy(alpha = 0.42f)
+
     var localSearchQuery by rememberSaveable { mutableStateOf(uiState.searchQuery) }
+    var activeFilter by remember { mutableStateOf(SearchFilter.All) }
+    val recentSearches = remember {
+        mutableStateListOf<String>().apply { addAll(loadRecentSearches(context)) }
+    }
 
     LaunchedEffect(uiState.searchQuery) {
         if (uiState.searchQuery != localSearchQuery) localSearchQuery = uiState.searchQuery
     }
 
     LaunchedEffect(localSearchQuery) {
-        delay(120)
+        delay(100)
         if (localSearchQuery != uiState.searchQuery) {
             viewModel.updateSearchQuery(localSearchQuery)
         }
     }
 
-    val searchQuery = localSearchQuery
-    val configuration = LocalConfiguration.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    // Panel size: Compact / Expanded / Full Screen. Persisted (fixes: this used to be a
-    // plain `remember { mutableStateOf(false) }` boolean that always reset to Compact
-    // whenever the overlay was dismissed and reopened).
-    var sizeMode by remember { mutableStateOf(getSavedSearchSizeMode(context)) }
-    val isExpanded = sizeMode != SearchSizeMode.COMPACT // kept for the child views' grid sizing
-    val isFullscreen = sizeMode == SearchSizeMode.FULLSCREEN
-
-    fun changeSizeMode(mode: SearchSizeMode) {
-        sizeMode = mode
-        saveSearchSizeMode(context, mode)
-    }
-
-    // Active filter tab
-    var activeFilter by remember { mutableStateOf(SearchFilter.All) }
-
-    // Recent searches — persisted so they survive the overlay closing (previously lost on close).
-    val recentSearches = remember { mutableStateListOf<String>().apply { addAll(loadRecentSearches(context)) } }
-
-    // Responsive Windows 11-style sizing: keep the overlay generous on phones,
-    // tablets and landscape without letting it become an oversized desktop card.
-    val screenWidth = configuration.screenWidthDp.dp
-    val screenHeight = configuration.screenHeightDp.dp
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-
-    val panelWidth = when (sizeMode) {
-        SearchSizeMode.COMPACT -> minOf(
-            screenWidth - 32.dp,
-            if (isLandscape) 620.dp else 520.dp
-        )
-        SearchSizeMode.EXPANDED -> minOf(
-            screenWidth - 24.dp,
-            if (isLandscape) 820.dp else 680.dp
-        )
-        SearchSizeMode.FULLSCREEN -> screenWidth
-    }
-
-    val maxPanelHeight = when (sizeMode) {
-        SearchSizeMode.COMPACT -> minOf(screenHeight * if (isLandscape) 0.72f else 0.58f, 520.dp)
-        SearchSizeMode.EXPANDED -> minOf(screenHeight * if (isLandscape) 0.84f else 0.76f, 700.dp)
-        SearchSizeMode.FULLSCREEN -> screenHeight
-    }
-
-    // Focus requester for auto-focus
     val focusRequester = remember { FocusRequester() }
-
-    fun performWebSearch(query: String) {
-        if (query.isNotBlank()) {
-            if (!recentSearches.contains(query)) {
-                recentSearches.add(0, query)
-                saveRecentSearches(context, recentSearches)
-            }
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${Uri.encode(query)}"))
-            context.startActivity(intent)
-        }
-    }
-
-    // Filtered results based on active tab
-    val normalizedQuery = remember(searchQuery) { searchQuery.trim().lowercase() }
-    val appResults = remember(uiState.installedApps, normalizedQuery) {
-        if (normalizedQuery.isEmpty()) uiState.installedApps
-        else uiState.installedApps.filter {
-            it.name.contains(normalizedQuery, ignoreCase = true) ||
-                    it.packageName.contains(normalizedQuery, ignoreCase = true)
-        }
-    }
-    val hasResults = appResults.isNotEmpty()
-
-    // Background surface (acrylic style)
-    // Was Color(0xFF1C1C2A)/Color(0xFFF0F0F5) — a separate fixed palette from
-    // Start Menu's glass background, and not affected by the transparency
-    // setting at all. Now shares DS.glass() with the live opacity value.
-    val (searchOpacity, _) = rememberOpacity(context)
-    val surfaceBg = DS.glass(isDark, searchOpacity)
-    val surfaceBorder = if (isDark) DS.borderDark else DS.borderLight
 
     LaunchedEffect(Unit) {
         runCatching { focusRequester.requestFocus() }
-        // Requesting focus doesn't guarantee the IME actually appears — explicitly show it,
-        // which was missing before (part of why the keyboard felt unreliable/inconsistent).
         runCatching { keyboardController?.show() }
     }
 
-    // Rounded in every mode so the search surface keeps the same modern desktop language.
-    // Fullscreen uses a slightly tighter radius because it reaches the screen edges.
-    val cornerRadius = if (isFullscreen) 24.dp else 28.dp
+    val searchQuery = localSearchQuery.trim()
+    val normalizedQuery = searchQuery.lowercase()
+    val isWideSearchLayout = configuration.screenWidthDp >= 560
 
-    Surface(
+    val appResults = remember(uiState.installedApps, normalizedQuery) {
+        if (normalizedQuery.isEmpty()) {
+            uiState.installedApps
+        } else {
+            uiState.installedApps.filter {
+                it.name.contains(normalizedQuery, ignoreCase = true) ||
+                    it.packageName.contains(normalizedQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    fun performWebSearch(query: String) {
+        if (query.isBlank()) return
+        if (!recentSearches.contains(query)) {
+            recentSearches.add(0, query)
+            if (recentSearches.size > 12) recentSearches.removeLast()
+            saveRecentSearches(context, recentSearches)
+        }
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://www.google.com/search?q=${Uri.encode(query)}")
+        )
+        context.startActivity(intent)
+    }
+
+    // Windows Search is a single floating Acrylic surface. There is deliberately
+    // no second card, no size-picker control, and no inner blur region.
+    // Match the polished Bluebird Start Menu shell while allowing Search
+    // a little extra height for its result hierarchy.
+    // Search is intentionally larger than Start while sharing its exact shell tone.
+    val width = minOf(configuration.screenWidthDp.dp * 0.96f, 680.dp)
+    val height = if (configuration.screenWidthDp > configuration.screenHeightDp) {
+        minOf(configuration.screenHeightDp.dp * 0.90f, 860.dp)
+    } else {
+        minOf(configuration.screenHeightDp.dp * 0.90f, 900.dp)
+    }
+
+    val radius = 12.dp
+    val panelShape = RoundedCornerShape(radius)
+
+    Box(
         modifier = modifier
-            .width(panelWidth)
-            .heightIn(max = maxPanelHeight)
-            .then(if (isFullscreen) Modifier.fillMaxHeight() else Modifier)
-            // Pushes this panel up above the keyboard instead of letting the IME cover it —
-            // this was the main cause of "keyboard blocks most parts".
+            .width(width)
+            .heightIn(min = 560.dp, max = height)
             .imePadding()
-            // Was Modifier.shadow(32.dp, ...) — replaced with the shared soft,
-            // wide, low-opacity shadow (see SoftUI.kt) so this panel reads as
-            // floating above the desktop instead of "card with a dropshadow",
-            // matching the same treatment now on Start Menu.
-            .then(
-                if (isFullscreen) Modifier
-                else Modifier.softShadow(cornerRadius = cornerRadius, blurRadius = 44.dp, alpha = 0.3f, offsetY = 16.dp)
-            ),
-        shape = RoundedCornerShape(cornerRadius),
-        color = surfaceBg,
-        border = BorderStroke(0.5.dp, surfaceBorder)
+            .softShadow(
+                cornerRadius = 12.dp,
+                blurRadius = 34.dp,
+                alpha = 0.30f,
+                offsetY = 10.dp
+            )
+            .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), panelShape)
+            .background(
+                if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8),
+                panelShape
+            )
+            .border(
+                1.dp,
+                if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f),
+                panelShape
+            )
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                // Keep one continuous Acrylic surface, exactly like Start.
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            // Windows-style search field: same visual family as the polished
+            // Start Menu, with the Bluebird colored search XML asset.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(
+                        if (isDark) Color.White.copy(alpha = 0.075f)
+                        else Color.White.copy(alpha = 0.82f)
+                    )
+                    .border(
+                        1.dp,
+                        if (isDark) Color.White.copy(alpha = 0.10f)
+                        else Color.Black.copy(alpha = 0.10f),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .clickable { runCatching { focusRequester.requestFocus() } }
+                    .padding(horizontal = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.ic_bluebird_start_search),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+
+                BasicTextField(
+                    value = localSearchQuery,
+                    onValueChange = { localSearchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = textColor,
+                        fontSize = 14.sp
+                    ),
+                    singleLine = true,
+                    cursorBrush = SolidColor(bluebirdColors.AccentBlue),
+                    decorationBox = { inner ->
+                        if (localSearchQuery.isEmpty()) {
+                            androidx.compose.material3.Text(
+                                "Search apps, settings, and documents",
+                                color = textColor.copy(alpha = 0.48f),
+                                fontSize = 14.sp
+                            )
+                        }
+                        inner()
+                    }
+                )
+
+                if (localSearchQuery.isNotEmpty()) {
+                    IconButton(
+                        icon = FluentIcon.Dismiss,
+                        tint = mutedText,
+                        size = 15.dp,
+                        onClick = { localSearchQuery = "" }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Keep the idle Search home visually quiet. Category filters appear
+            // once the user has an actual query, matching Windows Search's flow.
+            if (searchQuery.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(SearchFilter.values().toList()) { filter ->
+                        SearchFilterChip(
+                            filter = filter,
+                            selected = activeFilter == filter,
+                            isDark = isDark,
+                            onClick = { activeFilter = filter }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(11.dp))
+            }
+
             Column(
                 modifier = Modifier
-                    .padding(
-                        horizontal = if (isFullscreen) 24.dp else 20.dp,
-                        vertical = if (isFullscreen) 22.dp else 18.dp
-                    )
-                    // Scrollable so content is never clipped/hidden when the keyboard
-                    // shrinks the available height — it just scrolls instead of disappearing.
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
             ) {
-
-                // ── Search bar row ──
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Input field
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(46.dp)
-                            .clip(RoundedCornerShape(23.dp))
-                            .background(if (isDark) DS.surfaceDark else DS.surfaceLight)
-                            .border(
-                                1.dp,
-                                if (searchQuery.isNotEmpty()) bluebirdColors.AccentBlue.copy(0.5f) else surfaceBorder,
-                                RoundedCornerShape(23.dp)
-                            )
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            FluentIcon.Search,
-                            contentDescription = null,
-                            tint = if (searchQuery.isEmpty()) textColor.copy(alpha = 0.4f) else bluebirdColors.AccentBlue,
-                            modifier = Modifier.size(16.dp)
-                        )
-
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { localSearchQuery = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(focusRequester),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = textColor,
-                                fontSize = 14.sp
-                            ),
-                            singleLine = true,
-                            cursorBrush = SolidColor(bluebirdColors.AccentBlue),
-                            decorationBox = { inner ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        "Search apps, web, and more...",
-                                        color = textColor.copy(alpha = 0.35f),
-                                        fontSize = 13.sp
-                                    )
-                                }
-                                inner()
-                            }
-                        )
-
-                        // Shown/hidden instantly, no fade animation.
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                FluentIcon.Dismiss,
-                                contentDescription = "Clear",
-                                tint = textColor.copy(alpha = 0.45f),
-                                modifier = Modifier
-                                    .size(15.dp)
-                                    .clickable { localSearchQuery = "" }
-                            )
-                        }
-                    }
-
-                    // Size picker: Compact / Expanded / Full Screen (persisted).
-                    var showSizeMenu by remember { mutableStateOf(false) }
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(if (isDark) DS.surfaceDark else DS.surfaceLight)
-                                .border(0.5.dp, surfaceBorder, RoundedCornerShape(13.dp))
-                                .clickable { showSizeMenu = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                when (sizeMode) {
-                                    SearchSizeMode.COMPACT    -> FluentIcon.FullScreenMax
-                                    SearchSizeMode.EXPANDED   -> FluentIcon.Resize
-                                    SearchSizeMode.FULLSCREEN -> FluentIcon.FullScreenMin
-                                },
-                                contentDescription = "Panel size: ${sizeMode.name}",
-                                tint = textColor.copy(0.6f),
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showSizeMenu,
-                            onDismissRequest = { showSizeMenu = false },
-                            modifier = Modifier
-                                .background(surfaceBg, RoundedCornerShape(12.dp))
-                                .border(0.5.dp, surfaceBorder, RoundedCornerShape(12.dp))
-                        ) {
-                            listOf(
-                                SearchSizeMode.COMPACT to "Compact",
-                                SearchSizeMode.EXPANDED to "Expanded",
-                                SearchSizeMode.FULLSCREEN to "Full Screen"
-                            ).forEach { (mode, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            changeSizeMode(mode)
-                                            showSizeMenu = false
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    if (sizeMode == mode) {
-                                        Icon(FluentIcon.Checkmark, null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(14.dp))
-                                    } else {
-                                        Spacer(Modifier.size(14.dp))
-                                    }
-                                    Text(label, fontSize = 12.sp, color = textColor)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // ── Filter tabs (bluebird style) — shown/hidden instantly ──
-                if (searchQuery.isNotEmpty() || isExpanded) {
-                    Column {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(SearchFilter.values().toList()) { filter ->
-                                SearchFilterChip(
-                                    filter = filter,
-                                    isSelected = activeFilter == filter,
-                                    isDark = isDark,
-                                    onClick = { activeFilter = filter }
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-                }
-
-                // ── IDLE STATE (no query) ──
-                if (searchQuery.isBlank()) {
+                if (searchQuery.isEmpty()) {
                     IdleSearchContent(
                         uiState = uiState,
+                        recentSearches = recentSearches,
                         isDark = isDark,
                         textColor = textColor,
-                        isExpanded = isExpanded,
-                        isFullscreen = isFullscreen,
-                        recentSearches = recentSearches,
+                        isWideLayout = isWideSearchLayout,
                         onAppClick = { viewModel.openApp(context, it) },
-                        onQuickSearch = { viewModel.updateSearchQuery(it) },
-                        onRecentClick = {
-                            viewModel.updateSearchQuery(it)
-                            performWebSearch(it)
-                        },
+                        onQuickSearch = { localSearchQuery = it },
+                        onRecentClick = { localSearchQuery = it },
                         onClearRecent = {
                             recentSearches.clear()
                             saveRecentSearches(context, emptyList())
                         }
                     )
                 } else {
-                    // ── RESULTS STATE ──
                     SearchResultsContent(
                         query = searchQuery,
                         appResults = appResults,
                         activeFilter = activeFilter,
                         isDark = isDark,
                         textColor = textColor,
-                        isExpanded = isExpanded,
-                        isFullscreen = isFullscreen,
                         onAppClick = { viewModel.openApp(context, it) },
                         onWebSearch = { performWebSearch(it) }
                     )
                 }
             }
+
+            // Full-width structural boundary, matching the Start surface.
+            Spacer(Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        if (isDark) Color.White.copy(alpha = 0.07f)
+                        else Color.Black.copy(alpha = 0.07f)
+                    )
+            )
+            Spacer(Modifier.height(2.dp))
         }
     }
 }
 
-// ─────────────────────────────────────────────
-// Idle state (no search query)
-// ─────────────────────────────────────────────
 @Composable
 private fun IdleSearchContent(
     uiState: LauncherUiState,
+    recentSearches: List<String>,
     isDark: Boolean,
     textColor: Color,
-    isExpanded: Boolean,
-    isFullscreen: Boolean = false,
-    recentSearches: List<String>,
+    isWideLayout: Boolean,
     onAppClick: (AppInfo) -> Unit,
     onQuickSearch: (String) -> Unit,
     onRecentClick: (String) -> Unit,
     onClearRecent: () -> Unit
 ) {
-    val gridColumns = when {
-        isFullscreen -> 8
-        isExpanded -> 6
-        else -> 4
-    }
-    val appCount = if (isFullscreen) 32 else if (isExpanded) 18 else 8
-    val gridMaxHeight = when {
-        isFullscreen -> 520.dp
-        isExpanded -> 300.dp
-        else -> 220.dp
-    }
+    val context = LocalContext.current
 
-    // ── Recommended / Top Apps ──
-    SectionHeader(
-        title = "Recommended",
-        icon = FluentIcon.Sparkle,
-        textColor = textColor,
-        action = null
-    )
-    Spacer(Modifier.height(8.dp))
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(gridColumns),
-        modifier = Modifier.heightIn(max = gridMaxHeight),
-        contentPadding = PaddingValues(2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        userScrollEnabled = false
-    ) {
-        items(uiState.installedApps.take(appCount)) { app ->
-            TopAppItem(app = app, isDark = isDark, onClick = { onAppClick(app) })
-        }
-    }
-
-    Spacer(Modifier.height(14.dp))
-
-    // ── Quick searches ──
-    SectionHeader(title = "Quick search", icon = FluentIcon.Flash, textColor = textColor, action = null)
-    Spacer(Modifier.height(8.dp))
-
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(quickSearchItems) { (label, icon) ->
-            QuickSearchChip(
-                label = label,
-                icon = icon,
-                isDark = isDark,
-                onClick = { onQuickSearch(label) }
+    // Windows Search reference hierarchy: Recent on the left; Quick searches
+    // at upper-right; Top apps directly underneath. Everything stays inside
+    // the same continuous Bluebird Acrylic surface as Start.
+    val topApps = remember(uiState.installedApps) {
+        uiState.installedApps
+            .map { it to getAppOpenCount(context, it.packageName) }
+            .sortedWith(
+                compareByDescending<Pair<AppInfo, Int>> { it.second }
+                    .thenBy { it.first.name.lowercase() }
             )
-        }
+            .map { it.first }
+            .take(6)
+            .ifEmpty { uiState.installedApps.take(6) }
     }
 
-    // ── Recent searches ──
-    if (recentSearches.isNotEmpty()) {
-        Spacer(Modifier.height(14.dp))
-        SectionHeader(
-            title = "Recent searches",
-            icon = FluentIcon.List,
-            textColor = textColor,
-            action = "Clear" to onClearRecent
-        )
-        Spacer(Modifier.height(6.dp))
+    @Composable
+    fun RecentColumn(modifier: Modifier = Modifier) {
+        Column(modifier = modifier) {
+            SectionHeader(
+                title = "Recent",
+                icon = FluentIcon.List,
+                textColor = textColor,
+                action = if (recentSearches.isNotEmpty()) "Clear" to onClearRecent else null
+            )
+            Spacer(Modifier.height(7.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            recentSearches.take(if (isFullscreen) 15 else if (isExpanded) 8 else 5).forEach { query ->
-                RecentSearchRow(query = query, isDark = isDark, textColor = textColor, onClick = { onRecentClick(query) })
+            if (recentSearches.isNotEmpty()) {
+                recentSearches.take(6).forEach { query ->
+                    RecentSearchRow(
+                        query = query,
+                        textColor = textColor,
+                        onClick = { onRecentClick(query) }
+                    )
+                }
+            } else if (topApps.isNotEmpty()) {
+                // There is no separate Windows-style local file index in
+                // Bluebird yet, so a fresh install shows real installed apps
+                // rather than a fabricated recent-file list.
+                topApps.take(4).forEach { app ->
+                    SuggestedAppRow(
+                        app = app,
+                        isDark = isDark,
+                        textColor = textColor,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onAppClick(app) }
+                    )
+                }
+            } else {
+                Text(
+                    "No recent searches yet",
+                    color = textColor.copy(alpha = 0.42f),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
         }
     }
 
-    Spacer(Modifier.height(8.dp))
+    @Composable
+    fun RightColumn(modifier: Modifier = Modifier) {
+        Column(modifier = modifier) {
+            SectionHeader("Quick searches", FluentIcon.Flash, textColor)
+            Spacer(Modifier.height(7.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                quickSearchItems.take(6).chunked(2).forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        pair.forEach { (label, icon) ->
+                            QuickSearchChip(
+                                label = label,
+                                icon = icon,
+                                isDark = isDark,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onQuickSearch(label) }
+                            )
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            SectionHeader("Top apps", FluentIcon.Apps, textColor)
+            Spacer(Modifier.height(7.dp))
+
+            if (topApps.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    topApps.chunked(2).forEach { rowApps ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            rowApps.forEach { app ->
+                                TopAppItem(
+                                    app = app,
+                                    isDark = isDark,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onAppClick(app) }
+                                )
+                            }
+                            if (rowApps.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    "No apps available",
+                    color = textColor.copy(alpha = 0.42f),
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
+    if (isWideLayout) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(22.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            RecentColumn(modifier = Modifier.weight(0.9f))
+            RightColumn(modifier = Modifier.weight(1.35f))
+        }
+    } else {
+        // Portrait phones preserve the exact section order while stacking
+        // columns so none of the reference content becomes cramped.
+        RecentColumn(modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(18.dp))
+        RightColumn(modifier = Modifier.fillMaxWidth())
+    }
 }
 
-// ─────────────────────────────────────────────
-// Results state
-// ─────────────────────────────────────────────
 @Composable
 private fun SearchResultsContent(
     query: String,
@@ -531,41 +488,16 @@ private fun SearchResultsContent(
     activeFilter: SearchFilter,
     isDark: Boolean,
     textColor: Color,
-    isExpanded: Boolean,
-    isFullscreen: Boolean = false,
     onAppClick: (AppInfo) -> Unit,
     onWebSearch: (String) -> Unit
 ) {
     val showApps = activeFilter == SearchFilter.All || activeFilter == SearchFilter.Apps
     val showWeb = activeFilter == SearchFilter.All || activeFilter == SearchFilter.Web
-    val maxResults = if (isFullscreen) 24 else if (isExpanded) 10 else 6
-    val listMaxHeight = if (isFullscreen) 520.dp else if (isExpanded) 260.dp else 180.dp
 
-    if (appResults.isEmpty() && showApps) {
-        // No app results
-        Box(
-            modifier = Modifier.fillMaxWidth().height(80.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(FluentIcon.Search, null, tint = textColor.copy(0.18f), modifier = Modifier.size(28.dp))
-                Spacer(Modifier.height(6.dp))
-                Text("No apps found for \"$query\"", color = textColor.copy(0.45f), fontSize = 12.sp)
-            }
-        }
-    }
-
-    // App results section
-    if (showApps && appResults.isNotEmpty()) {
-        SectionHeader(
-            title = "Apps",
-            icon = FluentIcon.Apps,
-            textColor = textColor,
-            action = if (appResults.size > maxResults) "See all (${appResults.size})" to {} else null
-        )
+    if (showApps) {
+        SectionHeader("Best match", FluentIcon.Apps, textColor)
         Spacer(Modifier.height(6.dp))
 
-        // Best match hero item
         if (appResults.isNotEmpty()) {
             BestMatchItem(
                 app = appResults.first(),
@@ -573,48 +505,41 @@ private fun SearchResultsContent(
                 textColor = textColor,
                 onClick = { onAppClick(appResults.first()) }
             )
-            Spacer(Modifier.height(6.dp))
-        }
 
-        // Rest of results
-        if (appResults.size > 1) {
-            LazyColumn(
-                modifier = Modifier.heightIn(max = listMaxHeight),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                items(appResults.drop(1).take(maxResults - 1)) { app ->
+            Spacer(Modifier.height(10.dp))
+
+            if (appResults.size > 1) {
+                appResults.drop(1).take(8).forEach { app ->
                     AppResultRow(
                         app = app,
                         query = query,
-                        isDark = isDark,
                         textColor = textColor,
                         onClick = { onAppClick(app) }
                     )
                 }
             }
+        } else {
+            EmptySearchState(query = query, textColor = textColor)
         }
-        Spacer(Modifier.height(10.dp))
     }
 
-    // Web search section
     if (showWeb) {
-        HorizontalDivider(color = if (isDark) DS.borderDark else DS.borderLight, modifier = Modifier.padding(vertical = 4.dp))
-        Spacer(Modifier.height(4.dp))
-
-        SectionHeader(title = "Web", icon = FluentIcon.Globe, textColor = textColor, action = null)
-        Spacer(Modifier.height(6.dp))
-
-        // Search the web row
-        WebSearchRow(query = query, isDark = isDark, textColor = textColor, onClick = { onWebSearch(query) })
+        Spacer(Modifier.height(12.dp))
+        SectionHeader("Search the web", FluentIcon.Globe, textColor)
 
         Spacer(Modifier.height(6.dp))
 
-        // Suggested web queries
-        val suggestions = generateWebSuggestions(query)
-        suggestions.take(if (isFullscreen) 8 else if (isExpanded) 4 else 2).forEach { suggestion ->
+        WebSearchRow(
+            query = query,
+            textColor = textColor,
+            onClick = { onWebSearch(query) }
+        )
+
+        Spacer(Modifier.height(5.dp))
+
+        generateWebSuggestions(query).take(4).forEach { suggestion ->
             WebSuggestionRow(
                 suggestion = suggestion,
-                isDark = isDark,
                 textColor = textColor,
                 onClick = { onWebSearch(suggestion) }
             )
@@ -622,329 +547,440 @@ private fun SearchResultsContent(
     }
 }
 
-// ─────────────────────────────────────────────
-// Best match "hero" result
-// ─────────────────────────────────────────────
 @Composable
-private fun BestMatchItem(app: AppInfo, isDark: Boolean, textColor: Color, onClick: () -> Unit) {
-    val bg = if (isDark) DS.surfaceDark else DS.surfaceLight
+private fun EmptySearchState(query: String, textColor: Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.ic_bluebird_start_search),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.material3.Text(
+            "No apps found for \"$query\"",
+            color = textColor.copy(alpha = 0.48f),
+            fontSize = 12.sp
+        )
+    }
+}
 
+@Composable
+private fun BestMatchItem(
+    app: AppInfo,
+    isDark: Boolean,
+    textColor: Color,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .border(0.5.dp, bluebirdColors.AccentBlue.copy(0.3f), RoundedCornerShape(10.dp))
+            .background(DS.controlFill(isDark, 0.82f))
             .clickable(onClick = onClick)
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // App icon with accent ring
-        Box {
-            AppIconSmall(
-                drawable = app.icon,
-                contentDescription = app.name,
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(10.dp))
-            )
-            // Best match indicator
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(bluebirdColors.AccentBlue),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(FluentIcon.Sparkle, null, tint = Color.White, modifier = Modifier.size(8.dp))
-            }
-        }
+        AppIconSmall(
+            drawable = app.icon,
+            contentDescription = app.name,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+        )
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(app.name, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text("Best match · App", color = textColor.copy(0.5f), fontSize = 11.sp)
+            androidx.compose.material3.Text(
+                app.name,
+                color = textColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            androidx.compose.material3.Text(
+                "App",
+                color = textColor.copy(alpha = 0.48f),
+                fontSize = 11.sp
+            )
         }
 
-        // Open button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(bluebirdColors.AccentBlue.copy(0.15f))
-                .border(0.5.dp, bluebirdColors.AccentBlue.copy(0.4f), RoundedCornerShape(6.dp))
-                .padding(horizontal = 10.dp, vertical = 5.dp)
-        ) {
-            Text("Open", color = bluebirdColors.AccentBlue, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-        }
+        TextButton(
+            label = "Open",
+            tint = bluebirdColors.AccentBlue,
+            onClick = onClick
+        )
     }
 }
 
-// ─────────────────────────────────────────────
-// App result row
-// ─────────────────────────────────────────────
 @Composable
-private fun AppResultRow(app: AppInfo, query: String, isDark: Boolean, textColor: Color, onClick: () -> Unit) {
-    var hovered by remember { mutableStateOf(false) }
-    val bg = if (hovered) (if (isDark) DS.surfaceDark else DS.surfaceLight) else Color.Transparent
-
+private fun AppResultRow(
+    app: AppInfo,
+    query: String,
+    textColor: Color,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(7.dp))
-            .background(bg)
+            .clip(RoundedCornerShape(9.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         AppIconSmall(
             drawable = app.icon,
             contentDescription = app.name,
-            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp))
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(8.dp))
         )
+
         Column(modifier = Modifier.weight(1f)) {
-            // Highlight matched text
-            val nameAnnotated = buildAnnotatedString {
-                val lower = app.name.lowercase()
-                val queryLower = query.lowercase()
-                val idx = lower.indexOf(queryLower)
-                if (idx >= 0) {
-                    append(app.name.substring(0, idx))
-                    withStyle(SpanStyle(color = bluebirdColors.AccentBlue, fontWeight = FontWeight.SemiBold)) {
-                        append(app.name.substring(idx, idx + query.length))
+            val lower = app.name.lowercase()
+            val index = lower.indexOf(query.lowercase())
+            val name = buildAnnotatedString {
+                if (index >= 0) {
+                    append(app.name.substring(0, index))
+                    withStyle(
+                        SpanStyle(
+                            color = bluebirdColors.AccentBlue,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    ) {
+                        append(app.name.substring(index, index + query.length))
                     }
-                    append(app.name.substring(idx + query.length))
+                    append(app.name.substring(index + query.length))
                 } else {
                     append(app.name)
                 }
             }
-            Text(nameAnnotated, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("App", color = textColor.copy(0.4f), fontSize = 10.sp)
+
+            androidx.compose.material3.Text(
+                name,
+                color = textColor,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            androidx.compose.material3.Text(
+                "App",
+                color = textColor.copy(alpha = 0.42f),
+                fontSize = 10.sp
+            )
         }
-        Icon(FluentIcon.ChevronRight, null, tint = textColor.copy(0.25f), modifier = Modifier.size(14.dp))
+
+        Icon(FluentIcon.ChevronRight, null, tint = textColor.copy(alpha = 0.26f), modifier = Modifier.size(14.dp))
     }
 }
 
-// ─────────────────────────────────────────────
-// Web search row
-// ─────────────────────────────────────────────
 @Composable
-private fun WebSearchRow(query: String, isDark: Boolean, textColor: Color, onClick: () -> Unit) {
+private fun SuggestedAppRow(
+    app: AppInfo,
+    isDark: Boolean,
+    textColor: Color,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        AppIconSmall(
+            drawable = app.icon,
+            contentDescription = app.name,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            androidx.compose.material3.Text(
+                app.name,
+                color = textColor,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            androidx.compose.material3.Text(
+                "Suggested",
+                color = textColor.copy(alpha = 0.40f),
+                fontSize = 9.5.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentSearchRow(
+    query: String,
+    textColor: Color,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isDark) DS.surfaceDark else DS.surfaceLight) // was a local one-off color pair
-            .border(0.5.dp, bluebirdColors.AccentBlue.copy(0.2f), RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+            .padding(horizontal = 7.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
-        Icon(FluentIcon.Globe, null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(16.dp))
-        Text(
-            buildAnnotatedString {
-                append("Search the web for ")
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = textColor)) {
-                    append("\"$query\"")
-                }
-            },
-            color = textColor.copy(0.75f),
-            fontSize = 13.sp,
-            modifier = Modifier.weight(1f)
-        )
-        Icon(FluentIcon.Open, null, tint = textColor.copy(0.3f), modifier = Modifier.size(13.dp))
-    }
-}
-
-// ─────────────────────────────────────────────
-// Web suggestion row
-// ─────────────────────────────────────────────
-@Composable
-private fun WebSuggestionRow(suggestion: String, isDark: Boolean, textColor: Color, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(7.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(FluentIcon.ArrowTrendingUp, null, tint = textColor.copy(0.3f), modifier = Modifier.size(13.dp))
-        Text(suggestion, color = textColor.copy(0.75f), fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Icon(FluentIcon.ArrowReply, null, tint = textColor.copy(0.2f), modifier = Modifier.size(12.dp))
-    }
-}
-
-// ─────────────────────────────────────────────
-// Recent search row
-// ─────────────────────────────────────────────
-@Composable
-private fun RecentSearchRow(query: String, isDark: Boolean, textColor: Color, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(7.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(FluentIcon.List, null, tint = textColor.copy(0.4f), modifier = Modifier.size(14.dp))
-        Text(
+        Icon(FluentIcon.List, null, tint = textColor.copy(alpha = 0.42f), modifier = Modifier.size(14.dp))
+        androidx.compose.material3.Text(
             query,
-            color = textColor.copy(0.8f),
-            fontSize = 13.sp,
+            color = textColor.copy(alpha = 0.78f),
+            fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
-        Icon(FluentIcon.ArrowReply, null, tint = textColor.copy(0.2f), modifier = Modifier.size(12.dp))
+        Icon(FluentIcon.ArrowReply, null, tint = textColor.copy(alpha = 0.22f), modifier = Modifier.size(12.dp))
     }
 }
 
-// ─────────────────────────────────────────────
-// Section header
-// ─────────────────────────────────────────────
+@Composable
+private fun TopAppItem(
+    app: AppInfo,
+    isDark: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        AppIconSmall(
+            drawable = app.icon,
+            contentDescription = app.name,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+        )
+        Spacer(Modifier.height(5.dp))
+        androidx.compose.material3.Text(
+            app.name,
+            color = textColor.copy(alpha = 0.78f),
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun QuickSearchChip(
+    label: String,
+    icon: ImageVector,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(DS.controlFill(isDark, 0.82f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(icon, null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(13.dp))
+        androidx.compose.material3.Text(
+            label,
+            color = textColor.copy(alpha = 0.82f),
+            fontSize = 11.sp
+        )
+    }
+}
+
+@Composable
+private fun WebSearchRow(
+    query: String,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(11.dp))
+            .background(DS.controlFill(LocalIsDarkTheme.current, 0.95f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(FluentIcon.Globe, null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(16.dp))
+        androidx.compose.material3.Text(
+            buildAnnotatedString {
+                append("Search the web for ")
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = textColor)) {
+                    append("\"$query\"")
+                }
+            },
+            color = textColor.copy(alpha = 0.76f),
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(FluentIcon.Open, null, tint = textColor.copy(alpha = 0.3f), modifier = Modifier.size(13.dp))
+    }
+}
+
+@Composable
+private fun WebSuggestionRow(
+    suggestion: String,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Icon(FluentIcon.ArrowTrendingUp, null, tint = textColor.copy(alpha = 0.30f), modifier = Modifier.size(13.dp))
+        androidx.compose.material3.Text(
+            suggestion,
+            color = textColor.copy(alpha = 0.70f),
+            fontSize = 11.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Icon(FluentIcon.ArrowReply, null, tint = textColor.copy(alpha = 0.20f), modifier = Modifier.size(12.dp))
+    }
+}
+
 @Composable
 private fun SectionHeader(
     title: String,
     icon: ImageVector,
     textColor: Color,
-    action: Pair<String, () -> Unit>?
+    action: Pair<String, () -> Unit>? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = textColor.copy(0.45f), modifier = Modifier.size(12.dp))
-        Spacer(Modifier.width(5.dp))
-        Text(
+        androidx.compose.material3.Text(
             title,
-            color = textColor.copy(0.5f),
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.4.sp
+            color = textColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
         )
+
         Spacer(Modifier.weight(1f))
+
         if (action != null) {
-            Text(
+            androidx.compose.material3.Text(
                 action.first,
                 color = bluebirdColors.AccentBlue,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable { action.second() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .padding(horizontal = 5.dp, vertical = 3.dp)
             )
         }
     }
 }
 
-// ─────────────────────────────────────────────
-// Search filter chip
-// ─────────────────────────────────────────────
 @Composable
 private fun SearchFilterChip(
     filter: SearchFilter,
-    isSelected: Boolean,
+    selected: Boolean,
     isDark: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = when {
-        isSelected -> bluebirdColors.AccentBlue
-        isDark -> DS.surfaceDark
-        else -> DS.surfaceLight
-    }
-    val textColor = if (isSelected) Color.White
-        else if (isDark) bluebirdColors.TextPrimary.copy(0.7f)
-        else bluebirdColors.TextPrimaryLight.copy(0.6f)
+    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
 
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(bg)
-            .border(
-                width = if (isSelected) 0.dp else 0.5.dp,
-                color = if (isDark) DS.borderDark else DS.borderLight,
-                shape = RoundedCornerShape(20.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .background(
+                if (selected) bluebirdColors.AccentBlue.copy(alpha = 0.16f)
+                else Color.Transparent
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Icon(filter.icon, null, tint = textColor, modifier = Modifier.size(12.dp))
-        Text(filter.label, color = textColor, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
-    }
-}
-
-// ─────────────────────────────────────────────
-// Top App Icon in Grid
-// ─────────────────────────────────────────────
-@Composable
-private fun TopAppItem(app: AppInfo, isDark: Boolean, onClick: () -> Unit) {
-    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 7.dp)
-    ) {
-        AppIconSmall(
-            drawable = app.icon,
-            contentDescription = app.name,
-            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
+        Icon(
+            filter.icon,
+            null,
+            tint = if (selected) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.56f),
+            modifier = Modifier.size(12.dp)
         )
-        Spacer(Modifier.height(5.dp))
-        Text(
-            app.name,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor.copy(0.75f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = 10.sp
+        androidx.compose.material3.Text(
+            filter.label,
+            color = if (selected) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.68f),
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
 }
 
-// ─────────────────────────────────────────────
-// Quick search chip
-// ─────────────────────────────────────────────
 @Composable
-private fun QuickSearchChip(label: String, icon: ImageVector, isDark: Boolean, onClick: () -> Unit) {
-    val bgColor = if (isDark) DS.surfaceDark else DS.surfaceLight // was a local one-off color pair
-    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-
-    Row(
+private fun TextButton(
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    androidx.compose.material3.Text(
+        label,
+        color = tint,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(bgColor)
-            .border(0.5.dp, if (isDark) DS.borderDark else DS.borderLight, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(7.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+    )
+}
+
+@Composable
+private fun IconButton(
+    icon: ImageVector,
+    tint: Color,
+    size: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(13.dp))
-        Text(label, color = textColor.copy(0.85f), fontSize = 12.sp)
+        Icon(icon, null, tint = tint, modifier = Modifier.size(size))
     }
 }
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
 private fun generateWebSuggestions(query: String): List<String> = listOf(
     "$query - Wikipedia",
     "$query tutorial",
     "$query near me",
-    "How to $query",
-    "$query download"
+    "How to $query"
 )
 
 private val quickSearchItems = listOf(
@@ -953,7 +989,5 @@ private val quickSearchItems = listOf(
     "Calculator" to FluentIcon.Calculator,
     "Maps" to FluentIcon.Location,
     "Music" to FluentIcon.MusicNote2,
-    "Photos" to FluentIcon.ImageMultiple,
-    "Translate" to FluentIcon.Globe,
-    "Shopping" to FluentIcon.Stack
+    "Photos" to FluentIcon.ImageMultiple
 )

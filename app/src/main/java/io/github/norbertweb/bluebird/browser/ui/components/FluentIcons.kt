@@ -1,12 +1,25 @@
 package io.github.norbertweb.bluebird.browser.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import fluent.ui.system.icons.FluentIcons as NiyajaliFluentIcons
-
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fluent.ui.system.icons.filled.ArrowDownload
 import fluent.ui.system.icons.filled.Star
 import fluent.ui.system.icons.regular.Add
@@ -44,6 +57,7 @@ import fluent.ui.system.icons.regular.Star
 import fluent.ui.system.icons.regular.Subtract
 import fluent.ui.system.icons.regular.Warning
 import fluent.ui.system.icons.regular.ZoomIn
+import fluent.ui.system.icons.FluentIcons as NiyajaliFluentIcons
 
 /**
  * Bluebird's single Fluent System Icons gateway.
@@ -108,4 +122,71 @@ fun FluentIcon(
         tint = tint,
         modifier = modifier
     )
+}
+
+
+/** Compact address/search field used by the lightweight browser chrome. */
+@Composable
+fun BrowserTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    onFocusRequest: () -> Unit = {},
+    onImeGo: () -> Unit = {},
+    fontSize: androidx.compose.ui.unit.TextUnit = 12.sp
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.height(36.dp),
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontSize = fontSize),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+        keyboardActions = KeyboardActions(onGo = { onImeGo() }),
+        decorationBox = { innerTextField ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(textColor.copy(alpha = 0.06f), RoundedCornerShape(18.dp))
+                    .border(1.dp, textColor.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
+                    .padding(horizontal = 13.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value.isBlank()) {
+                    androidx.compose.material3.Text(
+                        placeholder,
+                        color = textColor.copy(alpha = 0.48f),
+                        fontSize = fontSize,
+                        maxLines = 1
+                    )
+                }
+                innerTextField()
+            }
+        }
+    )
+}
+
+/** Small Fluent-icon navigation button for browser chrome. */
+@Composable
+fun NavBtn(
+    icon: ImageVector,
+    enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
+    contentDescription: String?,
+    onClick: () -> Unit
+) {
+    androidx.compose.material3.IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(32.dp)
+    ) {
+        FluentIcon(
+            icon = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) tint else tint.copy(alpha = 0.32f),
+            modifier = Modifier.size(17.dp)
+        )
+    }
 }

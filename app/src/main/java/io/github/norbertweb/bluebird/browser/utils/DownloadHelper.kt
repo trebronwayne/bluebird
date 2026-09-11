@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.database.Cursor
 import android.net.Uri
 import android.os.Environment
 import android.os.Build
@@ -16,9 +15,8 @@ import kotlinx.coroutines.*
 import java.io.File
 
 /**
- * Bluebird download bridge.
- * Android DownloadManager owns the actual transfer; Bluebird only keeps a
- * lightweight, persistent presentation of each download.
+ * Small bridge to Android DownloadManager. Bluebird only presents downloads
+ * created during the current browser session.
  */
 class DownloadHelper(private val context: Context) {
     private val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -75,8 +73,6 @@ class DownloadHelper(private val context: Context) {
             setDescription("Downloading via Bluebird")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-            setAllowedOverMetered(true)
-            setAllowedOverRoaming(true)
         }
         val dmId = dm.enqueue(request)
         val item = DownloadItem(
@@ -97,28 +93,6 @@ class DownloadHelper(private val context: Context) {
             }
         }
         return item
-    }
-
-    fun retry(
-        item: DownloadItem,
-        onProgress: (Float, Long) -> Unit,
-        onComplete: (DownloadStatus) -> Unit
-    ): DownloadItem {
-        return enqueue(
-            url = item.url,
-            userAgent = android.webkit.WebSettings.getDefaultUserAgent(context),
-            contentDisposition = "",
-            mimeType = item.mimeType,
-            contentLength = item.fileSize,
-            onProgress = onProgress,
-            onComplete = onComplete
-        )
-    }
-
-    fun cancel(dmId: Long): Boolean {
-        val ourId = activeJobs.remove(dmId)
-        if (ourId != null) onCompletionCallbacks.remove(ourId)
-        return dm.remove(dmId) > 0
     }
 
     private fun queryProgress(dmId: Long): Pair<Float, Long> {
@@ -146,27 +120,6 @@ class DownloadHelper(private val context: Context) {
         } finally { cursor?.close() }
     }
 
-    fun reconcile(items: List<DownloadItem>): List<DownloadItem> = items.map { item ->
-        if (item.status == DownloadStatus.CANCELLED) return@map item
-        val cursor = if (item.downloadManagerId >= 0L) dm.query(DownloadManager.Query().setFilterById(item.downloadManagerId)) else null
-        cursor?.use { c ->
-            if (c.moveToFirst()) {
-                val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                val soFar = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                val state = when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> DownloadStatus.COMPLETED
-                    DownloadManager.STATUS_PAUSED -> DownloadStatus.PAUSED
-                    DownloadManager.STATUS_PENDING, DownloadManager.STATUS_RUNNING -> DownloadStatus.DOWNLOADING
-                    else -> DownloadStatus.FAILED
-                }
-                return@map item.copy(status = state, fileSize = if (total > 0) total else item.fileSize,
-                    bytesDownloaded = soFar, progress = if (total > 0) soFar.toFloat() / total else item.progress)
-            }
-        }
-        item.copy(status = DownloadStatus.FAILED)
-    }
-
     fun open(downloadManagerId: Long): Boolean {
         val uri = dm.getUriForDownloadedFile(downloadManagerId) ?: return false
         val mime = runCatching {
@@ -182,11 +135,6 @@ class DownloadHelper(private val context: Context) {
             true
         }.getOrDefault(false)
     }
-
-    fun openDownloadsFolder(): Boolean = runCatching {
-        context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        true
-    }.getOrDefault(false)
 
     fun remove(downloadManagerId: Long): Boolean {
         activeJobs.remove(downloadManagerId)

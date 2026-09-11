@@ -258,7 +258,6 @@ private fun bluebirdToast(
                 )
             },
         isDark       = isDark,
-        alpha        = 0.97f,
         cornerRadius = 10.dp
     ) {
         Column {

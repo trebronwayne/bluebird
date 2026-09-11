@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,7 +74,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import fluent.ui.system.icons.FluentIcons
 import fluent.ui.system.icons.filled.Checkmark
@@ -102,12 +100,10 @@ import fluent.ui.system.icons.regular.Open
 import fluent.ui.system.icons.regular.PaintBrush
 import fluent.ui.system.icons.regular.Person
 import fluent.ui.system.icons.regular.Settings
-import fluent.ui.system.icons.regular.Shapes
 import fluent.ui.system.icons.regular.ShieldCheckmark
 import fluent.ui.system.icons.regular.TopSpeed
 import fluent.ui.system.icons.regular.WeatherMoon
 import io.github.norbertweb.bluebird.LauncherViewModel
-import java.io.File
 
 // ─────────────────────────────────────────────────────────
 // Fluent icon set — every icon this screen uses, centralized in one place
@@ -123,7 +119,6 @@ private object SetupFI {
     val Description  = FluentIcons.Regular.DocumentText
     val FolderOpen   = FluentIcons.Regular.FolderOpen
     val Storage      = FluentIcons.Regular.HardDrive
-    val PhotoCamera  = FluentIcons.Regular.Camera
     val Notifications = FluentIcons.Regular.Alert
     val ArrowForward = FluentIcons.Regular.ArrowRight
     val Check        = FluentIcons.Filled.Checkmark
@@ -133,7 +128,7 @@ private object SetupFI {
     val Security     = FluentIcons.Regular.ShieldCheckmark
     val Settings     = FluentIcons.Regular.Settings
     val Speed        = FluentIcons.Regular.TopSpeed
-    val AddAPhoto    = FluentIcons.Regular.CameraAdd
+    val AddAPhoto    = FluentIcons.Regular.Image
     val PhotoLibrary = FluentIcons.Regular.ImageMultiple
     val SkipNext     = FluentIcons.Regular.ArrowRight
     val Info         = FluentIcons.Regular.Info
@@ -146,7 +141,7 @@ private object SetupFI {
     val AppSuggest   = FluentIcons.Regular.Apps
     val Backup       = FluentIcons.Regular.CloudArrowUp
     val Gestures     = FluentIcons.Regular.HandLeft
-    val IconPack     = FluentIcons.Regular.Shapes
+    val IconPack     = FluentIcons.Regular.Grid
 }
 
 // ─────────────────────────────────────────────────────────
@@ -198,47 +193,26 @@ private data class CustomizeTile(
 
 private val customizeTiles = listOf(
     CustomizeTile(
-        settingKey = "dark_mode_follow_system",
-        icon = SetupFI.DarkMode,
-        title = "Match system theme",
-        description = "Automatically switch between light and dark based on your device setting.",
+        settingKey = "start_menu_size",
+        icon = SetupFI.Dashboard,
+        title = "Start menu size",
+        description = "Choose how much space the Bluebird Start menu uses.",
         recommendedDefault = true
     ),
     CustomizeTile(
-        settingKey = "home_screen_widgets",
-        icon = SetupFI.Widgets,
-        title = "Add starter widgets",
-        description = "Place a clock and a favorites widget on your home screen to begin with.",
+        settingKey = "search_overlay_size",
+        icon = SetupFI.Settings,
+        title = "Search overlay size",
+        description = "Choose a compact, expanded, or full-screen search surface.",
         recommendedDefault = true
     ),
     CustomizeTile(
-        settingKey = "app_suggestions",
-        icon = SetupFI.AppSuggest,
-        title = "Smart app suggestions",
-        description = "Surface a row of apps you're likely to open next, based on time and habit.",
+        settingKey = "taskbar_height",
+        icon = SetupFI.Dashboard,
+        title = "Taskbar density",
+        description = "Choose a compact, normal, or large Bluebird taskbar.",
         recommendedDefault = true
-    ),
-    CustomizeTile(
-        settingKey = "icon_pack_rounded",
-        icon = SetupFI.IconPack,
-        title = "Rounded icon style",
-        description = "Use a softer, rounded icon shape across the launcher instead of square.",
-        recommendedDefault = false
-    ),
-    CustomizeTile(
-        settingKey = "gesture_navigation",
-        icon = SetupFI.Gestures,
-        title = "Swipe gestures",
-        description = "Swipe up from the home screen for search, and swipe down for notifications.",
-        recommendedDefault = true
-    ),
-    CustomizeTile(
-        settingKey = "backup_settings",
-        icon = SetupFI.Backup,
-        title = "Back up settings",
-        description = "Keep a local backup of your layout and preferences so you can restore them later.",
-        recommendedDefault = false
-    ),
+    )
 )
 
 private fun areAllPermissionsGranted(
@@ -256,7 +230,6 @@ private fun areAllPermissionsGranted(
 @Composable
 fun SetupScreen(
     viewModel: LauncherViewModel,
-    onRequestNotificationAccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val step = uiState.setupStep
@@ -266,7 +239,6 @@ fun SetupScreen(
 
     var setupCompleted by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf<PermissionItem?>(null) }
-    var showManageStorageDialog by remember { mutableStateOf(false) }
 
     // Hoisted here (not inside CustomizeStep) so toggle choices survive the
     // user tapping Back into this step from Legal and returning — the same
@@ -278,7 +250,9 @@ fun SetupScreen(
         }
     }
 
-    // Build permission list based on API level
+    // Only permissions declared in AndroidManifest.xml are shown here. Nothing
+    // is requested automatically; each permission is requested only when the user
+    // presses its explicit action button.
     val permissionItems = remember {
         val storagePerms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             listOf(
@@ -289,67 +263,34 @@ fun SetupScreen(
         } else {
             listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-
         buildList {
             add(
                 PermissionItem(
-                    "Media & Files",
-                    "Read photos, videos, and audio from your device",
-                    SetupFI.FolderOpen,
-                    storagePerms,
-                    optional = false
+                    title = "Photos, videos & audio",
+                    description = "Used only when you choose to browse or import media into Bluebird apps such as Photos and Media Player.",
+                    icon = SetupFI.FolderOpen,
+                    permissions = storagePerms,
+                    optional = true
                 )
             )
-            // All-files / MANAGE_EXTERNAL_STORAGE (API 30+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(
                     PermissionItem(
-                        "Manage All Files",
-                        "Required for file manager features and full storage access",
-                        SetupFI.Storage,
-                        emptyList(),
-                        optional = true,
-                        requiresSettingsIntent = true,
-                        settingsIntentAction = Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        isManageAllFiles = true
+                        title = "Notifications",
+                        description = "Lets Bluebird show its own notifications when you enable notification features. Bluebird never requests this silently.",
+                        icon = SetupFI.Notifications,
+                        permissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
+                        optional = true
                     )
                 )
             }
-            add(
-                PermissionItem(
-                    "Camera",
-                    "Take photos for your profile picture",
-                    SetupFI.PhotoCamera,
-                    listOf(Manifest.permission.CAMERA),
-                    optional = false
-                )
-            )
-            add(
-                PermissionItem(
-                    "Notifications",
-                    "Show app notifications on your home screen",
-                    SetupFI.Notifications,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                        listOf(Manifest.permission.POST_NOTIFICATIONS)
-                    else emptyList(),
-                    optional = true,
-                    requiresSettingsIntent = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU,
-                    settingsIntentAction = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)
-                        Settings.ACTION_APP_NOTIFICATION_SETTINGS else null
-                )
-            )
         }
     }
 
     val grantedStates = remember {
         mutableStateMapOf<String, Boolean>().apply {
             permissionItems.forEach { item ->
-                put(item.title, when {
-                    item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
-                        Environment.isExternalStorageManager()
-                    item.permissions.isEmpty() -> false
-                    else -> areAllPermissionsGranted(context, item.permissions)
-                })
+                put(item.title, areAllPermissionsGranted(context, item.permissions))
             }
         }
     }
@@ -419,18 +360,9 @@ fun SetupScreen(
                             grantedStates = grantedStates,
                             customizeSelections = customizeSelections,
                             onRequestPermission = { item ->
-                                if (item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    showManageStorageDialog = true
-                                } else if (item.requiresSettingsIntent && item.settingsIntentAction != null) {
-                                    context.startActivity(Intent(item.settingsIntentAction).apply {
-                                        data = Uri.parse("package:${context.packageName}")
-                                    })
-                                } else {
-                                    requestedItem = item
-                                    permLauncher.launch(item.permissions.toTypedArray())
-                                }
+                                requestedItem = item
+                                permLauncher.launch(item.permissions.toTypedArray())
                             },
-                            onRequestNotificationAccess = onRequestNotificationAccess,
                             onBack = { viewModel.decrementSetupStep() },
                             onSetupCompleted = { setupCompleted = true }
                         )
@@ -454,18 +386,9 @@ fun SetupScreen(
                             grantedStates = grantedStates,
                             customizeSelections = customizeSelections,
                             onRequestPermission = { item ->
-                                if (item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    showManageStorageDialog = true
-                                } else if (item.requiresSettingsIntent && item.settingsIntentAction != null) {
-                                    context.startActivity(Intent(item.settingsIntentAction).apply {
-                                        data = Uri.parse("package:${context.packageName}")
-                                    })
-                                } else {
-                                    requestedItem = item
-                                    permLauncher.launch(item.permissions.toTypedArray())
-                                }
+                                requestedItem = item
+                                permLauncher.launch(item.permissions.toTypedArray())
                             },
-                            onRequestNotificationAccess = onRequestNotificationAccess,
                             onBack = { viewModel.decrementSetupStep() },
                             onSetupCompleted = { setupCompleted = true }
                         )
@@ -503,37 +426,6 @@ fun SetupScreen(
             )
         }
 
-        // Manage All Files dialog
-        if (showManageStorageDialog && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            AlertDialog(
-                onDismissRequest = { showManageStorageDialog = false },
-                icon = { Icon(SetupFI.Storage, contentDescription = null, tint = primary) },
-                title = { Text("Manage all files access") },
-                text = {
-                    Text(
-                        "Bluebird OS needs access to manage all files on your device. You'll be redirected to Android Settings where you can enable this. This is optional — you can skip it and enable it later.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showManageStorageDialog = false
-                        try {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                        }
-                    }) { Text("Open Settings") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showManageStorageDialog = false }) { Text("Skip") }
-                }
-            )
-        }
     }
 }
 
@@ -550,7 +442,6 @@ private fun StepContent(
     grantedStates: Map<String, Boolean>,
     customizeSelections: SnapshotStateMap<String, Boolean>,
     onRequestPermission: (PermissionItem) -> Unit,
-    onRequestNotificationAccess: () -> Unit,
     onBack: () -> Unit,
     onSetupCompleted: () -> Unit
 ) {
@@ -565,7 +456,6 @@ private fun StepContent(
             permissionItems = permissionItems,
             grantedStates = grantedStates,
             onRequestPermission = onRequestPermission,
-            onRequestNotificationAccess = onRequestNotificationAccess,
             onNext = { viewModel.advanceSetupStep() },
             onBack = onBack
         )
@@ -582,6 +472,7 @@ private fun StepContent(
             onBack = onBack
         )
         4 -> CustomizeStep(
+            context = context,
             selections = customizeSelections,
             onApply = { selections ->
                 // TODO: persist `selections` (settingKey -> Boolean) via your
@@ -925,28 +816,19 @@ private fun PermissionsStep(
     permissionItems: List<PermissionItem>,
     grantedStates: Map<String, Boolean>,
     onRequestPermission: (PermissionItem) -> Unit,
-    onRequestNotificationAccess: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     StepContainer(
         title = "Permissions",
-        subtitle = "Grant access so Bluebird OS can work fully. Optional permissions can be skipped and changed any time in Android Settings.",
+        subtitle = "Bluebird only asks when a feature needs access. Choose Allow on a permission card, or continue without granting anything.",
         icon = SetupFI.Lock
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             permissionItems.forEach { item ->
-                val isGranted = if (item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    Environment.isExternalStorageManager()
-                } else {
-                    grantedStates[item.title] ?: false
-                }
-
-                val onGrant: () -> Unit = when {
-                    item.title == "Notifications" && item.permissions.isEmpty() -> onRequestNotificationAccess
-                    else -> { -> onRequestPermission(item) }
-                }
+                val isGranted = grantedStates[item.title] ?: false
+                val onGrant: () -> Unit = { onRequestPermission(item) }
 
                 PermissionCard(
                     icon = item.icon,
@@ -954,7 +836,7 @@ private fun PermissionsStep(
                     desc = item.description,
                     isGranted = isGranted,
                     isOptional = item.optional,
-                    grantLabel = if (item.requiresSettingsIntent) "Open Settings" else "Grant",
+                    grantLabel = if (isGranted) "Granted" else "Allow",
                     onGrant = onGrant
                 )
             }
@@ -1165,13 +1047,6 @@ private fun AvatarStep(
     val colorScheme = MaterialTheme.colorScheme
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Camera temp file URI
-    val cameraImageUri = remember {
-        val file = File(context.cacheDir, "avatar_capture_${System.currentTimeMillis()}.jpg")
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }
-
-    // Gallery picker
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -1181,177 +1056,45 @@ private fun AvatarStep(
         }
     }
 
-    // Camera launcher
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) {
-            selectedUri = cameraImageUri
-            onAvatarPicked(cameraImageUri)
-        }
-    }
-
-    // Check if camera permission is granted
-    val hasCameraPermission = remember(Unit) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
-
-    var showCameraPermissionDialog by remember { mutableStateOf(false) }
-
     StepContainer(
         title = "Add a profile photo",
-        subtitle = "This will appear on your home screen and lock screen. You can skip this and add one later.",
+        subtitle = "Choose an image from your gallery. Bluebird does not need camera access for your profile picture.",
         icon = SetupFI.Image
     ) {
-        // Avatar preview
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(
-                modifier = Modifier
-                    .size(112.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (selectedUri == null) colorScheme.primaryContainer
-                        else Color.Transparent
-                    )
-                    .border(
-                        2.dp,
-                        if (selectedUri != null) colorScheme.primary else colorScheme.outlineVariant,
-                        CircleShape
-                    )
-                    .semantics { role = Role.Button; contentDescription = "Tap to choose profile photo" }
+                modifier = Modifier.size(112.dp).clip(CircleShape)
+                    .background(if (selectedUri == null) colorScheme.primaryContainer else Color.Transparent)
+                    .border(2.dp, if (selectedUri != null) colorScheme.primary else colorScheme.outlineVariant, CircleShape)
                     .clickable { galleryLauncher.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
                 if (selectedUri != null) {
-                    AsyncImage(
-                        model = selectedUri,
-                        contentDescription = "Selected profile photo",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
+                    AsyncImage(model = selectedUri, contentDescription = "Selected profile photo", modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                 } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            SetupFI.AddAPhoto,
-                            null,
-                            tint = colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Text(
-                            "Add photo",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onPrimaryContainer
-                        )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(SetupFI.PhotoLibrary, null, tint = colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
+                        Text("Choose image", style = MaterialTheme.typography.labelSmall, color = colorScheme.onPrimaryContainer)
                     }
                 }
             }
         }
-
-        if (selectedUri != null) {
-            Text(
-                "Photo selected",
-                style = MaterialTheme.typography.labelMedium,
-                color = colorScheme.primary,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
-        }
-
-        // Source buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Gallery
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .border(0.5.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
-                    .semantics { role = Role.Button; contentDescription = "Choose photo from gallery" }
-                    .clickable { galleryLauncher.launch("image/*") }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(SetupFI.PhotoLibrary, null, tint = colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Text("Gallery", style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
-                }
-            }
-
-            // Camera
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .border(0.5.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
-                    .semantics { role = Role.Button; contentDescription = "Take a photo with camera" }
-                    .clickable {
-                        if (hasCameraPermission) {
-                            cameraLauncher.launch(cameraImageUri)
-                        } else {
-                            showCameraPermissionDialog = true
-                        }
-                    }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(SetupFI.PhotoCamera, null, tint = colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Text("Camera", style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
-                }
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .border(0.5.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+            .clickable { galleryLauncher.launch("image/*") }
+            .padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(SetupFI.PhotoLibrary, null, tint = colorScheme.primary, modifier = Modifier.size(19.dp))
+                Text("Choose from gallery", style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
             }
         }
-
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(
-                text = if (selectedUri != null) "Continue" else "Skip for now",
-                icon = if (selectedUri != null) SetupFI.Check else SetupFI.SkipNext,
-                onClick = onNext
-            )
+            PrimaryButton(text = if (selectedUri != null) "Continue" else "Skip for now", icon = if (selectedUri != null) SetupFI.Check else SetupFI.SkipNext, onClick = onNext)
             SecondaryButton("Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
-    }
-
-    // Camera permission dialog
-    if (showCameraPermissionDialog) {
-        val ctx = LocalContext.current
-        AlertDialog(
-            onDismissRequest = { showCameraPermissionDialog = false },
-            icon = { Icon(SetupFI.PhotoCamera, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Camera access needed") },
-            text = { Text("Camera permission was not granted during setup. Please enable it in Android Settings to take a photo.", style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showCameraPermissionDialog = false
-                    ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.parse("package:${ctx.packageName}")
-                    })
-                }) { Text("Open Settings") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCameraPermissionDialog = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 
@@ -1361,147 +1104,76 @@ private fun AvatarStep(
 
 @Composable
 private fun CustomizeStep(
+    context: android.content.Context,
     selections: SnapshotStateMap<String, Boolean>,
     onApply: (Map<String, Boolean>) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-
-    val enabledCount = customizeTiles.count { selections[it.settingKey] == true }
-    val allRecommendedOn = customizeTiles.all { selections[it.settingKey] == it.recommendedDefault }
-
     StepContainer(
-        title = "Customize your setup",
-        subtitle = "We've picked sensible defaults below. Turn anything off now, or leave it — every one of these can be changed later in Settings.",
+        title = "Make Bluebird yours",
+        subtitle = "These controls change real Bluebird UI behavior. Nothing here is a placeholder.",
         icon = SetupFI.Palette
     ) {
-        // Quick "reset to recommended" affordance — mirrors the OOBE pattern
-        // where the whole page has one clear default state to fall back to.
-        if (!allRecommendedOn) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colorScheme.primaryContainer.copy(alpha = 0.35f))
-                    .clickable { customizeTiles.forEach { selections[it.settingKey] = it.recommendedDefault } }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(SetupFI.CheckCircle, null, tint = colorScheme.primary, modifier = Modifier.size(15.dp))
-                Text(
-                    "Reset to recommended",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colorScheme.primary
-                )
-            }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            customizeTiles.forEach { tile ->
-                val isOn = selections[tile.settingKey] ?: tile.recommendedDefault
-                CustomizeTileRow(
-                    tile = tile,
-                    isOn = isOn,
-                    onToggle = { selections[tile.settingKey] = it }
-                )
-            }
-        }
-
-        Text(
-            "$enabledCount of ${customizeTiles.size} enabled",
-            style = MaterialTheme.typography.labelSmall,
-            color = colorScheme.onSurfaceVariant
-        )
+        CustomizeChoiceCard("Start menu", "Size of the Start menu surface", "start_menu_size",
+            listOf("COMPACT" to "Compact", "EXPANDED" to "Expanded", "FULLSCREEN" to "Full screen"), context, selections)
+        CustomizeChoiceCard("Search overlay", "Size of the search surface", "search_overlay_size",
+            listOf("COMPACT" to "Compact", "EXPANDED" to "Expanded", "FULLSCREEN" to "Full screen"), context, selections)
+        CustomizeChoiceCard("Taskbar", "Vertical density", "taskbar_height",
+            listOf("COMPACT" to "Compact", "NORMAL" to "Normal", "LARGE" to "Large"), context, selections)
 
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(
-                text = "Continue",
-                icon = SetupFI.ArrowForward,
-                onClick = { onApply(selections.toMap()); onNext() }
-            )
-            SecondaryButton(
-                text = "Skip for now",
-                onClick = {
-                    // Skipping applies nothing — every tile stays at whatever the
-                    // app's normal first-run default is, untouched by this screen.
-                    onNext()
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+            PrimaryButton("Continue", SetupFI.ArrowForward, onClick = { onApply(selections.toMap()); onNext() })
+            SecondaryButton("Skip for now", onClick = onNext, modifier = Modifier.fillMaxWidth())
             SecondaryButton("Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
     }
 }
 
 @Composable
-private fun CustomizeTileRow(
-    tile: CustomizeTile,
-    isOn: Boolean,
-    onToggle: (Boolean) -> Unit
+private fun CustomizeChoiceCard(
+    title: String, description: String, key: String, options: List<Pair<String,String>>,
+    context: android.content.Context, selections: SnapshotStateMap<String, Boolean>
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .border(
-                0.5.dp,
-                if (isOn) colorScheme.primary.copy(alpha = 0.3f) else colorScheme.outlineVariant,
-                RoundedCornerShape(10.dp)
-            )
-            .semantics { role = Role.Switch; contentDescription = "${tile.title}, ${if (isOn) "on" else "off"}" }
-            .clickable { onToggle(!isOn) }
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isOn) colorScheme.primary.copy(alpha = 0.12f) else colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                tile.icon,
-                null,
-                tint = if (isOn) colorScheme.primary else colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(19.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(tile.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = colorScheme.onSurface)
-                if (tile.recommendedDefault) {
-                    Text(
-                        "Recommended",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(colorScheme.primary.copy(alpha = 0.12f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    )
+    val prefsName = when (key) {
+        "start_menu_size" -> "start_menu_layout_prefs"
+        "search_overlay_size" -> "search_overlay_prefs"
+        else -> "taskbar_settings"
+    }
+    val prefsKey = when (key) {
+        "start_menu_size" -> "size_mode"
+        "search_overlay_size" -> "size_mode"
+        else -> "taskbarHeight"
+    }
+    val defaults = when (key) {
+        "start_menu_size" -> "EXPANDED"
+        "search_overlay_size" -> "EXPANDED"
+        else -> "NORMAL"
+    }
+    val prefs = context.getSharedPreferences(prefsName, android.content.Context.MODE_PRIVATE)
+    val saved = prefs.getString(prefsKey, defaults) ?: defaults
+    var selected by remember(key) { mutableStateOf(saved) }
+    selections[key] = true
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            options.forEach { (value,label) ->
+                val active = selected == value
+                Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                    .background(if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                    .border(1.dp, if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                    .clickable { selected = value; selections[key] = true }
+                    .padding(horizontal = 7.dp, vertical = 9.dp), contentAlignment = Alignment.Center) {
+                    Text(label, fontSize = 11.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal, color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                 }
             }
-            Text(tile.description, style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant, lineHeight = 17.sp)
         }
-        Switch(
-            checked = isOn,
-            onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = colorScheme.onPrimary,
-                checkedTrackColor = colorScheme.primary,
-                uncheckedThumbColor = colorScheme.outline,
-                uncheckedTrackColor = colorScheme.surfaceVariant
-            )
-        )
+        LaunchedEffect(selected) { prefs.edit().putString(prefsKey, selected).apply() }
     }
+    Spacer(Modifier.height(10.dp))
 }
 
 // ─────────────────────────────────────────────────────────
