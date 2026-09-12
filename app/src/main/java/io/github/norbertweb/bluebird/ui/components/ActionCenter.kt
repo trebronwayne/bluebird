@@ -110,9 +110,9 @@ fun ActionCenter(
     // surface/border language through AcrylicSurface + DS/bluebirdColors.
     AcrylicSurface(
         modifier = modifier
-            .fillMaxWidth(0.86f)
-            .widthIn(min = 300.dp, max = 420.dp)
-            .heightIn(min = 360.dp, max = 620.dp),
+            .fillMaxWidth(0.78f)
+            .widthIn(min = 272.dp, max = 340.dp)
+            .heightIn(min = 320.dp, max = 480.dp),
         isDark = isDark,
         accent = accent,
         cornerRadius = 12.dp,
@@ -123,7 +123,7 @@ fun ActionCenter(
                 .fillMaxSize()
                 .background(if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8), RoundedCornerShape(12.dp))
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 11.dp, vertical = 10.dp)
         ) {
             // ── Compact header ───────────────────────────────────────────────
             Row(
@@ -145,7 +145,7 @@ fun ActionCenter(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
 
             // Static reference tiles: no fake On/Off/Connected labels. Taps
             // only navigate to a real Android/Bluebird destination where one
@@ -167,11 +167,11 @@ fun ActionCenter(
                 FluentIcon.Settings
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 quickRefs.chunked(3).forEachIndexed { rowIndex, row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         row.forEachIndexed { colIndex, (label, action) ->
                             ReferenceQuickTile(
@@ -188,9 +188,9 @@ fun ActionCenter(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(8.dp))
 
             // ── Real controls, compactly represented ─────────────────────────
             CompactSliderSection(
@@ -217,9 +217,9 @@ fun ActionCenter(
                 onValueChange = { viewModel.setBrightness(it, context) }
             )
 
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(8.dp))
 
             // ── Windows-style compact calendar ────────────────────────────────
             CompactCalendar(
@@ -343,15 +343,15 @@ private fun ReferenceQuickTile(
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     Column(
         modifier = modifier
-            .height(42.dp)
+            .heightIn(min = 40.dp)
             .clip(RoundedCornerShape(7.dp))
             .background(if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.032f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.82f), modifier = Modifier.size(16.dp))
-        Text(label, color = textColor.copy(alpha = 0.82f), fontSize = (10f * textScale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.82f), modifier = Modifier.size(14.dp))
+        Text(label, color = textColor.copy(alpha = 0.82f), fontSize = (9.5f * textScale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -413,19 +413,19 @@ private fun CompactCalendar(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(monthName, color = textColor, fontSize = (12f * textScale).sp, fontWeight = FontWeight.SemiBold)
+            Text(monthName, color = textColor, fontSize = (11f * textScale).sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
-            Text("Today", color = accent, fontSize = (9.5f * textScale).sp, fontWeight = FontWeight.Medium)
+            Text("Today", color = accent, fontSize = (9f * textScale).sp, fontWeight = FontWeight.Medium)
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             weekDays.forEach { day ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(day, color = textColor.copy(alpha = 0.42f), fontSize = (8.5f * textScale).sp, fontWeight = FontWeight.Medium)
+                    Text(day, color = textColor.copy(alpha = 0.42f), fontSize = (8f * textScale).sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(2.dp))
 
         val totalCells = ((firstDayOffset + daysInMonth + 6) / 7) * 7
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -436,18 +436,18 @@ private fun CompactCalendar(
                         val day = cell - firstDayOffset + 1
                         val isCurrent = day == today.get(Calendar.DAY_OF_MONTH) && day in 1..daysInMonth
                         Box(
-                            modifier = Modifier.weight(1f).height(24.dp),
+                            modifier = Modifier.weight(1f).height(19.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             if (day in 1..daysInMonth) {
                                 Box(
-                                    modifier = if (isCurrent) Modifier.size(21.dp).clip(CircleShape).background(accent) else Modifier.size(21.dp),
+                                    modifier = if (isCurrent) Modifier.size(17.dp).clip(CircleShape).background(accent) else Modifier.size(17.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         day.toString(),
                                         color = if (isCurrent) Color.White else textColor.copy(alpha = 0.78f),
-                                        fontSize = (9.5f * textScale).sp,
+                                        fontSize = (8.5f * textScale).sp,
                                         fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 }

@@ -41,6 +41,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +63,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 
 import io.github.norbertweb.bluebird.LauncherViewModel
+import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
 import io.github.norbertweb.bluebird.ui.components.BpkPackageIcon
 import io.github.norbertweb.bluebird.LauncherScreen
@@ -123,6 +125,29 @@ import io.github.norbertweb.bluebird.wordprocessor.formatDate
 import io.github.norbertweb.bluebird.wordprocessor.formatFileSize
 
 // ────────────────────────────────────────────────────────
+// Windows 11-inspired light palette (matched to the Bluebird Explorer reference)
+// ────────────────────────────────────────────────────────
+private val ExplorerLightBackground = Color(0xFFFAFBFD)
+private val ExplorerLightNav = Color(0xFFF1F5FB)
+private val ExplorerLightSurface = Color(0xFFF3F6FA)
+private val ExplorerLightField = Color(0xFFFBFCFE)
+private val ExplorerLightBorder = Color(0xFFDCE5EF)
+private val ExplorerLightText = Color(0xFF193557)
+private val ExplorerLightSecondaryText = Color(0xFF5D718C)
+private val ExplorerAccentBlue = Color(0xFF0078D4)
+private val ExplorerSelectionBlue = Color(0xFFD8E9F8)
+
+private val ExplorerDarkBackground = Color(0xFF202020)
+private val ExplorerDarkNav = Color(0xFF242424)
+private val ExplorerDarkSurface = Color(0xFF2B2B2B)
+private val ExplorerDarkField = Color(0xFF202020)
+private val ExplorerDarkBorder = Color(0xFF3A3A3A)
+private val ExplorerDarkText = Color(0xFFF3F6FA)
+private val ExplorerDarkSecondaryText = Color(0xFFB8C4D1)
+private val ExplorerDarkAccent = Color(0xFF60B5FF)
+private val ExplorerDarkSelection = Color(0xFF234A70)
+
+// ────────────────────────────────────────────────────────
 // Data & Helpers
 // ────────────────────────────────────────────────────────
 
@@ -134,6 +159,13 @@ data class RealFileItem(
     val lastModified: Long = file.lastModified(),
     val extension: String = file.extension.lowercase(),
     val iconBitmap: Bitmap? = null
+)
+
+
+private data class ExplorerNavDestination(
+    val label: String,
+    val directory: File,
+    val icon: Int
 )
 
 
@@ -159,19 +191,16 @@ fun getFileIcon(item: RealFileItem): ImageVector = when {
 }
 
 fun getFileIconColor(item: RealFileItem): Color = when {
-    item.isDirectory -> Color(0xFFFFC107)
-    item.extension in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Color(0xFF4CAF50)
-    item.extension in listOf("mp4", "mkv", "avi", "mov", "webm") -> Color(0xFF9C27B0)
-    item.extension in listOf("mp3", "wav", "ogg", "flac", "aac") -> Color(0xFFFF5722)
-    item.extension == "pdf" -> Color(0xFFF44336)
-    item.extension == "apk" -> Color(0xFF4CAF50)
-    item.extension in listOf("doc", "docx") -> Color(0xFF2196F3)
-    item.extension in listOf("xls", "xlsx") -> Color(0xFF4CAF50)
-    item.extension == "webapp" -> Color(0xFF0078D4)
-    item.extension == "bpk" -> Color(0xFF0078D4)
-    item.extension == "exe" -> Color(0xFF0078D4)
-    item.extension == "io.github.norbertweb.io.github.norbertweb.bluebird" -> Color(0xFF0078D4)
-    else -> Color(0xFF9E9E9E)
+    item.isDirectory -> ExplorerAccentBlue
+    item.extension in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Color(0xFF168FE5)
+    item.extension in listOf("mp4", "mkv", "avi", "mov", "webm", "3gp") -> Color(0xFF6F58D9)
+    item.extension in listOf("mp3", "wav", "ogg", "flac", "aac", "m4a") -> Color(0xFFE26596)
+    item.extension == "pdf" -> Color(0xFFD83B01)
+    item.extension == "apk" -> Color(0xFF107C10)
+    item.extension in listOf("doc", "docx") -> Color(0xFF2B88D8)
+    item.extension in listOf("xls", "xlsx") -> Color(0xFF107C10)
+    item.extension in listOf("webapp", "bpk", "exe", "io.github.norbertweb.io.github.norbertweb.bluebird") -> ExplorerAccentBlue
+    else -> Color(0xFF667A90)
 }
 
 fun getMimeType(file: File): String {
@@ -236,15 +265,36 @@ private fun hasStorageAccess(context: android.content.Context): Boolean {
 // ────────────────────────────────────────────────────────
 
 private class FileExplorerState(initialDir: File) {
+    private val externalRoot = Environment.getExternalStorageDirectory()
     var currentDir by mutableStateOf(initialDir)
+    var isHomeDashboard by mutableStateOf(initialDir.absolutePath == externalRoot.absolutePath)
+    var isDeviceDashboard by mutableStateOf(false)
     var pathHistory by mutableStateOf(listOf<File>())
     var allFiles by mutableStateOf(listOf<RealFileItem>())
 
-    /** Derived listing: search/sort never touches the filesystem. */
+    /**
+     * Derived listing: search/sort never touches the filesystem.
+     *
+     * Memoized because Compose can ask for `files` many times while a lazy list/grid
+     * is measuring. Previously a large folder could be sorted repeatedly during
+     * recomposition, making an otherwise fast directory feel sluggish.
+     */
+    private var cachedAllFiles: List<RealFileItem>? = null
+    private var cachedQuery = ""
+    private var cachedSortBy = ""
+    private var cachedSortAscending = true
+    private var cachedFiles: List<RealFileItem> = emptyList()
+
     val files: List<RealFileItem>
         get() {
+            val source = allFiles
             val query = searchQuery.trim()
-            val filtered = if (query.isEmpty()) allFiles else allFiles.filter {
+            if (source === cachedAllFiles && query == cachedQuery &&
+                sortBy == cachedSortBy && sortAscending == cachedSortAscending) {
+                return cachedFiles
+            }
+
+            val filtered = if (query.isEmpty()) source else source.filter {
                 it.name.contains(query, ignoreCase = true)
             }
             val sorted = when (sortBy) {
@@ -256,7 +306,13 @@ private class FileExplorerState(initialDir: File) {
             }
             val dirs = sorted.filter { it.isDirectory }
             val filesOnly = sorted.filter { it.file.isFile }
-            return if (sortAscending) dirs + filesOnly else (filesOnly + dirs).reversed()
+            cachedFiles = if (sortAscending) dirs + filesOnly else dirs.reversed() + filesOnly.reversed()
+
+            cachedAllFiles = source
+            cachedQuery = query
+            cachedSortBy = sortBy
+            cachedSortAscending = sortAscending
+            return cachedFiles
         }
     var isLoading by mutableStateOf(true)
 
@@ -280,22 +336,52 @@ private class FileExplorerState(initialDir: File) {
     // Clipboard now lives in the ViewModel (shared with Desktop) — see vmUiState.clipboardFiles
 
     fun navigateTo(dir: File) {
+        isHomeDashboard = false
+        isDeviceDashboard = false
         if (dir != currentDir) {
             pathHistory = pathHistory + currentDir
             currentDir = dir
         }
     }
 
+    fun navigateHome() {
+        val root = externalRoot
+        isHomeDashboard = true
+        isDeviceDashboard = false
+        pathHistory = emptyList()
+        currentDir = root
+        searchQuery = ""
+        selectedFiles = emptySet()
+    }
+
+    fun navigateDevice() {
+        isHomeDashboard = false
+        isDeviceDashboard = true
+        pathHistory = emptyList()
+        currentDir = externalRoot
+        searchQuery = ""
+        selectedFiles = emptySet()
+    }
+
     fun goBack() {
+        if (isDeviceDashboard) {
+            navigateHome()
+            return
+        }
         if (pathHistory.isNotEmpty()) {
+            isHomeDashboard = false
+            isDeviceDashboard = false
             currentDir = pathHistory.last()
             pathHistory = pathHistory.dropLast(1)
         }
     }
 
     fun goUp() {
+        if (isDeviceDashboard) return
         val parent = currentDir.parentFile
         if (parent != null && parent != currentDir) {
+            isHomeDashboard = false
+            isDeviceDashboard = false
             pathHistory = pathHistory + currentDir
             currentDir = parent
         }
@@ -447,10 +533,10 @@ private fun FileExplorerContent(
     // Ribbon's paste button reacts live to a cut/copy made on Desktop or in another window.
     val vmUiState = viewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
-    val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val bgColor = if (isDark) Color(0xFF1C1C1C) else Color(0xFFFAFAFA)
-    val surfaceBg = if (isDark) Color(0xFF252525) else Color(0xFFF0F0F0)
-    val navBg = if (isDark) Color(0xFF202020) else Color(0xFFF3F5F7)
+    val textColor = if (isDark) ExplorerDarkText else ExplorerLightText
+    val bgColor = if (isDark) ExplorerDarkBackground else ExplorerLightBackground
+    val surfaceBg = if (isDark) ExplorerDarkSurface else ExplorerLightSurface
+    val navBg = if (isDark) ExplorerDarkNav else ExplorerLightNav
     val contentBorder = textColor.copy(alpha = if (isDark) 0.10f else 0.08f)
     val explorerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -542,28 +628,17 @@ private fun FileExplorerContent(
                         withContext(Dispatchers.Main.immediate) { state.allFiles = emptyList() }
                         return@withContext
                     }
-                    val rawFiles = dir.listFiles()?.asSequence() ?: emptySequence()
-                    val loaded = ArrayList<RealFileItem>()
-                    rawFiles
-                        .filter { state.showHidden || !it.name.startsWith(".") }
-                        .forEach { file ->
-                            val icon = when {
-                                file.extension.equals("exe", true) -> {
-                                    BluebirdExecutable.read(file)?.let { descriptor ->
-                                        runCatching {
-                                            BluebirdExecutable.resolveIcon(file, descriptor)
-                                                .takeIf { it.isFile }
-                                                ?.let { BitmapFactory.decodeFile(it.absolutePath) }
-                                        }.getOrNull()
-                                    }
-                                }
-                                file.extension.equals("bpk", true) -> {
-                                    BpkPackageIcon.decode(file)
-                                }
-                                else -> null
-                            }
-                            loaded += RealFileItem(file, iconBitmap = icon)
-                        }
+                    // Metadata-only scan. Expensive .exe/.bpk artwork is deliberately
+                    // not decoded here; package icons are loaded lazily by visible tiles.
+                    val rawFiles = dir.listFiles()
+                    val loaded = if (rawFiles == null) {
+                        emptyList()
+                    } else {
+                        rawFiles.asSequence()
+                            .filter { state.showHidden || !it.name.startsWith(".") }
+                            .map { file -> RealFileItem(file) }
+                            .toList()
+                    }
                     withContext(Dispatchers.Main.immediate) {
                         if (generation == loadGeneration && dir == state.currentDir) {
                             // Publish one immutable snapshot. Search and sorting are derived locally.
@@ -669,22 +744,30 @@ private fun FileExplorerContent(
             onBack = { state.goBack() },
             onUp = { state.goUp() },
             onRefresh = { loadFiles(state.currentDir) },
-            pathParts = remember(state.currentDir) {
+            pathParts = when {
+                state.isHomeDashboard -> listOf("Home" to Environment.getExternalStorageDirectory())
+                state.isDeviceDashboard -> listOf("This Device" to Environment.getExternalStorageDirectory())
+                else -> remember(state.currentDir) {
                 val externalRoot = Environment.getExternalStorageDirectory().absolutePath
                 val trimmed = state.currentDir.absolutePath.removePrefix(externalRoot)
-                val parts = mutableListOf("This PC" to Environment.getExternalStorageDirectory())
+                val parts = mutableListOf("Home" to Environment.getExternalStorageDirectory())
                 var curr = Environment.getExternalStorageDirectory()
                 trimmed.split("/").filter { it.isNotEmpty() }.forEach { part ->
                     curr = File(curr, part)
                     parts.add(part to curr)
                 }
                 parts
+                }
             },
-            onNavigate = { state.navigateTo(it) },
+            onNavigate = { dir ->
+                if (state.isDeviceDashboard && dir == Environment.getExternalStorageDirectory()) state.navigateDevice()
+                else state.navigateTo(dir)
+            },
             isGridView = state.isGridView,
             onToggleView = { state.isGridView = !state.isGridView },
             searchQuery = state.searchQuery,
             onSearchChange = { state.searchQuery = it },
+            searchHome = state.isHomeDashboard || state.isDeviceDashboard,
             textColor = textColor,
             surfaceBg = surfaceBg,
             isDark = isDark
@@ -732,33 +815,62 @@ private fun FileExplorerContent(
             NavigationPane(
                 quickAccess = quickAccess,
                 currentDir = state.currentDir,
+                isHomeDashboard = state.isHomeDashboard,
+                isDeviceDashboard = state.isDeviceDashboard,
                 onNavigate = { state.navigateTo(it) },
+                onHome = { state.navigateHome() },
+                onDevice = { state.navigateDevice() },
                 textColor = textColor,
                 navBg = navBg,
                 surfaceBg = surfaceBg,
                 isDark = isDark
             )
 
-            FileListArea(
-                state = state,
-                bgColor = bgColor,
-                surfaceBg = surfaceBg,
-                textColor = textColor,
-                isDark = isDark,
-                context = context,
-                viewModel = viewModel,
-                onBackgroundContextMenu = { offset ->
-                    state.contextMenuOffset = offset
-                    state.showBackgroundContextMenu = true
-                    state.contextMenuFile = null
-                }
-            )
+            if (state.isHomeDashboard) {
+                HomeDashboard(
+                    quickAccess = quickAccess,
+                    textColor = textColor,
+                    bgColor = bgColor,
+                    surfaceBg = surfaceBg,
+                    isDark = isDark,
+                    context = context,
+                    viewModel = viewModel,
+                    onNavigate = { state.navigateTo(it) }
+                )
+            } else if (state.isDeviceDashboard) {
+                DeviceStorageDashboard(
+                    textColor = textColor,
+                    bgColor = bgColor,
+                    surfaceBg = surfaceBg,
+                    isDark = isDark,
+                    onNavigate = { state.navigateTo(it) }
+                )
+            } else {
+                FileListArea(
+                    state = state,
+                    bgColor = bgColor,
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    isDark = isDark,
+                    context = context,
+                    viewModel = viewModel,
+                    onBackgroundContextMenu = { offset ->
+                        state.contextMenuOffset = offset
+                        state.showBackgroundContextMenu = true
+                        state.contextMenuFile = null
+                    }
+                )
+            }
         }
 
         StatusBar(
             textColor = textColor,
-            itemCount = state.files.size,
-            selectedCount = state.selectedFiles.size
+            itemCount = when {
+                state.isHomeDashboard -> quickAccess.size
+                state.isDeviceDashboard -> 1
+                else -> state.files.size
+            },
+            selectedCount = if (state.isHomeDashboard || state.isDeviceDashboard) 0 else state.selectedFiles.size
         )
     }
 
@@ -771,6 +883,267 @@ private fun FileExplorerContent(
         clipboardActive = vmUiState?.clipboardFiles?.isNotEmpty() == true,
         onReload = { loadFiles(state.currentDir) }
     )
+}
+
+// ────────────────────────────────────────────────────────
+// Home Dashboard — Bluebird-native landing page
+// ────────────────────────────────────────────────────────
+private data class HomeQuickLink(
+    val label: String,
+    val directory: File,
+    val icon: Int
+)
+
+@Composable
+private fun HomeDashboard(
+    quickAccess: List<Pair<String, File>>,
+    textColor: Color,
+    bgColor: Color,
+    surfaceBg: Color,
+    isDark: Boolean,
+    context: android.content.Context,
+    viewModel: LauncherViewModel?,
+    onNavigate: (File) -> Unit
+) {
+    val homeLinks = remember(quickAccess) {
+        val iconFor = mapOf(
+            "Downloads" to R.drawable.ic_explorer_downloads,
+            "Documents" to R.drawable.ic_explorer_documents,
+            "Pictures" to R.drawable.ic_explorer_pictures,
+            "Music" to R.drawable.ic_explorer_music,
+            "Movies" to R.drawable.ic_explorer_videos,
+            "DCIM" to R.drawable.ic_explorer_pictures,
+            "Internal Storage" to R.drawable.ic_explorer_storage
+        )
+        quickAccess
+            .filter { it.first != "DCIM" && it.first != "Internal Storage" }
+            .mapNotNull { (label, dir) ->
+                if (!dir.exists()) null else HomeQuickLink(label, dir, iconFor[label] ?: R.drawable.ic_explorer_storage)
+            }
+    }
+
+    var recentFiles by remember { mutableStateOf<List<RealFileItem>>(emptyList()) }
+    val recentRootsKey = remember(quickAccess) { quickAccess.map { it.second.absolutePath } }
+
+    LaunchedEffect(recentRootsKey) {
+        recentFiles = withContext(Dispatchers.IO) {
+            quickAccess
+                .filter { it.second.exists() && it.second.isDirectory }
+                .flatMap { (_, dir) ->
+                    runCatching {
+                        dir.listFiles()
+                            ?.asSequence()
+                            ?.filter { it.isFile && !it.name.startsWith(".") }
+                            ?.map { RealFileItem(it) }
+                            ?.toList()
+                            ?: emptyList()
+                    }.getOrDefault(emptyList())
+                }
+                .sortedByDescending { it.lastModified }
+                .take(6)
+        }
+    }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor)
+            .verticalScroll(rememberScrollState())
+    ) {
+        val columns = if (maxWidth >= 760.dp) 3 else 2
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = if (isDark) ExplorerDarkSurface else Color(0xFFF0F5FB),
+                border = BorderStroke(1.dp, if (isDark) ExplorerDarkBorder else ExplorerLightBorder)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = RoundedCornerShape(13.dp),
+                        color = ExplorerAccentBlue.copy(alpha = 0.12f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_explorer_home),
+                                contentDescription = null,
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(25.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Welcome to Bluebird Explorer",
+                            color = textColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "Quick access to your folders and recent files",
+                            color = textColor.copy(alpha = 0.58f),
+                            fontSize = 12.5.sp
+                        )
+                    }
+                }
+            }
+
+            Text(
+                "Quick access",
+                color = textColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            homeLinks.chunked(columns).forEach { rowLinks ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowLinks.forEach { link ->
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { onNavigate(link.directory) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDark) ExplorerDarkSurface else ExplorerLightField,
+                            border = BorderStroke(1.dp, if (isDark) ExplorerDarkBorder else ExplorerLightBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(11.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(link.icon),
+                                    contentDescription = link.label,
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(25.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        link.label,
+                                        color = textColor,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        "This Device",
+                                        color = textColor.copy(alpha = 0.48f),
+                                        fontSize = 10.5.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                                Icon(
+                                    FluentIcons.Regular.ChevronRight,
+                                    contentDescription = null,
+                                    tint = textColor.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+                    repeat(columns - rowLinks.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Recent files",
+                    color = textColor,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (recentFiles.size > 0) {
+                    Text(
+                        "${recentFiles.size} items",
+                        color = textColor.copy(alpha = 0.45f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (isDark) ExplorerDarkSurface else ExplorerLightField,
+                border = BorderStroke(1.dp, if (isDark) ExplorerDarkBorder else ExplorerLightBorder)
+            ) {
+                if (recentFiles.isEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Recent files will appear here",
+                            color = textColor.copy(alpha = 0.48f),
+                            fontSize = 12.sp
+                        )
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        recentFiles.forEachIndexed { index, item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (item.isDirectory) onNavigate(item.file)
+                                        else openFileFromExplorer(item, context, viewModel)
+                                    }
+                                    .padding(horizontal = 13.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    getFileIcon(item),
+                                    contentDescription = null,
+                                    tint = getFileIconColor(item),
+                                    modifier = Modifier.size(21.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        item.name,
+                                        color = textColor,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        item.file.parentFile?.name ?: "This Device",
+                                        color = textColor.copy(alpha = 0.45f),
+                                        fontSize = 10.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text(
+                                    formatDate(item.lastModified),
+                                    color = textColor.copy(alpha = 0.42f),
+                                    fontSize = 10.5.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            if (index < recentFiles.lastIndex) {
+                                HorizontalDivider(color = textColor.copy(alpha = 0.055f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ────────────────────────────────────────────────────────
@@ -1232,8 +1605,8 @@ private data class Win11DialogColors(val bg: Color, val text: Color, val accent:
 @Composable
 private fun rememberWin11DialogColors(isDark: Boolean): Win11DialogColors {
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val bg = if (isDark) Color(0xFF2C2C2C) else Color(0xFFFBFBFB)
-    val fieldBg = if (isDark) Color(0xFF3A3A3A) else Color.White
+    val bg = if (isDark) ExplorerDarkSurface else ExplorerLightSurface
+    val fieldBg = if (isDark) ExplorerDarkField else Color(0xFFFEFEFE)
     val border = textColor.copy(alpha = if (isDark) 0.16f else 0.18f)
     return Win11DialogColors(bg, textColor, bluebirdColors.AccentBlue, fieldBg, border)
 }
@@ -1437,119 +1810,110 @@ private fun CommandBar(
     onToggleView: () -> Unit,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
+    searchHome: Boolean,
     textColor: Color,
     surfaceBg: Color,
     isDark: Boolean
 ) {
+    val controlBg = if (isDark) ExplorerDarkSurface else ExplorerLightSurface
+    val fieldBg = if (isDark) ExplorerDarkField else ExplorerLightField
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = surfaceBg,
-        shadowElevation = 1.dp
+        color = if (isDark) ExplorerDarkBackground else ExplorerLightField,
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.06f))
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            IconButton(
-                onClick = onBack,
-                enabled = true,
-                modifier = Modifier.size(36.dp)
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Icon(FluentIcons.Regular.ArrowLeft, "Back", tint = textColor, modifier = Modifier.size(18.dp))
-            }
-            IconButton(
-                onClick = onUp,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(FluentIcons.Regular.ArrowUp, "Up", tint = textColor, modifier = Modifier.size(18.dp))
-            }
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(FluentIcons.Regular.ArrowClockwise, "Refresh", tint = textColor, modifier = Modifier.size(18.dp))
-            }
-
-            BreadcrumbBar(
-                parts = pathParts,
-                onNavigate = onNavigate,
-                textColor = textColor,
-                surfaceBg = surfaceBg,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(36.dp)
-            )
-
-            Surface(
-                modifier = Modifier.width(220.dp).height(36.dp),
-                shape = RoundedCornerShape(9.dp),
-                color = if (isDark) Color(0xFF303030) else Color(0xFFE7EAED),
-                border = BorderStroke(1.dp, textColor.copy(alpha = 0.07f))
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        FluentIcons.Regular.Search,
-                        contentDescription = "Search",
-                        tint = textColor.copy(alpha = 0.48f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    // FIX: this Box had no contentAlignment, so both the placeholder and the
-                    // BasicTextField defaulted to top-start inside a box sized to its tallest
-                    // child — that's what made the cursor/caret appear to float above the
-                    // visible text line instead of sitting centered on it.
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                        if (searchQuery.isEmpty()) {
-                            Text(
-                                "Search this folder",
-                                color = textColor.copy(alpha = 0.42f),
-                                fontSize = 12.5.sp,
-                                maxLines = 1
-                            )
-                        }
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = onSearchChange,
-                            singleLine = true,
-                            textStyle = TextStyle(color = textColor, fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
-                            cursorBrush = SolidColor(bluebirdColors.AccentBlue),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onSearchChange("") },
-                            modifier = Modifier.size(22.dp)
-                        ) {
-                            Icon(
-                                FluentIcons.Regular.DiamondDismiss,
-                                contentDescription = "Clear search",
-                                tint = textColor.copy(alpha = 0.55f),
-                                modifier = Modifier.size(14.dp)
-                            )
+                listOf(
+                    Triple(FluentIcons.Regular.ArrowLeft, "Back", onBack),
+                    Triple(FluentIcons.Regular.ArrowUp, "Up", onUp),
+                    Triple(FluentIcons.Regular.ArrowClockwise, "Refresh", onRefresh)
+                ).forEach { (icon, label, action) ->
+                    Surface(
+                        shape = RoundedCornerShape(9.dp),
+                        color = controlBg,
+                        border = BorderStroke(1.dp, textColor.copy(alpha = 0.045f))
+                    ) {
+                        IconButton(onClick = action, modifier = Modifier.size(34.dp)) {
+                            Icon(icon, label, tint = textColor.copy(alpha = 0.82f), modifier = Modifier.size(17.dp))
                         }
                     }
                 }
-            }
 
-            Surface(
-                shape = RoundedCornerShape(9.dp),
-                color = if (isDark) Color(0xFF303030) else Color(0xFFE7EAED)
-            ) {
-                IconButton(onClick = onToggleView, modifier = Modifier.size(34.dp)) {
-                    Icon(
-                        if (isGridView) FluentIcons.Regular.List else FluentIcons.Regular.Grid,
-                        if (isGridView) "List view" else "Grid view",
-                        tint = textColor,
-                        modifier = Modifier.size(18.dp)
-                    )
+                BreadcrumbBar(
+                    parts = pathParts,
+                    onNavigate = onNavigate,
+                    textColor = textColor,
+                    surfaceBg = fieldBg,
+                    modifier = Modifier.weight(1f).height(36.dp)
+                )
+
+                Surface(
+                    modifier = Modifier.width(250.dp).height(36.dp),
+                    shape = RoundedCornerShape(9.dp),
+                    color = fieldBg,
+                    border = BorderStroke(1.dp, textColor.copy(alpha = 0.07f))
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            FluentIcons.Regular.Search,
+                            contentDescription = "Search",
+                            tint = textColor.copy(alpha = 0.48f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(7.dp))
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    if (searchHome) "Search Home" else "Search this folder",
+                                    color = textColor.copy(alpha = 0.40f),
+                                    fontSize = 12.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = onSearchChange,
+                                singleLine = true,
+                                textStyle = TextStyle(color = textColor, fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
+                                cursorBrush = SolidColor(bluebirdColors.AccentBlue),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchChange("") }, modifier = Modifier.size(22.dp)) {
+                                Icon(
+                                    FluentIcons.Regular.DiamondDismiss,
+                                    contentDescription = "Clear search",
+                                    tint = textColor.copy(alpha = 0.50f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(9.dp),
+                    color = if (isGridView) bluebirdColors.AccentBlue.copy(alpha = 0.12f) else controlBg,
+                    border = BorderStroke(1.dp, textColor.copy(alpha = 0.045f))
+                ) {
+                    IconButton(onClick = onToggleView, modifier = Modifier.size(34.dp)) {
+                        Icon(
+                            if (isGridView) FluentIcons.Regular.List else FluentIcons.Regular.Grid,
+                            if (isGridView) "List view" else "Grid view",
+                            tint = if (isGridView) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.82f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1622,75 +1986,141 @@ private fun Ribbon(
     isDark: Boolean,
     itemCount: Int
 ) {
+    val barBg = if (isDark) ExplorerDarkNav else ExplorerLightSurface
+    val controlBg = if (isDark) ExplorerDarkSurface else Color(0xFFFEFEFE)
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = if (isDark) Color(0xFF2A2A2A) else Color(0xFFE9ECEF),
-        tonalElevation = 1.dp
+        color = barBg,
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.045f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().height(42.dp).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            ExplorerAction("New folder", FluentIcons.Regular.FolderAdd, onNewFolder, textColor)
-            ExplorerAction("Cut", FluentIcons.Regular.Cut, onCut, textColor, enabled = true)
-            ExplorerAction("Copy", FluentIcons.Regular.Copy, onCopy, textColor, enabled = true)
-            ExplorerAction(
+            CommandPill("New", FluentIcons.Regular.FolderAdd, onNewFolder, textColor, controlBg)
+            CommandPill("Cut", FluentIcons.Regular.Cut, onCut, textColor, controlBg)
+            CommandPill("Copy", FluentIcons.Regular.Copy, onCopy, textColor, controlBg)
+            CommandPill(
                 "Paste",
                 FluentIcons.Regular.ClipboardPaste,
                 onPaste,
                 if (clipboardActive) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.28f),
+                controlBg,
                 enabled = clipboardActive
             )
-            ExplorerAction("Delete", FluentIcons.Regular.Delete, onDelete, textColor, enabled = true)
+            CommandPill("Delete", FluentIcons.Regular.Delete, onDelete, textColor, controlBg)
 
-            Spacer(Modifier.width(4.dp))
-            VerticalDivider(modifier = Modifier.height(22.dp), color = textColor.copy(alpha = 0.10f))
-            Spacer(Modifier.width(5.dp))
+            Spacer(Modifier.width(3.dp))
+            VerticalDivider(modifier = Modifier.height(22.dp), color = textColor.copy(alpha = 0.09f))
+            Spacer(Modifier.width(3.dp))
 
-            Text(
-                "Sort",
-                color = textColor.copy(alpha = 0.50f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+            SortMenuButton(
+                sortBy = sortBy,
+                sortAscending = sortAscending,
+                onSortChange = onSortChange,
+                textColor = textColor,
+                controlBg = controlBg
             )
-            listOf("name", "date", "size", "type").forEach { sort ->
-                TextButton(
-                    onClick = {
-                        if (sortBy == sort) onSortChange(sort, !sortAscending)
-                        else onSortChange(sort, true)
-                    },
-                    contentPadding = PaddingValues(horizontal = 5.dp),
-                    modifier = Modifier.height(30.dp)
-                ) {
-                    Text(
-                        sort.replaceFirstChar { it.uppercase() },
-                        color = if (sortBy == sort) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.65f),
-                        fontSize = 11.sp
-                    )
-                    if (sortBy == sort) {
-                        Icon(
-                            if (sortAscending) FluentIcons.Regular.ChevronUp else FluentIcons.Regular.ChevronDown,
-                            null,
-                            tint = bluebirdColors.AccentBlue,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
-            }
 
-            Spacer(Modifier.weight(1f))
-            ExplorerAction(
-                if (showHidden) "Hide hidden files" else "Show hidden files",
+            CommandPill("Select all", FluentIcons.Regular.SelectAllOn, onSelectAll, textColor, controlBg)
+            CommandPill(
+                if (showHidden) "Hide hidden" else "Hidden items",
                 if (showHidden) FluentIcons.Regular.EyeOff else FluentIcons.Regular.Eye,
                 onToggleHidden,
-                textColor
+                textColor,
+                controlBg
             )
+
+            Spacer(Modifier.weight(1f))
             Text(
                 "$itemCount items",
-                color = textColor.copy(alpha = 0.42f),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(start = 4.dp)
+                color = textColor.copy(alpha = 0.40f),
+                fontSize = 10.5.sp,
+                modifier = Modifier.padding(end = 3.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun CommandPill(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    tint: Color,
+    background: Color,
+    enabled: Boolean = true
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (enabled) background else background.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, tint.copy(alpha = if (enabled) 0.055f else 0.03f))
+    ) {
+        TextButton(
+            onClick = onClick,
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = Modifier.height(32.dp)
+        ) {
+            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(5.dp))
+            Text(label, color = tint, fontSize = 11.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun SortMenuButton(
+    sortBy: String,
+    sortAscending: Boolean,
+    onSortChange: (String, Boolean) -> Unit,
+    textColor: Color,
+    controlBg: Color
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = controlBg,
+            border = BorderStroke(1.dp, textColor.copy(alpha = 0.055f))
+        ) {
+            TextButton(
+                onClick = { expanded = true },
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Icon(FluentIcons.Regular.ArrowUp, "Sort", tint = textColor.copy(alpha = 0.78f), modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("Sort", color = textColor.copy(alpha = 0.84f), fontSize = 11.sp)
+                Spacer(Modifier.width(2.dp))
+                Icon(FluentIcons.Regular.ChevronDown, null, tint = textColor.copy(alpha = 0.50f), modifier = Modifier.size(13.dp))
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            listOf("name", "date", "size", "type").forEach { sort ->
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(sort.replaceFirstChar { it.uppercase() })
+                            if (sortBy == sort) {
+                                Spacer(Modifier.width(8.dp))
+                                Icon(
+                                    if (sortAscending) FluentIcons.Regular.ChevronUp else FluentIcons.Regular.ChevronDown,
+                                    contentDescription = null,
+                                    tint = bluebirdColors.AccentBlue,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        if (sortBy == sort) onSortChange(sort, !sortAscending) else onSortChange(sort, true)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
@@ -1713,106 +2143,237 @@ private fun ExplorerAction(
 }
 
 @Composable
-private fun NavigationPane(
-    quickAccess: List<Pair<String, File>>,
-    currentDir: File,
-    onNavigate: (File) -> Unit,
+private fun DeviceStorageDashboard(
     textColor: Color,
-    navBg: Color,
+    bgColor: Color,
     surfaceBg: Color,
-    isDark: Boolean
+    isDark: Boolean,
+    onNavigate: (File) -> Unit
 ) {
-    Column(
+    val internalStorage = Environment.getExternalStorageDirectory()
+    val removableStorage = remember {
+        File("/storage").listFiles()
+            ?.filter { it.isDirectory && it.name !in setOf("emulated", "self") && it.canRead() }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+    }
+
+    val storageEntries = buildList {
+        add("Internal Storage" to internalStorage)
+        removableStorage.forEach { add("${it.name}" to it) }
+    }
+
+    Row(
         modifier = Modifier
-            .width(196.dp)
-            .fillMaxHeight()
-            .background(navBg)
+            .fillMaxSize()
+            .background(bgColor)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 7.dp, vertical = 9.dp)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            "Quick access",
-            color = textColor.copy(alpha = 0.48f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-        )
-        quickAccess.forEach { (label, dir) ->
-            NavItem(
-                label = label,
-                icon = when (label) {
-                    "Downloads" -> FluentIcons.Regular.ArrowDownload
-                    "Pictures" -> FluentIcons.Regular.Image
-                    "Music" -> FluentIcons.Regular.MusicNote2
-                    "Movies" -> FluentIcons.Regular.VideoClip
-                    "Desktop" -> FluentIcons.Regular.Desktop
-                    "DCIM" -> FluentIcons.Regular.Camera
-                    "Documents" -> FluentIcons.Regular.Document
-                    else -> FluentIcons.Regular.HardDrive
-                },
-                isSelected = currentDir == dir,
-                textColor = textColor,
-                onClick = { onNavigate(dir) }
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                "This Device",
+                color = textColor,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold
             )
-        }
+            Text(
+                "Storage available on this device",
+                color = if (isDark) ExplorerDarkSecondaryText else ExplorerLightSecondaryText,
+                fontSize = 12.5.sp
+            )
 
-        Spacer(Modifier.height(7.dp))
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 5.dp),
-            color = textColor.copy(alpha = 0.08f)
-        )
-        Spacer(Modifier.height(8.dp))
+            storageEntries.chunked(2).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    row.forEach { (label, directory) ->
+                        val stat = remember(directory.absolutePath) { runCatching { StatFs(directory.path) }.getOrNull() }
+                        val totalBytes = stat?.totalBytes ?: 0L
+                        val freeBytes = stat?.availableBytes ?: 0L
+                        val usedBytes = (totalBytes - freeBytes).coerceAtLeast(0L)
+                        val fraction = if (totalBytes > 0L) (usedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f) else 0f
+                        val icon = if (directory.absolutePath == internalStorage.absolutePath) R.drawable.ic_explorer_storage else R.drawable.ic_explorer_sd_card
 
-        val stat = remember { StatFs(Environment.getExternalStorageDirectory().path) }
-        val totalBytes = stat.totalBytes
-        val freeBytes = stat.availableBytes
-        val usedBytes = totalBytes - freeBytes
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            color = surfaceBg.copy(alpha = 0.58f)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        FluentIcons.Regular.HardDrive,
-                        null,
-                        tint = textColor.copy(alpha = 0.60f),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        "Internal storage",
-                        color = textColor.copy(alpha = 0.72f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                        Surface(
+                            modifier = Modifier.weight(1f).clickable { onNavigate(directory) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isDark) ExplorerDarkSurface else Color(0xFFFEFEFE),
+                            border = BorderStroke(1.dp, if (isDark) ExplorerDarkBorder else ExplorerLightBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        modifier = Modifier.size(42.dp),
+                                        shape = RoundedCornerShape(11.dp),
+                                        color = (if (directory.absolutePath == internalStorage.absolutePath) ExplorerAccentBlue else ExplorerLightSecondaryText).copy(alpha = if (isDark) 0.16f else 0.10f)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                painter = painterResource(icon),
+                                                contentDescription = null,
+                                                tint = Color.Unspecified,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(11.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(label, color = textColor, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            formatFileSize(freeBytes) + " free of " + formatFileSize(totalBytes),
+                                            color = if (isDark) ExplorerDarkSecondaryText else ExplorerLightSecondaryText,
+                                            fontSize = 10.5.sp
+                                        )
+                                    }
+                                    Icon(
+                                        FluentIcons.Regular.ChevronRight,
+                                        contentDescription = null,
+                                        tint = textColor.copy(alpha = 0.34f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                LinearProgressIndicator(
+                                    progress = { fraction },
+                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                    color = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+                                    trackColor = textColor.copy(alpha = 0.10f)
+                                )
+                            }
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
-                Spacer(Modifier.height(7.dp))
-                LinearProgressIndicator(
-                    progress = { if (totalBytes > 0) (usedBytes.toFloat() / totalBytes) else 0f },
-                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-                    color = bluebirdColors.AccentBlue,
-                    trackColor = textColor.copy(alpha = 0.10f)
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    "${formatFileSize(freeBytes)} free of ${formatFileSize(totalBytes)}",
-                    color = textColor.copy(alpha = 0.46f),
-                    fontSize = 10.5.sp
-                )
             }
         }
     }
 }
 
 @Composable
+private fun NavigationPane(
+    quickAccess: List<Pair<String, File>>,
+    currentDir: File,
+    isHomeDashboard: Boolean,
+    isDeviceDashboard: Boolean,
+    onNavigate: (File) -> Unit,
+    onHome: () -> Unit,
+    onDevice: () -> Unit,
+    textColor: Color,
+    navBg: Color,
+    surfaceBg: Color,
+    isDark: Boolean
+) {
+    val homeDir = Environment.getExternalStorageDirectory()
+    val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    val documents = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+    val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+    val music = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+    val videos = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+    val desktop = File(homeDir, "Desktop")
+
+    val primary = listOf(
+        ExplorerNavDestination("Home", homeDir, R.drawable.ic_explorer_home),
+        ExplorerNavDestination("Gallery", pictures, R.drawable.ic_explorer_gallery)
+    )
+    val folders = listOf(
+        ExplorerNavDestination("Desktop", desktop, R.drawable.ic_explorer_desktop),
+        ExplorerNavDestination("Downloads", downloads, R.drawable.ic_explorer_downloads),
+        ExplorerNavDestination("Documents", documents, R.drawable.ic_explorer_documents),
+        ExplorerNavDestination("Pictures", pictures, R.drawable.ic_explorer_pictures),
+        ExplorerNavDestination("Music", music, R.drawable.ic_explorer_music),
+        ExplorerNavDestination("Videos", videos, R.drawable.ic_explorer_videos)
+    ).filter { it.directory.exists() }
+
+    Column(
+        modifier = Modifier
+            .width(214.dp)
+            .fillMaxHeight()
+            .background(navBg)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 10.dp)
+    ) {
+        Text(
+            "Home",
+            color = textColor.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+        primary.forEach { item ->
+            NavItem(
+                label = item.label,
+                iconRes = item.icon,
+                isSelected = when (item.label) {
+                    "Home" -> isHomeDashboard
+                    "Gallery" -> !isHomeDashboard && currentDir == item.directory
+                    else -> false
+                },
+                textColor = textColor,
+                selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
+                accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+                onClick = {
+                    if (item.label == "Home") onHome() else onNavigate(item.directory)
+                }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 6.dp), color = textColor.copy(alpha = 0.07f))
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            "Folders",
+            color = textColor.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+        folders.forEach { item ->
+            NavItem(
+                label = item.label,
+                iconRes = item.icon,
+                isSelected = currentDir == item.directory,
+                textColor = textColor,
+                selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
+                accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+                onClick = { onNavigate(item.directory) }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 6.dp), color = textColor.copy(alpha = 0.07f))
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            "Storage",
+            color = textColor.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+
+        NavItem(
+            label = "This Device",
+            iconRes = R.drawable.ic_explorer_device,
+            isSelected = isDeviceDashboard,
+            textColor = textColor,
+            selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
+            accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+            onClick = onDevice
+        )
+    }
+}
+
+@Composable
 private fun NavItem(
     label: String,
-    icon: ImageVector,
+    iconRes: Int,
     isSelected: Boolean,
     textColor: Color,
+    selectionBackground: Color,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -1820,7 +2381,7 @@ private fun NavItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isSelected) bluebirdColors.AccentBlue.copy(alpha = 0.15f)
+                if (isSelected) selectionBackground
                 else Color.Transparent
             )
             .clickable(onClick = onClick)
@@ -1829,14 +2390,14 @@ private fun NavItem(
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Icon(
-            icon,
-            null,
-            tint = if (isSelected) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.66f),
-            modifier = Modifier.size(17.dp)
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(18.dp)
         )
         Text(
             label,
-            color = if (isSelected) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.88f),
+            color = if (isSelected) accentColor else textColor.copy(alpha = 0.88f),
             fontSize = 12.5.sp,
             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1,
@@ -1914,6 +2475,32 @@ private fun FileExplorerThumbnail(
     val extension = item.extension
     val isImage = !item.isDirectory && extension in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp")
     val isVideo = !item.isDirectory && extension in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp")
+    val needsPackageIcon = !item.isDirectory && extension in setOf("exe", "bpk")
+
+    // Custom package artwork is now loaded only for visible Explorer tiles. This keeps
+    // opening a directory with hundreds/thousands of files responsive.
+    val lazyPackageIcon by produceState<Bitmap?>(
+        initialValue = item.iconBitmap,
+        item.file.absolutePath,
+        item.lastModified,
+        item.size,
+        needsPackageIcon
+    ) {
+        if (!needsPackageIcon || value != null) return@produceState
+        value = withContext(Dispatchers.IO) {
+            when (extension) {
+                "exe" -> runCatching {
+                    BluebirdExecutable.read(item.file)?.let { descriptor ->
+                        BluebirdExecutable.resolveIcon(item.file, descriptor)
+                            .takeIf { it.isFile }
+                            ?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                    }
+                }.getOrNull()
+                "bpk" -> runCatching { BpkPackageIcon.decode(item.file) }.getOrNull()
+                else -> null
+            }
+        }
+    }
     val videoThumbnail by produceState<Bitmap?>(
         initialValue = null,
         item.file.absolutePath,
@@ -1952,9 +2539,9 @@ private fun FileExplorerThumbnail(
                     Icon(FluentIcons.Filled.Play, null, tint = Color.White, modifier = Modifier.padding(4.dp))
                 }
             }
-            item.iconBitmap != null -> {
+            lazyPackageIcon != null -> {
                 Image(
-                    bitmap = item.iconBitmap.asImageBitmap(),
+                    bitmap = lazyPackageIcon!!.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier.size(iconSize).clip(RoundedCornerShape(6.dp)),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -2150,7 +2737,7 @@ private fun ExplorerContextPopup(
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true)
     ) {
         val bg = if (isDark) Color(0xFA1E1E1E) else Color(0xFCEFF4F9)
-        val border = if (isDark) Color(0xFF303030) else Color(0xFFE5E5E5)
+        val border = if (isDark) ExplorerDarkBorder else ExplorerLightBorder
         Surface(
             modifier = Modifier.width(204.dp),
             shape = RoundedCornerShape(6.dp),

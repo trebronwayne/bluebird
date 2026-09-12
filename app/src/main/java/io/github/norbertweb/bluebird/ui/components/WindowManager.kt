@@ -77,7 +77,7 @@ import io.github.norbertweb.bluebird.ui.screens.CalendarScreen
 import io.github.norbertweb.bluebird.ui.screens.FileExplorerScreen
 import io.github.norbertweb.bluebird.ui.screens.ImageViewerScreen
 import io.github.norbertweb.bluebird.ui.screens.MediaPlayerScreen
-import io.github.norbertweb.bluebird.ui.screens.MessagesScreen
+
 import io.github.norbertweb.bluebird.ui.screens.RecycleBinScreen
 import io.github.norbertweb.bluebird.ui.screens.SettingsScreen
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
@@ -1007,7 +1007,7 @@ fun WindowContent(
                     ImageViewerScreen(isDark, filePath, viewModel)
                 }
                 LauncherScreen.WORD_IMPRESS      -> PhoneScreen(isDark, initialPath = extras["filePath"] ?: "")
-                LauncherScreen.BLUEBIRD_STORE   -> MessagesScreen(isDark)
+
                 LauncherScreen.RECYCLE_BIN -> RecycleBinScreen(isDark, viewModel)
                 LauncherScreen.TERMINAL    -> TerminalScreen(isDark)
                 LauncherScreen.PROGRAM_MANAGER -> {

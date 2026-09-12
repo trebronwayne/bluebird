@@ -469,6 +469,11 @@ data class MediaTrack(
             .setArtworkUri(artworkUri)
             .setIsBrowsable(false)
             .setIsPlayable(true)
+            // N-06: lets PlaybackService tell audio from video with zero extra
+            // plumbing (no custom Bundle/extra needed) — it just reads
+            // player.currentMediaItem.mediaMetadata.mediaType to decide
+            // whether this item should get a notification at all.
+            .setMediaType(if (isVideo) MediaMetadata.MEDIA_TYPE_VIDEO else MediaMetadata.MEDIA_TYPE_MUSIC)
             .build()
         val builder = MediaItem.Builder()
             .setUri(contentUri)
@@ -940,6 +945,24 @@ fun MediaPlayerScreen(
         }
     }
 
+    // N-08: keep the screen awake only while video is actually playing — audio
+    // doesn't need this (screen off is normal/expected for background audio),
+    // and paused video shouldn't hold the screen awake either. DisposableEffect
+    // rather than LaunchedEffect specifically so the flag is guaranteed to
+    // clear the moment either key changes OR this window closes — a plain
+    // LaunchedEffect only cancels its coroutine on exit, it doesn't run any
+    // cleanup, which would leave FLAG_KEEP_SCREEN_ON stuck exactly like the
+    // brightness-never-reset bug (B-13) above.
+    DisposableEffect(state.currentTrack?.isVideo, state.isPlaying) {
+        val activity = ctx as? Activity
+        if (activity != null && state.currentTrack?.isVideo == true && state.isPlaying) {
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // ── Connect to PlaybackService via MediaController ───────────────
     DisposableEffect(Unit) {
         val token = SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))
@@ -948,7 +971,19 @@ fun MediaPlayerScreen(
             state.controller = try { future.get() } catch (_: Exception) { null }
         }, MoreExecutors.directExecutor())
         onDispose {
-            state.controller?.let { ctrl -> runCatching { ctrl.release() } }
+            // N-07: this fires exactly on a real window close, never on
+            // minimize — WindowManager keeps a minimized window's content
+            // fully composed (that's how MediaPlayer "keeps playing" while
+            // minimized) and only disposes it once the window is actually
+            // closed. Without an explicit stop() here, release() alone just
+            // detaches this UI from the session — PlaybackService keeps
+            // playing regardless, since surviving a simple navigate-away is
+            // the whole point of it being a MediaSessionService. Closing the
+            // window should end playback outright, not just stop watching it.
+            state.controller?.let { ctrl ->
+                runCatching { ctrl.stop() }
+                runCatching { ctrl.release() }
+            }
             MediaController.releaseFuture(future)
             state.controller = null
         }
@@ -1628,7 +1663,7 @@ private fun LibraryPane(
                     // Deliberately flat — no per-album section headers. A wall of
                     // dividerless rows reads calmer and more "premium" than a
                     // library chopped into a header every 3-4 tracks (the sticky
-                    // GroupHeader treatment is kept for Folders/Videos, where
+                    // GroupHeader treatment is kept for Folders only, where
                     // people actually think in those buckets; nobody browses
                     // their own music by album titles they don't remember).
                     itemsIndexed(tracks, key = { _, t -> t.metaKey }) { idx, t ->
@@ -1646,42 +1681,23 @@ private fun LibraryPane(
                     }
                 }
                 else -> {
-                    val isVideos = state.activeTab == MediaTab.VIDEOS
-                    if (isVideos && state.searchQuery.isEmpty()) {
-                        state.videoGroups.forEach { (folderName, groupTracks) ->
-                            stickyHeader(key = "vid_$folderName") {
-                                GroupHeader(folderName, groupTracks.size, isDark, tc, tcm, surface, surfaceH) {
-                                    state.playQueue(groupTracks, 0)
-                                }
-                            }
-                            itemsIndexed(groupTracks, key = { _, t -> t.metaKey }) { idx, t ->
-                                LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
-                                    onClick = { state.playQueue(groupTracks, idx) },
-                                    onAddToQueue = { state.addToPlaylist(t) },
-                                    onPlayNext   = { state.playNext(t) },
-                                    onRemoveFromQueue = {},
-                                    onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
-                                    onAddToPlaylist = { state.showAddToPlaylist = t },
-                                    onShare    = { shareTrack(ctx, t) },
-                                    onTagEdit  = {},
-                                    onLoadSubtitle = { pickSubtitleFor(t, onPickSubtitle, state) }
-                                )
-                            }
-                        }
-                    } else {
-                        itemsIndexed(tracks) { idx, t ->
-                            LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
-                                onClick = { state.playQueue(tracks, idx) },
-                                onAddToQueue = { state.addToPlaylist(t) },
-                                onPlayNext   = { state.playNext(t) },
-                                onRemoveFromQueue = {},
-                                onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
-                                onAddToPlaylist = { state.showAddToPlaylist = t },
-                                onShare    = { shareTrack(ctx, t) },
-                                onTagEdit  = { state.showTagEditor = t },
-                                onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
-                            )
-                        }
+                    // Same call as Music: no sticky section headers. Folders
+                    // keeps its grouping above since that's the one tab where
+                    // the section IS the point; Videos/Recents/Favorites/etc.
+                    // just flow, matching Music's "premium, uninterrupted"
+                    // list feel instead of chopping every few items.
+                    itemsIndexed(tracks, key = { _, t -> t.metaKey }) { idx, t ->
+                        LibraryRow(t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcs, tcm, border, ctx,
+                            onClick = { state.playQueue(tracks, idx) },
+                            onAddToQueue = { state.addToPlaylist(t) },
+                            onPlayNext   = { state.playNext(t) },
+                            onRemoveFromQueue = {},
+                            onFavorite = { t.isFavorite = !t.isFavorite; scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) } },
+                            onAddToPlaylist = { state.showAddToPlaylist = t },
+                            onShare    = { shareTrack(ctx, t) },
+                            onTagEdit  = { state.showTagEditor = t },
+                            onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
+                        )
                     }
                 }
             }
@@ -1754,16 +1770,21 @@ private object VideoThumbCache {
         hits[track.metaKey]?.let { return it }
         if (track.metaKey in misses) return null
         return withContext(Dispatchers.IO) {
+            // A fixed 1s seek fails outright on anything shorter than that;
+            // aim for the midpoint of the clip instead, capped at 3s so long
+            // videos don't wait on a seek, floored at 0 for zero-duration/
+            // not-yet-known-duration tracks.
+            val timeUs = (track.durationMs.takeIf { it > 0 }?.div(2)?.coerceAtMost(3000L) ?: 0L) * 1000L
             val bmp = runCatching {
                 val retriever = MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(ctx, track.contentUri)
-                    if (Build.VERSION.SDK_INT >= 27) {
-                        // Decoded pre-scaled — cheap enough to do for every row, not just Now Playing.
-                        retriever.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270)
-                    } else {
-                        retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    }
+                    val scaled = if (Build.VERSION.SDK_INT >= 27) {
+                        runCatching { retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270) }.getOrNull()
+                    } else null
+                    scaled
+                        ?: runCatching { retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) }.getOrNull()
+                        ?: runCatching { retriever.frameAtTime }.getOrNull() // last resort: whatever frame it'll give us
                 } finally {
                     retriever.release()
                 }
@@ -1794,17 +1815,22 @@ private fun TrackThumbnail(
     track: MediaTrack, ctx: Context, size: Dp, radius: Dp = 8.dp,
     isActive: Boolean = false, isPlaying: Boolean = false
 ) {
-    val videoFrame = if (track.isVideo && track.artworkUri == null) rememberVideoThumbnail(ctx, track) else null
+    // Video's `artworkUri`, when the scanner sets one at all, is typically a
+    // MediaStore video-thumbnail URI — those are unreliable on modern Android
+    // (scoped storage) and were silently failing to load, which blocked this
+    // from ever reaching the extracted-frame fallback below. For video we
+    // always prefer a real frame over that URI rather than gating on it.
+    val videoFrame = if (track.isVideo) rememberVideoThumbnail(ctx, track) else null
     when {
-        track.artworkUri != null -> AsyncImage(
-            model = track.artworkUri, contentDescription = null,
-            modifier = Modifier.size(size).clip(RoundedCornerShape(radius)),
-            contentScale = ContentScale.Crop, error = null
-        )
-        videoFrame != null -> Image(
+        track.isVideo && videoFrame != null -> Image(
             bitmap = videoFrame.asImageBitmap(), contentDescription = null,
             modifier = Modifier.size(size).clip(RoundedCornerShape(radius)),
             contentScale = ContentScale.Crop
+        )
+        !track.isVideo && track.artworkUri != null -> AsyncImage(
+            model = track.artworkUri, contentDescription = null,
+            modifier = Modifier.size(size).clip(RoundedCornerShape(radius)),
+            contentScale = ContentScale.Crop, error = null
         )
         else -> Box(
             Modifier.size(size).clip(RoundedCornerShape(radius))
@@ -1826,11 +1852,11 @@ private fun TrackThumbnail(
  */
 @Composable
 private fun VideoPoster(track: MediaTrack, ctx: Context, modifier: Modifier = Modifier) {
-    val videoFrame = if (track.artworkUri == null) rememberVideoThumbnail(ctx, track) else null
-    when {
-        track.artworkUri != null -> AsyncImage(model = track.artworkUri, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
-        videoFrame != null -> Image(bitmap = videoFrame.asImageBitmap(), contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
-        else -> {}
+    val videoFrame = rememberVideoThumbnail(ctx, track)
+    if (videoFrame != null) {
+        Image(bitmap = videoFrame.asImageBitmap(), contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
+    } else if (track.artworkUri != null) {
+        AsyncImage(model = track.artworkUri, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
     }
 }
 

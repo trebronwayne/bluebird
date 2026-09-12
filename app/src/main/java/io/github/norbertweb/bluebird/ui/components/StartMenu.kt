@@ -248,7 +248,7 @@ internal val builtInApps = listOf(
     Triple("Settings", FluentIcon.Settings, LauncherScreen.SETTINGS),
     Triple("Calculator", FluentIcon.Calculator, LauncherScreen.CALCULATOR),
     Triple("Calendar", FluentIcon.Calendar, LauncherScreen.CALENDAR),
-    Triple("Bluebird Store", FluentIcon.Moon, LauncherScreen.BLUEBIRD_STORE),
+
     Triple("Word Impress", FluentIcon.DocumentText, LauncherScreen.WORD_IMPRESS),
 
     Triple("Files",        FluentIcon.Folder,       LauncherScreen.FILE_EXPLORER),

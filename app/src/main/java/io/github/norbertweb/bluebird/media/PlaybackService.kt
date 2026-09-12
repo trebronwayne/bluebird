@@ -37,6 +37,7 @@ import android.media.audiofx.Virtualizer
 import android.os.Bundle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -112,6 +113,28 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = session
 
+    // N-06: MediaSessionService posts a notification (and promotes itself to
+    // a foreground service) for ANY active session by default — it has no
+    // built-in concept of "audio vs video". That's wrong here: the whole
+    // point of the notification+foreground combo is to keep playback alive
+    // when the screen is off or the app isn't in front, which is exactly
+    // what we want for audio and explicitly DON'T want for video (video is
+    // only ever meant to be visible in-app; per the docs on
+    // MediaSessionService, overriding this method means WE take
+    // responsibility for starting/stopping the foreground state ourselves —
+    // we simply never start it for video, and drop it immediately if a
+    // video item becomes current while it was already showing for audio).
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        if (isCurrentVideo()) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            return
+        }
+        super.onUpdateNotification(session, startInForegroundRequired)
+    }
+
+    private fun isCurrentVideo(): Boolean =
+        player.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO
+
     override fun onDestroy() {
         saveJob?.cancel()
         fadeJob?.cancel()
@@ -127,8 +150,11 @@ class PlaybackService : MediaSessionService() {
     // If the user swipes the app away from recents while paused (or nothing
     // is queued), let the foreground service actually stop instead of
     // lingering — otherwise it'll sit in the notification shade forever.
+    // Video is stricter: it never gets a notification (see
+    // onUpdateNotification above), so there'd be no way to bring it back or
+    // stop it if it kept running — always tear it down on task removal.
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!player.playWhenReady || player.mediaItemCount == 0) {
+        if (isCurrentVideo() || !player.playWhenReady || player.mediaItemCount == 0) {
             player.stop()
             stopSelf()
         }

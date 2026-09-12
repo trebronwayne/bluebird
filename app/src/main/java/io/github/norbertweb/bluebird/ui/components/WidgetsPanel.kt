@@ -52,8 +52,18 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.geometry.Offset
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -396,6 +406,37 @@ private val WIDGET_LABELS = mapOf(
     "network"    to "Network Speed"
 )
 
+// A small fixed palette, picked deterministically per widget id so every
+// row gets a distinct, consistent identity color across sessions — the
+// same trick iOS/Android settings screens use for app icons in a list.
+private val WIDGET_SWATCH_HUES = listOf(210f, 265f, 152f, 28f, 338f, 190f, 48f, 300f)
+private fun widgetAccentColor(id: String): Color {
+    val hue = WIDGET_SWATCH_HUES[Math.floorMod(id.hashCode(), WIDGET_SWATCH_HUES.size)]
+    val argb = android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.58f, 0.93f))
+    return Color(argb)
+}
+
+/** Real app name + icon for a hosted third-party widget, so the rearrange list can show "Google Keep" instead of a generic "App widget". */
+private data class ExternalWidgetMeta(val label: String, val icon: android.graphics.Bitmap?)
+
+private fun loadExternalWidgetMeta(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int): ExternalWidgetMeta {
+    val pm = context.packageManager
+    return try {
+        val info = appWidgetManager.getAppWidgetInfo(widgetId)
+            ?: return ExternalWidgetMeta("Widget", null)
+        val appInfo = pm.getApplicationInfo(info.provider.packageName, 0)
+        val appLabel = pm.getApplicationLabel(appInfo).toString()
+        val widgetLabel = try { info.loadLabel(pm) } catch (e: Exception) { "" }
+        val label = if (widgetLabel.isNotBlank() && !widgetLabel.equals(appLabel, ignoreCase = true))
+            "$appLabel \u2022 $widgetLabel" else appLabel
+        val icon = try { info.loadIcon(context, 0)?.toBitmap(width = 96, height = 96) }
+            catch (e: Exception) { try { appInfo.loadIcon(pm).toBitmap(width = 96, height = 96) } catch (e2: Exception) { null } }
+        ExternalWidgetMeta(label, icon)
+    } catch (e: Exception) {
+        ExternalWidgetMeta("Widget", null)
+    }
+}
+
 // ─────────────────────────────────────────────────────────
 // Main Widget Panel
 // ─────────────────────────────────────────────────────────
@@ -403,6 +444,262 @@ private val WIDGET_LABELS = mapOf(
 // fine as long as it's unique within the app (only one widget surface hosts
 // widgets here, so a constant is fine).
 private const val BLUEBIRD_APPWIDGET_HOST_ID = 1042
+
+// ─── Custom widget picker ───────────────────────────────────────────────────
+// Replaces the raw system ACTION_APPWIDGET_PICK dialog (a plain, unstyled
+// list owned entirely by the OS) with our own grid of real widget previews,
+// grouped by app — the same shape every mainstream launcher uses. We still
+// go through the system exactly once, but only to ask for BIND_APPWIDGET
+// permission on the *specific* widget the user already chose in our UI,
+// never to browse.
+
+private data class WidgetPickerEntry(
+    val provider: android.appwidget.AppWidgetProviderInfo,
+    val appLabel: String,
+    val widgetLabel: String,
+    val previewBitmap: android.graphics.Bitmap?,
+    val iconBitmap: android.graphics.Bitmap?,
+    val spanCols: Int,
+    val spanRows: Int,
+)
+
+/** Rough cell size (dp) used only to turn a provider's minWidth/minHeight into an N×M badge. */
+private const val WIDGET_GRID_CELL_DP = 72
+
+private fun loadWidgetPickerEntries(context: Context, appWidgetManager: AppWidgetManager): List<WidgetPickerEntry> {
+    val pm = context.packageManager
+    val densityDpi = context.resources.displayMetrics.densityDpi
+    return appWidgetManager.installedProviders.mapNotNull { info ->
+        try {
+            val appInfo = pm.getApplicationInfo(info.provider.packageName, 0)
+            val appLabel = pm.getApplicationLabel(appInfo).toString()
+            val widgetLabel = info.loadLabel(pm).ifBlank { appLabel }
+
+            val previewDrawable = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                    try { info.loadPreviewImage(context, densityDpi) } catch (e: Exception) { null }
+                else -> null
+            } ?: if (info.previewImage != 0) {
+                try { pm.getDrawable(info.provider.packageName, info.previewImage, appInfo) } catch (e: Exception) { null }
+            } else null
+
+            val iconDrawable = try { info.loadIcon(context, densityDpi) } catch (e: Exception) {
+                try { appInfo.loadIcon(pm) } catch (e2: Exception) { null }
+            }
+
+            val cellPx = (WIDGET_GRID_CELL_DP * (densityDpi / 160f)).roundToInt().coerceAtLeast(1)
+            WidgetPickerEntry(
+                provider = info,
+                appLabel = appLabel,
+                widgetLabel = widgetLabel,
+                previewBitmap = previewDrawable?.let { runCatching { it.toBitmap() }.getOrNull() },
+                iconBitmap = iconDrawable?.let { runCatching { it.toBitmap(width = 96, height = 96) }.getOrNull() },
+                spanCols = (info.minWidth / cellPx).coerceIn(1, 4),
+                spanRows = (info.minHeight / cellPx).coerceIn(1, 4),
+            )
+        } catch (e: Exception) { null }
+    }.sortedBy { it.appLabel.lowercase(Locale.getDefault()) }
+}
+
+@Composable
+private fun WidgetPickerSheet(
+    isDark: Boolean,
+    textColor: Color,
+    textScale: Float,
+    onDismiss: () -> Unit,
+    onPick: (android.appwidget.AppWidgetProviderInfo) -> Unit,
+) {
+    val context = LocalContext.current
+    val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+    val bg = if (isDark) bluebirdColors.WidgetBg else bluebirdColors.WidgetBgLight
+    val border = if (isDark) DS.borderDark else DS.borderLight
+    var query by remember { mutableStateOf("") }
+    var entries by remember { mutableStateOf<List<WidgetPickerEntry>?>(null) }
+
+    LaunchedEffect(Unit) {
+        entries = withContext(Dispatchers.IO) { loadWidgetPickerEntries(context, appWidgetManager) }
+    }
+
+    val grouped: Map<String, List<WidgetPickerEntry>> = remember(entries, query) {
+        val list = entries ?: emptyList()
+        val filtered = if (query.isBlank()) list else list.filter {
+            it.appLabel.contains(query, ignoreCase = true) || it.widgetLabel.contains(query, ignoreCase = true)
+        }
+        filtered.groupBy { it.appLabel }.toSortedMap(compareBy { it.lowercase(Locale.getDefault()) })
+    }
+
+    // Scrim + sheet, drawn as the topmost layer of the panel.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f))
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxSize()
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
+                .shadow(elevation = 24.dp, shape = RoundedCornerShape(PANEL_CORNER))
+                .clip(RoundedCornerShape(PANEL_CORNER))
+                .background(bg)
+                .border(1.dp, border, RoundedCornerShape(PANEL_CORNER))
+        ) {
+            // Header: title + close.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Add a widget", color = textColor, fontSize = (17 * textScale).sp, fontWeight = FontWeight.SemiBold)
+                IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
+                    Icon(imageVector = FluentIcon.Dismiss, contentDescription = "Close", tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                }
+            }
+
+            // Search field, styled like a real search bar rather than a bare OutlinedTextField.
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 18.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(textColor.copy(alpha = 0.06f))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text("Search widgets or apps", color = textColor.copy(alpha = 0.4f), fontSize = (13 * textScale).sp)
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontSize = (13 * textScale).sp),
+                        cursorBrush = Brush.verticalGradient(listOf(LocalWidgetAccent.current, LocalWidgetAccent.current)),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    Icon(
+                        imageVector = FluentIcon.Dismiss, contentDescription = "Clear search",
+                        tint = textColor.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp).clickable { query = "" }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            when {
+                entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = LocalWidgetAccent.current, modifier = Modifier.size(28.dp))
+                }
+                grouped.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No widgets found", color = textColor.copy(alpha = 0.5f), fontSize = (13 * textScale).sp)
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    grouped.forEach { (appLabel, widgets) ->
+                        item(key = "header:$appLabel") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                widgets.first().iconBitmap?.let {
+                                    Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
+                                }
+                                Text(appLabel, color = textColor, fontSize = (13 * textScale).sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        item(key = "row:$appLabel") {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(widgets, key = { it.provider.provider.flattenToString() }) { entry ->
+                                    WidgetPickerCard(entry, isDark, textColor, textScale) { onPick(entry.provider) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WidgetPickerCard(
+    entry: WidgetPickerEntry,
+    isDark: Boolean,
+    textColor: Color,
+    textScale: Float,
+    onClick: () -> Unit,
+) {
+    val cardBg = if (isDark) bluebirdColors.WidgetBgLight.copy(alpha = 0.06f) else Color.White
+    val cardBorder = if (isDark) DS.borderDark else DS.borderLight
+
+    Column(
+        modifier = Modifier
+            .width((WIDGET_GRID_CELL_DP * entry.spanCols + 24).dp.coerceAtMost(220.dp))
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(WIDGET_CORNER + 3.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .clip(RoundedCornerShape(WIDGET_CORNER + 3.dp))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(WIDGET_CORNER + 3.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .padding(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height((WIDGET_GRID_CELL_DP * entry.spanRows).dp.coerceAtMost(140.dp))
+                .clip(RoundedCornerShape(WIDGET_CORNER))
+                .background(if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.03f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (entry.previewBitmap != null) {
+                Image(
+                    bitmap = entry.previewBitmap.asImageBitmap(),
+                    contentDescription = entry.widgetLabel,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(WIDGET_CORNER)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+            } else if (entry.iconBitmap != null) {
+                Image(bitmap = entry.iconBitmap.asImageBitmap(), contentDescription = entry.widgetLabel, modifier = Modifier.size(40.dp))
+            } else {
+                Icon(imageVector = FluentIcon.Image, contentDescription = null, tint = textColor.copy(alpha = 0.3f), modifier = Modifier.size(28.dp))
+            }
+            // Size badge, e.g. "4×2" — exactly what Android's own S+ widget
+            // picker overlays on every preview, so this reads as native.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+            ) {
+                Text("${entry.spanCols}\u00D7${entry.spanRows}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            entry.widgetLabel, color = textColor, fontSize = (11 * textScale).sp, fontWeight = FontWeight.Medium,
+            maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
+    }
+}
 
 @Composable
 fun WidgetsPanel(
@@ -422,9 +719,16 @@ fun WidgetsPanel(
 
     var isRefreshing  by remember { mutableStateOf(false) }
     var editMode      by remember { mutableStateOf(false) }
+    var showWidgetPicker by remember { mutableStateOf(false) }
+    var configurePendingId by remember { mutableStateOf(-1) }
     var widgetOrder   by remember { mutableStateOf(loadWidgetOrder(context)) }
     var hiddenWidgets by remember { mutableStateOf(loadHiddenWidgets(context).filter { it in ALL_WIDGET_IDS || it.startsWith("ext:") }.toSet()) }
     var externalIds   by remember { mutableStateOf(loadExternalWidgetIds(context)) }
+    // Looked up once per set of external widgets so the edit panel can show
+    // "Google Keep" instead of a generic "App widget" label.
+    val externalMeta = remember(externalIds) {
+        externalIds.associateWith { id -> loadExternalWidgetMeta(context, AppWidgetManager.getInstance(context), id) }
+    }
     var pinnedWidgets by remember { mutableStateOf(loadPinnedWidgets(context).filter { it in ALL_WIDGET_IDS || it.startsWith("ext:") }.toSet()) }
     // Widgets stay on Bluebird's own Fluent accent so system wallpaper colors
     // cannot unexpectedly recolor the shell's tonal hierarchy.
@@ -468,48 +772,76 @@ fun WidgetsPanel(
         saveWidgetOrder(context, newOrder)
     }
 
-    // Step 2 of the bind flow: system asked the user to approve binding —
-    // if they said yes, the widget is now safe to host.
+    // Step 2b: the widget's own configuration activity (e.g. "pick a
+    // calendar", "pick a photo album") — only added to the panel once the
+    // provider itself reports success, same as a real home screen.
+    val configureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val id = configurePendingId
+        configurePendingId = -1
+        if (id != -1) {
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                addExternalWidget(id)
+            } else {
+                appWidgetHost.deleteAppWidgetId(id)
+            }
+        }
+    }
+
+    // Whether some part of the flow still needs the provider's own setup
+    // screen (e.g. a calendar widget asking which calendar to show) before
+    // it's actually added to the panel.
+    fun finishAdding(id: Int, provider: android.appwidget.AppWidgetProviderInfo?) {
+        if (provider?.configure != null) {
+            configurePendingId = id
+            configureLauncher.launch(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                    component = provider.configure
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                }
+            )
+        } else {
+            addExternalWidget(id)
+        }
+    }
+
+    // Step 2 (only reached if the provider needed explicit bind approval):
+    // the system asked the user a single yes/no "allow?" question scoped to
+    // the exact widget already chosen in our own picker UI below — never a
+    // browsing list.
     val bindLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val id = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
         if (result.resultCode == android.app.Activity.RESULT_OK && id != -1) {
-            addExternalWidget(id)
+            finishAdding(id, appWidgetManager.getAppWidgetInfo(id))
         } else if (id != -1) {
             appWidgetHost.deleteAppWidgetId(id)
         }
     }
 
-    // Step 1: system's own "choose a widget" picker (shows every widget from
-    // every installed app, exactly like adding one to the home screen).
-    val pickLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val id = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-        if (result.resultCode != android.app.Activity.RESULT_OK || id == -1) {
-            if (id != -1) appWidgetHost.deleteAppWidgetId(id)
-            return@rememberLauncherForActivityResult
-        }
-        val info = appWidgetManager.getAppWidgetInfo(id)
-        if (info != null) {
-            addExternalWidget(id)
+    // Step 1: our own picker (grid of real previews, grouped by app) has
+    // already chosen a specific provider. Try to bind it directly — most
+    // widgets are pre-approved for a launcher and this succeeds silently,
+    // with zero system UI at all. Only fall back to asking the system for
+    // permission when bindAppWidgetIdIfAllowed refuses.
+    fun addProviderWidget(provider: android.appwidget.AppWidgetProviderInfo) {
+        val newId = appWidgetHost.allocateAppWidgetId()
+        val bound = try {
+            appWidgetManager.bindAppWidgetIdIfAllowed(newId, provider.provider)
+        } catch (e: SecurityException) { false }
+        if (bound) {
+            finishAdding(newId, provider)
         } else {
-            // Provider needs explicit bind approval — ask the user.
             bindLauncher.launch(
                 Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newId)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)
                 }
             )
         }
-    }
-
-    fun launchWidgetPicker() {
-        val newId = appWidgetHost.allocateAppWidgetId()
-        val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newId)
-        }
-        pickLauncher.launch(intent)
+        showWidgetPicker = false
     }
 
     // Refresh trigger — only widgets that support an explicit refresh observe it.
@@ -595,6 +927,7 @@ fun WidgetsPanel(
                     isDark      = isDark,
                     textColor   = textColor,
                     textScale   = textScale,
+                    externalMeta = externalMeta,
                     onToggle    = { id ->
                         hiddenWidgets = if (id in hiddenWidgets)
                             hiddenWidgets - id else hiddenWidgets + id
@@ -610,7 +943,7 @@ fun WidgetsPanel(
                         saveWidgetOrder(context, newOrder)
                     },
                     onRemoveExternal = { id -> removeExternalWidget(id) },
-                    onAddWidget = { launchWidgetPicker() }
+                    onAddWidget = { showWidgetPicker = true }
                 )
             }
 
@@ -636,6 +969,16 @@ fun WidgetsPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
         }
+        }
+
+        if (showWidgetPicker) {
+            WidgetPickerSheet(
+                isDark = isDark,
+                textColor = textColor,
+                textScale = textScale,
+                onDismiss = { showWidgetPicker = false },
+                onPick = { provider -> addProviderWidget(provider) }
+            )
         }
     }
     }
@@ -708,6 +1051,7 @@ private fun WidgetEditPanel(
     isDark: Boolean,
     textColor: Color,
     textScale: Float,
+    externalMeta: Map<Int, ExternalWidgetMeta>,
     onToggle: (String) -> Unit,
     onTogglePin: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
@@ -752,7 +1096,7 @@ private fun WidgetEditPanel(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Hold  ${'\u2261'}  to drag",
+                "Hold the grip to drag",
                 color      = textColor.copy(alpha = 0.4f),
                 fontSize   = (10 * textScale).sp,
                 fontWeight = FontWeight.Medium
@@ -760,101 +1104,192 @@ private fun WidgetEditPanel(
         }
 
         localOrder.forEachIndexed { index, id ->
-            val isExternal = id.startsWith("ext:")
-            val label = if (isExternal) "App widget" else (WIDGET_LABELS[id] ?: id)
-            val visible = id !in hidden
-            val isPinned = id in pinned
-            val isDragged = id == draggingId
-            val rowBg by animateColorAsState(
-                targetValue = if (isDragged) LocalWidgetAccent.current.copy(alpha = 0.10f)
-                else Color.Transparent,
-                label = "editRowBg"
-            )
+            key(id) {
+                val isExternal = id.startsWith("ext:")
+                val externalId = if (isExternal) id.removePrefix("ext:").toIntOrNull() else null
+                val meta = externalId?.let { externalMeta[it] }
+                val label = meta?.label ?: (WIDGET_LABELS[id] ?: id)
+                val visible = id !in hidden
+                val isPinned = id in pinned
+                val isDragged = id == draggingId
+                val accent = widgetAccentColor(id)
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { rowHeightPx.value = it.size.height.toFloat() }
-                    .zIndex(if (isDragged) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragged) dragOffset else 0f
-                        scaleX = if (isDragged) 1.015f else 1f
-                        scaleY = if (isDragged) 1.015f else 1f
+                // ── FLIP-style reflow: when a swap moves this row to a new
+                // index, it should visibly slide into its new slot instead
+                // of teleporting there — the difference between a settings
+                // list and something that feels physically grabbable.
+                val flipOffset = remember { Animatable(0f) }
+                var lastIndex by remember { mutableStateOf(index) }
+                LaunchedEffect(index) {
+                    if (!isDragged && lastIndex != index) {
+                        val delta = (lastIndex - index) * rowHeightPx.value
+                        lastIndex = index
+                        flipOffset.snapTo(delta)
+                        flipOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+                    } else {
+                        lastIndex = index
                     }
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(rowBg)
-                    .then(
-                        if (isDragged) Modifier.border(1.dp, LocalWidgetAccent.current.copy(alpha = 0.35f), RoundedCornerShape(11.dp))
-                        else Modifier
-                    )
-                    .padding(vertical = 7.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = FluentIcon.ArrowSort,
-                    contentDescription = "Drag to reorder",
-                    tint = if (isDragged) LocalWidgetAccent.current else textColor.copy(alpha = 0.35f),
+                }
+
+                // A held row lifts: elevation and a faint accent glow ramp up,
+                // and it very slightly scales up — the same "picked up off
+                // the table" cue as iOS/Android's own home-screen edit mode.
+                val liftT by animateFloatAsState(if (isDragged) 1f else 0f, animationSpec = spring(stiffness = Spring.StiffnessMedium), label = "liftT")
+
+                // While *any* row is being dragged, every other (non-dragged,
+                // non-hidden-behind-drag) row gets a subtle iOS-style jiggle
+                // so edit mode reads as "alive" rather than static — but it
+                // pauses on the row you're actually holding.
+                val jiggle = rememberInfiniteTransition(label = "jiggle$id")
+                val jiggleAngle by jiggle.animateFloat(
+                    initialValue = -1.4f, targetValue = 1.4f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(180 + (index % 3) * 40, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ), label = "jiggleAngle"
+                )
+
+                // Each row's own accent tints its background very faintly and
+                // its border more visibly — the "polished colors" pass, so
+                // every widget reads as its own distinct card rather than a
+                // uniform gray list, while staying calm enough not to fight
+                // the switch/label content.
+                val baseBg = if (isDark) bluebirdColors.WidgetBgLight.copy(alpha = 0.05f) else Color.White
+                val rowBg = androidx.compose.ui.graphics.lerp(baseBg, accent, if (isDark) 0.10f else 0.055f)
+                val restBorder = accent.copy(alpha = if (isDark) 0.30f else 0.22f)
+
+                Row(
                     modifier = Modifier
-                        .size(22.dp)
-                        .pointerInput(localOrder) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    draggingId = id; dragOffset = 0f
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                },
-                                onDragEnd = { draggingId = null; dragOffset = 0f; onReorder(localOrder) },
-                                onDragCancel = { draggingId = null; dragOffset = 0f },
-                                onDrag = { change, delta ->
-                                    change.consume()
-                                    dragOffset += delta.y
-                                    val rowH = rowHeightPx.value.coerceAtLeast(1f)
-                                    val currentIdx = localOrder.indexOf(id)
-                                    val targetIdx = (currentIdx + (dragOffset / rowH).roundToInt())
-                                        .coerceIn(0, localOrder.lastIndex)
-                                    if (targetIdx != currentIdx) {
-                                        localOrder = localOrder.toMutableList().apply {
-                                            add(targetIdx, removeAt(currentIdx))
+                        .fillMaxWidth()
+                        .onGloballyPositioned { rowHeightPx.value = it.size.height.toFloat() + 10f }
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (isDragged) dragOffset else flipOffset.value
+                            val scale = 1f + liftT * 0.04f
+                            scaleX = scale; scaleY = scale
+                            rotationZ = if (isDragged) 0f else if (draggingId != null) 0f else jiggleAngle
+                        }
+                        .shadow(
+                            elevation = (3f + liftT * 16f).dp,
+                            shape = RoundedCornerShape(18.dp),
+                            ambientColor = accent.copy(alpha = 0.35f),
+                            spotColor = accent.copy(alpha = 0.35f)
+                        )
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(rowBg)
+                        .border(
+                            if (isDragged) 1.6.dp else 1.dp,
+                            androidx.compose.ui.graphics.lerp(restBorder, accent, liftT),
+                            RoundedCornerShape(18.dp)
+                        )
+                        .padding(vertical = 14.dp, horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Grip handle: bigger, with a dot grid rather than a
+                    // bare icon — gives the drag target real weight.
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(if (isDragged) accent.copy(alpha = 0.20f) else textColor.copy(alpha = 0.05f))
+                            .pointerInput(localOrder) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggingId = id; dragOffset = 0f
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onDragEnd = { draggingId = null; dragOffset = 0f; onReorder(localOrder) },
+                                    onDragCancel = { draggingId = null; dragOffset = 0f },
+                                    onDrag = { change, delta ->
+                                        change.consume()
+                                        dragOffset += delta.y
+                                        val rowH = rowHeightPx.value.coerceAtLeast(1f)
+                                        val currentIdx = localOrder.indexOf(id)
+                                        val targetIdx = (currentIdx + (dragOffset / rowH).roundToInt())
+                                            .coerceIn(0, localOrder.lastIndex)
+                                        if (targetIdx != currentIdx) {
+                                            localOrder = localOrder.toMutableList().apply {
+                                                add(targetIdx, removeAt(currentIdx))
+                                            }
+                                            dragOffset -= (targetIdx - currentIdx) * rowH
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         }
-                                        dragOffset -= (targetIdx - currentIdx) * rowH
-                                        // A lighter tick than the pickup, one per swap — gives
-                                        // continuous feedback without feeling like a buzzer.
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     }
-                                }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val dotColor = if (isDragged) accent else textColor.copy(alpha = 0.4f)
+                        Canvas(modifier = Modifier.size(18.dp, 20.dp)) {
+                            val r = 1.8.dp.toPx()
+                            val colXs = listOf(size.width * 0.28f, size.width * 0.72f)
+                            val rowYs = listOf(size.height * 0.12f, size.height * 0.5f, size.height * 0.88f)
+                            for (cx in colXs) for (cy in rowYs) {
+                                drawCircle(color = dotColor, radius = r, center = Offset(cx, cy))
+                            }
+                        }
+                    }
+
+                    // Identity avatar: the real app icon for a hosted
+                    // third-party widget, or a colored initial swatch for a
+                    // built-in one — this is what makes "App widget" become
+                    // recognizable at a glance instead of anonymous.
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(accent.copy(alpha = if (isDark) 0.28f else 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (meta?.icon != null) {
+                            Image(
+                                bitmap = meta.icon.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+                            )
+                        } else {
+                            Text(
+                                label.take(1).uppercase(Locale.getDefault()),
+                                color = accent,
+                                fontSize = (15 * textScale).sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                )
-                Switch(
-                    checked  = visible,
-                    onCheckedChange = { onToggle(id) },
-                    colors   = SwitchDefaults.colors(checkedThumbColor = LocalWidgetAccent.current),
-                    modifier = Modifier.size(36.dp, 21.dp)
-                )
-                Text(
-                    label, color = textColor,
-                    fontSize = (13 * textScale).sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { onTogglePin(id) }, modifier = Modifier.size(26.dp)) {
-                    Icon(
-                        imageVector = FluentIcon.Pin,
-                        contentDescription = if (isPinned) "Unpin widget" else "Pin widget to top",
-                        tint = if (isPinned) LocalWidgetAccent.current else textColor.copy(alpha = 0.3f),
-                        modifier = Modifier.size(16.dp)
+                    }
+
+                    Switch(
+                        checked  = visible,
+                        onCheckedChange = { onToggle(id) },
+                        colors   = SwitchDefaults.colors(checkedThumbColor = accent),
+                        modifier = Modifier.size(40.dp, 23.dp)
                     )
-                }
-                if (isExternal) {
-                    IconButton(
-                        onClick = { id.removePrefix("ext:").toIntOrNull()?.let(onRemoveExternal) },
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Icon(imageVector = FluentIcon.Delete, contentDescription = "Remove widget",
-                            tint = bluebirdColors.Error.copy(alpha = 0.75f), modifier = Modifier.size(16.dp))
+                    Text(
+                        label, color = textColor,
+                        fontSize = (15 * textScale).sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { onTogglePin(id) }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = FluentIcon.Pin,
+                            contentDescription = if (isPinned) "Unpin widget" else "Pin widget to top",
+                            tint = if (isPinned) accent else textColor.copy(alpha = 0.3f),
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    if (isExternal) {
+                        IconButton(
+                            onClick = { externalId?.let(onRemoveExternal) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(imageVector = FluentIcon.Delete, contentDescription = "Remove widget",
+                                tint = bluebirdColors.Error.copy(alpha = 0.75f), modifier = Modifier.size(19.dp))
+                        }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
             }
         }
 

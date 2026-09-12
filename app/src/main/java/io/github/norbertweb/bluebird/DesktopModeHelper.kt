@@ -32,7 +32,7 @@ object DesktopModeHelper {
      * We target 700dp to give a comfortable io.github.norbertweb.io.github.norbertweb.bluebird layout.
      * Increase if you want everything even more spread out.
      */
-    private const val TARGET_SMALLEST_WIDTH_DP = 650f
+    private const val TARGET_SMALLEST_WIDTH_DP = 600f
 
     /**
      * Computes the density multiplier that makes the smallest screen axis

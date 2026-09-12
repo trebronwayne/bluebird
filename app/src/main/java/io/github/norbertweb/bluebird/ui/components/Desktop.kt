@@ -1310,7 +1310,7 @@ private val BLUEBIRD_DEFAULT_APPS = listOf(
     DefaultShortcut("Terminal", builtInScreen = LauncherScreen.TERMINAL),
 
     DefaultShortcut("Recycle Bin", builtInScreen = LauncherScreen.RECYCLE_BIN),
-    DefaultShortcut("Bluebird Store", builtInScreen = LauncherScreen.BLUEBIRD_STORE),
+
     DefaultShortcut("Program Manager", builtInScreen = LauncherScreen.PROGRAM_MANAGER)
 )
 
@@ -4251,7 +4251,7 @@ fun AppPickerDialog(
                             "Terminal" to LauncherScreen.TERMINAL,
 
                             "Recycle Bin" to LauncherScreen.RECYCLE_BIN,
-                            "Bluebird Store" to LauncherScreen.BLUEBIRD_STORE,
+
                             "Program Manager" to LauncherScreen.PROGRAM_MANAGER
                         ).filter { it.first.contains(searchQuery, true) }
                     }
