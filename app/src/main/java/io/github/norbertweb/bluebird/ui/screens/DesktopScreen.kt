@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow // Crucial import for .shadow() modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -105,6 +106,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     onDoubleTap = { viewModel.toggleTaskbar() },
                     onTap = {
                         if (uiState.isStartMenuOpen || uiState.isActionCenterOpen ||
+                            uiState.isCalendarOpen ||
                             uiState.isSearchOpen || uiState.isWidgetsOpen || uiState.isPowerMenuOpen ||
                             uiState.isDesktopContextMenuOpen
                         ) {
@@ -143,6 +145,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
 
         // ── 3. Scrim ──
         val anyOverlay = uiState.isStartMenuOpen || uiState.isActionCenterOpen ||
+                uiState.isCalendarOpen ||
                 uiState.isSearchOpen || uiState.isWidgetsOpen || uiState.isPowerMenuOpen
         AnimatedVisibility(
             visible = anyOverlay,
@@ -229,6 +232,24 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     .pointerInput(Unit) { detectTapGestures { /* consume */ } }
             ) {
                 ActionCenter(uiState = uiState, viewModel = viewModel, hazeState = hazeState, accent = wallpaperAccent)
+            }
+        }
+
+        // ── 7b. Calendar ── opened by tapping the taskbar clock/date, separate
+        // from Action Center (wifi/volume/battery). Same corner, same motion.
+        AnimatedVisibility(
+            visible = uiState.isCalendarOpen,
+            modifier = Modifier.align(Alignment.BottomEnd),
+            enter = slideInVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow), initialOffsetY = { it / 3 }) + fadeIn(tween(200)),
+            exit = slideOutVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow), targetOffsetY = { it / 3 }) + fadeOut(tween(150))
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = if (uiState.isTaskbarVisible) 54.dp else 8.dp)
+                    .padding(end = 8.dp)
+                    .pointerInput(Unit) { detectTapGestures { /* consume */ } }
+            ) {
+                CalendarFlyout(hazeState = hazeState, accent = wallpaperAccent)
             }
         }
 
@@ -567,7 +588,7 @@ fun LockScreenOverlay(
                     .background(
                         Brush.linearGradient(
                             gradient,
-                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                            start = Offset(0f, 0f),
                             end = androidx.compose.ui.geometry.Offset(2000f, 1200f)
                         )
                     )

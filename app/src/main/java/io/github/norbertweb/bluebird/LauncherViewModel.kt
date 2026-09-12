@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -17,19 +16,16 @@ import android.os.Environment
 import android.os.FileObserver
 import android.provider.Settings
 import androidx.compose.ui.geometry.Offset
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
-import io.github.norbertweb.bluebird.ui.components.BluebirdRemoteNotification
 import io.github.norbertweb.bluebird.ui.components.BpkPackageManager
 import io.github.norbertweb.bluebird.ui.components.DesktopFileInfo
 import io.github.norbertweb.bluebird.ui.components.DesktopItemType
 import io.github.norbertweb.bluebird.ui.components.InstalledBpkApp
 import io.github.norbertweb.bluebird.ui.components.ToastNotifData
-import io.github.norbertweb.bluebird.ui.components.toToastData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -44,7 +40,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -52,33 +47,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
-
-// ─── Remote (Bluebird team) announcements — config ────────────────────────────
-//
-// See the "Remote (Bluebird team) announcements" section further down in
-// LauncherViewModel for the full design writeup. Short version: no
-// background polling — fetches are triggered by app-open / Action-Center-open
-// and throttled to at most once per REMOTE_NOTIF_MIN_INTERVAL_MS.
-
-private const val REMOTE_NOTIF_URL =
-    "https://raw.githubusercontent.com/Norbert-web/bluebird-releases/main/assets/bluebird/notify.json"
-private const val REMOTE_NOTIF_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000L // 2 hours
-
-/**
- * Stable fingerprint of everything about a remote notification that a user
- * would actually perceive as "different" content. Deliberately excludes
- * [BluebirdRemoteNotification.id] and [BluebirdRemoteNotification.timestamp] —
- * so if the Bluebird team re-publishes the same announcement under a new id,
- * or just bumps its timestamp, it's recognized as already-seen and won't
- * pop a duplicate toast.
- */
-private fun BluebirdRemoteNotification.contentSignatureHash(): String {
-    val raw = listOf(type, priority, title, body, actionLabel.orEmpty(), actionUrl.orEmpty(), badgeColor)
-        .joinToString("\u0001")
-    val digestBytes = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(raw.toByteArray(Charsets.UTF_8))
-    return digestBytes.joinToString("") { "%02x".format(it) }
-}
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
 
@@ -207,16 +175,6 @@ object WindowIconKey {
     const val COPY_PROGRESS    = "copy"
 }
 
-data class RealNotification(
-    val id: String,
-    val packageName: String,
-    val appName: String,
-    val title: String,
-    val body: String,
-    val time: Long = System.currentTimeMillis(),
-    val icon: Drawable? = null
-)
-
 data class UserProfile(
     val userName: String = "User",
     val profilePicturePath: String = ""
@@ -240,6 +198,7 @@ data class LauncherUiState(
     val isTaskbarVisible: Boolean = true,
     val isStartMenuOpen: Boolean = false,
     val isActionCenterOpen: Boolean = false,
+    val isCalendarOpen: Boolean = false,
     val isSearchOpen: Boolean = false,
     val isWidgetsOpen: Boolean = false,
     val isPowerMenuOpen: Boolean = false,
@@ -275,13 +234,6 @@ data class LauncherUiState(
     val systemDesktopItems: List<DesktopFileInfo> = emptyList(),
     val openWindows: List<WindowState> = emptyList(),
     val activeWindowId: String? = null,
-    val notifications: List<RealNotification> = emptyList(),
-    val isNotificationListenerEnabled: Boolean = false,
-    // Bluebird team announcements fetched from notify.json — moved here (was
-    // local state in ActionCenter) so both the panel and the toast host read
-    // the same list, and dismissing one place dismisses it everywhere.
-    val remoteNotifications: List<BluebirdRemoteNotification> = emptyList(),
-    val dismissedRemoteNotificationIds: Set<String> = emptySet(),
     val userProfile: UserProfile = UserProfile(),
     val searchQuery: String = "",
     val volume: Float = 0.5f,
@@ -457,15 +409,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadInstalledBpkApps()
         loadBackgroundEffects()
         startBatteryMonitor()
-        // Remote (Bluebird team) announcements are NOT fetched here — there's
-        // no background polling. See refreshRemoteNotificationsIfDue(): it's
-        // called from MainActivity on app launch and from ActionCenter when
-        // the panel opens, each throttled to REMOTE_NOTIF_MIN_INTERVAL_MS so
-        // reopening the app/panel repeatedly doesn't turn into a poll.
         initSystemDesktopItems()
         refreshDesktopFiles()
         startDesktopObserver()
-        checkNotificationListenerPermission()
     }
 
     private fun loadInstalledBpkApps() {
@@ -1392,48 +1338,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // ─── Notifications ───────────────────────────────────────────────────────
-
-    // One-shot events for the floating bluebird-style toast popup (NotificationToastHost).
-    // Separate from the persistent lists in state — this flow only fires the
-    // instant something new happens, which is what a transient toast needs.
+    // ─── Toast events ────────────────────────────────────────────────────────
+    // One-shot events for the floating bluebird-style toast popup
+    // (NotificationToastHost). Historically fed by device notifications and
+    // remote Bluebird announcements — both removed. The ONLY thing allowed
+    // to emit on this flow now is postSystemNotification() (used sparingly,
+    // e.g. battery-low alerts) and the tip scheduler below.
     private val _toastEvents = MutableSharedFlow<ToastNotifData>(extraBufferCapacity = 8)
     val toastEvents: SharedFlow<ToastNotifData> = _toastEvents.asSharedFlow()
 
-    private fun bannersAllowed(): Boolean {
-        val state = _uiState.value
-        return state.notificationBanners && !state.dndEnabled && !state.focusAssist
-    }
-
-    fun addNotification(notification: RealNotification) {
-        val updated = listOf(notification) + _uiState.value.notifications.take(49)
-        _uiState.value = _uiState.value.copy(notifications = updated)
-        if (bannersAllowed()) {
-            _toastEvents.tryEmit(notification.toToastData())
-        }
-    }
-
-    fun dismissNotification(id: String) {
-        _uiState.value = _uiState.value.copy(
-            notifications = _uiState.value.notifications.filter { it.id != id }
-        )
-    }
-
-    fun dismissRemoteNotification(id: String) {
-        _uiState.value = _uiState.value.copy(
-            dismissedRemoteNotificationIds = _uiState.value.dismissedRemoteNotificationIds + id
-        )
-    }
-
-    // ─── Generic notification portal ──────────────────────────────────────────
-    // Any other part of the codebase (battery monitor, storage checks, update
-    // checker, background jobs, etc.) can call this to raise a toast without
-    // knowing anything about RealNotification/BluebirdRemoteNotification. Pass
-    // an `id` for things that should only ever toast once at a time (e.g.
-    // "battery_low") — a second call with the same id while it's still the
-    // active toast just gets ignored by the host's de-dupe in most cases, but
-    // callers doing repeat conditions (like a monitor loop) should still gate
-    // themselves — see startBatteryMonitor() below for the pattern.
+    /**
+     * Generic toast-posting utility. Used internally for real system-status
+     * alerts (see startBatteryMonitor()'s checkBatteryThreshold()) and by
+     * the tip scheduler below. This does NOT add anything to a persisted
+     * notification history — Bluebird no longer keeps one.
+     */
     fun postSystemNotification(
         title: String,
         body: String,
@@ -1441,8 +1360,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         appLabel: String = "Bluebird",
         accentColor: String = "#0078D4",
         actionLabel: String? = null,
-        actionUrl: String? = null,
-        addToHistory: Boolean = false
+        actionUrl: String? = null
     ) {
         val accent = try {
             androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(accentColor))
@@ -1459,207 +1377,92 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 actionUrl   = actionUrl
             )
         )
-
-        if (addToHistory) {
-            addNotification(
-                RealNotification(
-                    id          = id,
-                    packageName = "",
-                    appName     = appLabel,
-                    title       = title,
-                    body        = body
-                )
-            )
-        }
     }
 
-    // ─── Remote (Bluebird team) announcements ─────────────────────────────────
-    //
-    // Fetches a small notify.json manifest published by the Bluebird team and
-    // turns each entry into an Action Center item, plus a one-time toast the
-    // first time it's seen. Design constraints this section is built around:
-    //
-    //  1. No background timer / WorkManager job. The app has no legitimate
-    //     reason to touch the network while it isn't in the foreground, so
-    //     every trigger is tied to something the user is already doing:
-    //       - app launch          -> MainActivity calls refreshRemoteNotificationsIfDue()
-    //       - Action Center opens -> ActionCenter calls refreshRemoteNotificationsIfDue()
-    //     Both are throttled to at most once per REMOTE_NOTIF_MIN_INTERVAL_MS
-    //     (2h) via lastRemoteFetchAt, so neither call site needs to worry
-    //     about calling "too often" — launching the app twice in a row, or
-    //     opening/closing Action Center repeatedly, does at most one real
-    //     network request per interval.
-    //
-    //  2. A toast should only ever fire for genuinely new *content* — not
-    //     just a new id. Two persisted ledgers make that possible:
-    //       - seenRemoteIds:           ids already shown in Action Center at
-    //                                  least once. Only used to detect the
-    //                                  very first fetch ever (isFirstEverRun),
-    //                                  so a fresh install doesn't toast every
-    //                                  historical announcement at once.
-    //       - seenRemoteContentHashes: contentSignatureHash() of every
-    //                                  notification already toasted. A
-    //                                  notification only toasts if its
-    //                                  content hash is new, so republishing
-    //                                  the same announcement under a new id
-    //                                  (or just touching its timestamp)
-    //                                  does not cause a duplicate popup.
-    //
-    //  3. Expired notifications (expires_at in the past) are dropped before
-    //     they ever reach uiState — they never show in Action Center and
-    //     never toast, without needing dismissedRemoteNotificationIds
-    //     bookkeeping for them.
+    // ─── Tips ────────────────────────────────────────────────────────────────
+    // Bluebird's only remaining toast content besides real system-status
+    // alerts. Two triggers only: a slow rotating interval, and a one-time
+    // nudge right after an app version bump. Nothing else should call
+    // postTip() directly — add new tips to tipLibrary instead.
 
-    private val seenRemoteIds: MutableSet<String> by lazy {
-        (prefs.getStringSet("seen_remote_notif_ids", emptySet()) ?: emptySet()).toMutableSet()
-    }
-    private val seenRemoteContentHashes: MutableSet<String> by lazy {
-        (prefs.getStringSet("seen_remote_notif_hashes", emptySet()) ?: emptySet()).toMutableSet()
-    }
-    private var remoteBootstrapped = prefs.getBoolean("remote_notif_bootstrapped", false)
-    private var lastRemoteFetchAt: Long
-        get() = prefs.getLong("remote_notif_last_fetch_at", 0L)
-        set(value) { prefs.edit().putLong("remote_notif_last_fetch_at", value).apply() }
+    private val tipLibrary = listOf(
+        "Double-click a file to open it.",
+        "Drag a window to the screen edge to snap it.",
+        "Right-click the desktop for more options.",
+        "Long-press a taskbar icon to unpin it.",
+        "Tap the clock to open your calendar."
+    )
+    private val tipMinIntervalMs = 6L * 60 * 60 * 1000L // 6 hours
 
-    /** Prevents two near-simultaneous triggers (e.g. app-open + Action-Center-open) from racing into overlapping fetches. */
-    private var remoteFetchInFlight = false
+    private var lastTipShownAt: Long
+        get() = prefs.getLong("last_tip_shown_at", 0L)
+        set(value) { prefs.edit().putLong("last_tip_shown_at", value).apply() }
+    private var lastTipIndex: Int
+        get() = prefs.getInt("last_tip_index", -1)
+        set(value) { prefs.edit().putInt("last_tip_index", value).apply() }
+    private var lastSeenTipVersionCode: Int
+        get() = prefs.getInt("last_seen_tip_version_code", -1)
+        set(value) { prefs.edit().putInt("last_seen_tip_version_code", value).apply() }
 
-    private fun saveSeenRemoteIds() {
-        prefs.edit().putStringSet("seen_remote_notif_ids", seenRemoteIds).apply()
-    }
-    private fun saveSeenRemoteContentHashes() {
-        prefs.edit().putStringSet("seen_remote_notif_hashes", seenRemoteContentHashes).apply()
+    fun postTip(text: String) {
+        postSystemNotification(
+            id       = "tip_${System.currentTimeMillis()}",
+            title    = "Tip",
+            body     = text,
+            appLabel = "Tip"
+        )
     }
 
     /**
-     * The "safe to call often" entry point — call this from any UI trigger
-     * that represents the user actively looking at the app (app launch,
-     * Action Center opening). Only reaches the network if more than
-     * [REMOTE_NOTIF_MIN_INTERVAL_MS] has passed since the last attempt;
-     * otherwise it's a no-op, so callers never need their own throttling.
+     * Call once per app open (e.g. from MainActivity.onCreate/onResume).
+     * Shows at most one rotating tip every [tipMinIntervalMs]; otherwise a
+     * no-op, so it's always safe to call on every launch.
      */
-    fun refreshRemoteNotificationsIfDue() {
-        val elapsed = System.currentTimeMillis() - lastRemoteFetchAt
-        if (elapsed < REMOTE_NOTIF_MIN_INTERVAL_MS) return
-        refreshRemoteNotifications()
+    fun maybeShowScheduledTip() {
+        val now = System.currentTimeMillis()
+        if (now - lastTipShownAt < tipMinIntervalMs) return
+        val next = (lastTipIndex + 1) % tipLibrary.size
+        lastTipIndex = next
+        lastTipShownAt = now
+        postTip(tipLibrary[next])
     }
 
     /**
-     * Forces an immediate fetch, bypassing the interval guard. Not called
-     * automatically anywhere — wire this to an explicit "Refresh" action if
-     * one gets added to Action Center; everyday triggers should use
-     * [refreshRemoteNotificationsIfDue] instead.
+     * Call once per app open, alongside [maybeShowScheduledTip]. Shows
+     * [updateTipText] exactly once, the first time it notices the installed
+     * version code increased since last launch. Pass null to disable the
+     * update-nudge entirely (it will still silently record the version).
      */
-    fun refreshRemoteNotifications() {
-        if (remoteFetchInFlight) return
-        remoteFetchInFlight = true
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                fetchRemoteNotificationsOnce()
-            } finally {
-                remoteFetchInFlight = false
+    fun checkForUpdateTip(updateTipText: String? = null) {
+        val app = getApplication<Application>()
+        val versionCode = try {
+            val info = app.packageManager.getPackageInfo(app.packageName, 0)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                info.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION") info.versionCode
             }
+        } catch (e: Exception) { -1 }
+        if (versionCode == -1) return
+
+        val last = lastSeenTipVersionCode
+        if (last == -1) {
+            // First launch we've ever tracked this on — just record it,
+            // don't nudge (avoids "updating" toasting on a fresh install).
+            lastSeenTipVersionCode = versionCode
+            return
         }
-    }
-
-    private suspend fun fetchRemoteNotificationsOnce() {
-        try {
-            val raw = URL(REMOTE_NOTIF_URL).readText(Charsets.UTF_8)
-            // Recorded as soon as we've successfully reached the network,
-            // regardless of what happens during parsing below — a malformed
-            // manifest shouldn't make us hammer the server on every app open.
-            lastRemoteFetchAt = System.currentTimeMillis()
-
-            val root = JSONObject(raw)
-            val arr  = root.getJSONArray("notifications")
-            val now  = java.time.Instant.now()
-
-            val list = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.getJSONObject(i)
-                val action = if (obj.has("action") && !obj.isNull("action")) {
-                    val a = obj.getJSONObject("action")
-                    Pair(a.optString("label"), a.optString("url"))
-                } else null
-                val notif = BluebirdRemoteNotification(
-                    id          = obj.getString("id"),
-                    type        = obj.optString("type", "announcement"),
-                    priority    = obj.optString("priority", "normal"),
-                    title       = obj.getString("title"),
-                    body        = obj.getString("body"),
-                    timestamp   = obj.optString("timestamp", ""),
-                    expiresAt   = if (obj.has("expires_at") && !obj.isNull("expires_at")) obj.getString("expires_at") else null,
-                    actionLabel = action?.first,
-                    actionUrl   = action?.second,
-                    badgeColor  = obj.optString("badge_color", "#0078D4")
-                )
-                val isExpired = notif.expiresAt?.let { expiresAt ->
-                    try { java.time.Instant.parse(expiresAt).isBefore(now) } catch (_: Exception) { false }
-                } ?: false
-                if (isExpired) null else notif
-            }
-
-            val newHashes = list
-                .map { it to it.contentSignatureHash() }
-                .filter { (_, hash) -> hash !in seenRemoteContentHashes }
-
-            val isFirstEverRun = !remoteBootstrapped
-
-            withContext(Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(remoteNotifications = list)
-                if (bannersAllowed() && !isFirstEverRun) {
-                    newHashes.forEach { (notif, _) ->
-                        _toastEvents.tryEmit(notif.toToastData())
-                    }
-                }
-            }
-
-            if (newHashes.isNotEmpty()) {
-                seenRemoteContentHashes.addAll(newHashes.map { it.second })
-                saveSeenRemoteContentHashes()
-            }
-            seenRemoteIds.addAll(list.map { it.id })
-            saveSeenRemoteIds()
-
-            if (isFirstEverRun) {
-                remoteBootstrapped = true
-                prefs.edit().putBoolean("remote_notif_bootstrapped", true).apply()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            // lastRemoteFetchAt is only set above, after a successful
-            // network read — so a failure here (no connectivity, DNS,
-            // timeout, etc.) leaves it untouched and the very next due
-            // check will simply try again, rather than waiting out the
-            // full interval on a failed attempt.
+        if (versionCode > last) {
+            lastSeenTipVersionCode = versionCode
+            if (updateTipText != null) postTip(updateTipText)
         }
-    }
-
-    fun dismissAllNotifications() {
-        _uiState.value = _uiState.value.copy(notifications = emptyList())
-    }
-
-    private fun checkNotificationListenerPermission() {
-        val context = getApplication<Application>()
-        val enabled = ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.BIND_NOTIFICATION_LISTENER_SERVICE
-        ) == PackageManager.PERMISSION_GRANTED
-        _uiState.value = _uiState.value.copy(isNotificationListenerEnabled = enabled)
-    }
-
-    fun requestNotificationListenerPermission(context: Context) {
-        try {
-            context.startActivity(
-                Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) { e.printStackTrace() }
     }
 
     // ─── Overlays ─────────────────────────────────────────────────────────────
     fun toggleStartMenu() {
         _uiState.value = _uiState.value.copy(
             isStartMenuOpen          = !_uiState.value.isStartMenuOpen,
-            isActionCenterOpen       = false, isSearchOpen = false,
+            isActionCenterOpen       = false, isCalendarOpen = false, isSearchOpen = false,
             isPowerMenuOpen          = false, isDesktopContextMenuOpen = false, isWidgetsOpen = false
         )
     }
@@ -1667,6 +1470,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun toggleActionCenter() {
         _uiState.value = _uiState.value.copy(
             isActionCenterOpen       = !_uiState.value.isActionCenterOpen,
+            isCalendarOpen           = false,
+            isStartMenuOpen          = false, isSearchOpen = false,
+            isPowerMenuOpen          = false, isDesktopContextMenuOpen = false
+        )
+    }
+
+    // Calendar is its own flyout now — opened by tapping the taskbar
+    // clock/date, separate from Action Center's wifi/volume/battery tap
+    // target. Mutually exclusive with every other overlay, same as Action
+    // Center.
+    fun toggleCalendar() {
+        _uiState.value = _uiState.value.copy(
+            isCalendarOpen           = !_uiState.value.isCalendarOpen,
+            isActionCenterOpen       = false,
             isStartMenuOpen          = false, isSearchOpen = false,
             isPowerMenuOpen          = false, isDesktopContextMenuOpen = false
         )
@@ -1675,7 +1492,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun toggleSearch() {
         _uiState.value = _uiState.value.copy(
             isSearchOpen             = !_uiState.value.isSearchOpen,
-            isStartMenuOpen          = false, isActionCenterOpen = false, isDesktopContextMenuOpen = false
+            isStartMenuOpen          = false, isActionCenterOpen = false, isCalendarOpen = false,
+            isDesktopContextMenuOpen = false
         )
     }
 
@@ -1691,7 +1509,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun dismissAllOverlays() {
         _uiState.value = _uiState.value.copy(
-            isStartMenuOpen          = false, isActionCenterOpen = false, isSearchOpen = false,
+            isStartMenuOpen          = false, isActionCenterOpen = false, isCalendarOpen = false,
+            isSearchOpen             = false,
             isWidgetsOpen            = false, isPowerMenuOpen    = false, isDesktopContextMenuOpen = false
         )
     }

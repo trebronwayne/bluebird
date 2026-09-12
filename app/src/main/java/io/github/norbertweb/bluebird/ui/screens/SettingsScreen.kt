@@ -45,17 +45,9 @@ import fluent.ui.system.icons.regular.Accessibility
 import fluent.ui.system.icons.regular.Add
 import fluent.ui.system.icons.regular.Airplane
 import fluent.ui.system.icons.regular.Alert
-import fluent.ui.system.icons.regular.Apps
-import fluent.ui.system.icons.regular.ArrowClockwise
-import fluent.ui.system.icons.regular.ArrowCounterclockwise
-import fluent.ui.system.icons.regular.ArrowDownload
-import fluent.ui.system.icons.regular.ArrowRight
-import fluent.ui.system.icons.regular.ArrowSort
 import fluent.ui.system.icons.regular.ArrowSync
 import fluent.ui.system.icons.regular.BatterySaver
 import fluent.ui.system.icons.regular.Bluetooth
-import fluent.ui.system.icons.regular.Blur
-import fluent.ui.system.icons.regular.BorderAll
 import fluent.ui.system.icons.regular.Bug
 import fluent.ui.system.icons.regular.CalendarLtr
 import fluent.ui.system.icons.regular.Call
@@ -70,8 +62,6 @@ import fluent.ui.system.icons.regular.CircleHalfFill
 import fluent.ui.system.icons.regular.ClipboardPaste
 import fluent.ui.system.icons.regular.Clock
 import fluent.ui.system.icons.regular.ClosedCaption
-import fluent.ui.system.icons.regular.Cloud
-import fluent.ui.system.icons.regular.CloudArrowUp
 import fluent.ui.system.icons.regular.Cursor
 import fluent.ui.system.icons.regular.DarkTheme
 import fluent.ui.system.icons.regular.DataBarHorizontal
@@ -82,9 +72,7 @@ import fluent.ui.system.icons.regular.Desktop
 import fluent.ui.system.icons.regular.Dismiss
 import fluent.ui.system.icons.regular.DocumentText
 import fluent.ui.system.icons.regular.Edit
-import fluent.ui.system.icons.regular.EyeOff
 import fluent.ui.system.icons.regular.Fingerprint
-import fluent.ui.system.icons.regular.FolderOpen
 import fluent.ui.system.icons.regular.Games
 import fluent.ui.system.icons.regular.Globe
 import fluent.ui.system.icons.regular.Grid
@@ -113,23 +101,17 @@ import fluent.ui.system.icons.regular.Power
 import fluent.ui.system.icons.regular.Print
 import fluent.ui.system.icons.regular.Prohibited
 import fluent.ui.system.icons.regular.RadioButton
-import fluent.ui.system.icons.regular.Resize
 import fluent.ui.system.icons.regular.RibbonStar
 import fluent.ui.system.icons.regular.Router
 import fluent.ui.system.icons.regular.Scan
 import fluent.ui.system.icons.regular.Screenshot
 import fluent.ui.system.icons.regular.Search
 import fluent.ui.system.icons.regular.Server
-import fluent.ui.system.icons.regular.Settings
 import fluent.ui.system.icons.regular.Shield
 import fluent.ui.system.icons.regular.Sparkle
 import fluent.ui.system.icons.regular.Speaker1
 import fluent.ui.system.icons.regular.Speaker2
 import fluent.ui.system.icons.regular.Star
-import fluent.ui.system.icons.regular.SwipeDown
-import fluent.ui.system.icons.regular.SwipeRight
-import fluent.ui.system.icons.regular.SwipeUp
-import fluent.ui.system.icons.regular.Tag
 import fluent.ui.system.icons.regular.TapDouble
 import fluent.ui.system.icons.regular.Target
 import fluent.ui.system.icons.regular.TextBold
@@ -216,12 +198,7 @@ import java.util.TimeZone
 
 private enum class SettingsCategory(val label: String, val icon: ImageVector) {
     APPEARANCE      ("Appearance",          FluentIcons.Regular.PaintBrush),
-    GESTURES        ("Gestures",            FluentIcons.Regular.SwipeRight),
-    APPS            ("Apps",                FluentIcons.Regular.Apps),
     ACCOUNTS        ("Accounts",            FluentIcons.Regular.PersonCircle),
-    BACKUP          ("Backup & restore",    FluentIcons.Regular.CloudArrowUp),
-    SEARCH          ("Search",              FluentIcons.Regular.Search),
-    UPDATE          ("Launcher Update",     FluentIcons.Regular.ArrowClockwise),
     ABOUT           ("About",               FluentIcons.Regular.Info)
 }
 
@@ -253,15 +230,16 @@ fun SettingsScreen(
     // always follows the system's own light/dark + dynamic-color theme (Theme.kt)
     // rather than offering its own set of skins.
     //
-    // Re-hued to the same slate/indigo family as DS's surface tokens (was neutral
-    // grays, 0xFF202020/0xFF2C2C2C/0xFF272727) so Settings doesn't look like a
-    // separately-themed screen from the rest of the app — while still keeping the
-    // three genuinely distinct tones (bg / content surface / nav rail) real Mica
-    // uses, since DS itself only defines two.
+    // Re-toned to match Action Center's exact surface language (same neutral
+    // #1F1F1F / #F8F8F8 fill, same bluebirdColors accent) instead of the old
+    // bespoke slate/indigo "Mica" palette — Settings and Action Center should
+    // read as one consistent design language, not two separately-skinned
+    // surfaces. Nav rail stays one shade off content, same three-tone Mica
+    // rhythm as before, just recolored to this neutral family.
     val textColor      = if (effectiveDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val bgColor        = if (effectiveDark) Color(0xFF14161C)         else Color(0xFFF8F9FB)
-    val surfaceBg      = if (effectiveDark) DS.surfaceDark            else DS.surfaceLight
-    val navBg          = if (effectiveDark) Color(0xFF181B22)         else Color(0xFFF5F7FA)
+    val bgColor        = if (effectiveDark) Color(0xFF1F1F1F)          else Color(0xFFF8F8F8)
+    val surfaceBg      = if (effectiveDark) Color(0xFF2A2A2A)          else Color(0xFFFFFFFF)
+    val navBg          = if (effectiveDark) Color(0xFF242424)          else Color(0xFFEFEFEF)
 
     val resolvedBg      = bgColor
     val resolvedNav     = navBg
@@ -432,12 +410,7 @@ fun SettingsScreen(
 
             when (selectedCategoryState.value) {
                 SettingsCategory.APPEARANCE   -> AppearanceSettings(args)
-                SettingsCategory.GESTURES     -> GestureSettings(args)
-                SettingsCategory.APPS         -> AppsSettings(args)
                 SettingsCategory.ACCOUNTS     -> AccountsSettings(args)
-                SettingsCategory.BACKUP       -> BackupRestoreSettings(args)
-                SettingsCategory.SEARCH       -> SearchSettings(args)
-                SettingsCategory.UPDATE       -> LauncherUpdateSettings(args)
                 SettingsCategory.ABOUT        -> AboutSettings(args)
             }
         }
@@ -1278,18 +1251,13 @@ private fun PersonalizationSection(a: ScreenArgs) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Taskbar — PLACEHOLDER
+// APPEARANCE
 //
-// Taskbar.kt is being updated separately (a newer local version exists that
-// this pass hasn't seen), so this category intentionally does not yet port
-// TaskbarSettingsPanel's controls. Once the current Taskbar.kt is shared,
-// replace this body with the real controls, following the same pattern as
-// PersonalizationSection above: read/write via TaskbarPrefs.load(a.ctx) /
-// TaskbarPrefs.save(a.ctx, settings), rendered as SettingsGroup sections
-// (Items, Appearance, Icon Overflow, System Tray) instead of a floating
-// popup — Taskbar.kt's settings-gear action should then call
-// viewModel.openWindow(LauncherScreen.SETTINGS, extras = mapOf("category" to "TASKBAR"))
-// instead of opening its own panel.
+// Trimmed to what's actually real: wallpaper personalization and the system
+// font picker. The old Accent color / Text size / Icon size / Shape & corners
+// / Visual effects / Layout groups below this were never wired to anything
+// that rendered differently elsewhere in the app — removed rather than left
+// as controls that silently do nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun AppearanceSettings(a: ScreenArgs) {
@@ -1303,58 +1271,6 @@ private fun AppearanceSettings(a: ScreenArgs) {
     // Settings directly to this category (see Desktop.kt's onPersonalize).
     PersonalizationSection(a)
 
-    // Accent color
-    SettingsGroup("Accent color", a) {
-        val accentColors = remember {
-            listOf(0xFF0078D4L, 0xFF107C10L, 0xFFE81123L, 0xFFFF8C00L, 0xFF744DA9L,
-                0xFF00B7C3L, 0xFFE74856L, 0xFF7A7574L, 0xFF9C6BF7L, 0xFF10A0E3L, 0xFF00CC6AL, 0xFFFF6B35L)
-        }
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                accentColors.forEach { colorValue ->
-                    val color      = Color(colorValue)
-                    val isSelected = a.uiState?.accentColor == colorValue
-                    Box(
-                        modifier = Modifier.size(28.dp).clip(CircleShape).background(color)
-                            .border(if (isSelected) 2.dp else 0.dp, Color.White, CircleShape)
-                            .clickable { a.vm?.setAccentColor(colorValue) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSelected) Icon(FluentIcons.Regular.Checkmark, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    }
-                }
-            }
-        }
-    }
-
-    // Text size
-    SettingsGroup("Text size", a) {
-        val scale = a.scale
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(FluentIcons.Regular.TextFont, null, tint = a.accent, modifier = Modifier.size(20.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Text size", color = a.textColor, fontSize = (13 * scale).sp)
-                    Text("Drag to resize all text in the launcher", color = a.textColor.copy(alpha = 0.5f), fontSize = (11 * scale).sp)
-                }
-                Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(a.accent.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text(when { scale < 0.85f -> "XS"; scale < 0.95f -> "Small"; scale < 1.05f -> "Default"; scale < 1.15f -> "Large"; scale < 1.25f -> "XL"; else -> "XXL" },
-                        color = a.accent, fontSize = (11 * scale).sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 32.dp)) {
-                Text("A", color = a.textColor.copy(alpha = 0.4f), fontSize = 10.sp)
-                Slider(value = scale, onValueChange = { a.vm?.setTextScale(it) }, valueRange = 0.8f..1.4f, steps = 5,
-                    colors   = SliderDefaults.colors(thumbColor = a.accent, activeTrackColor = a.accent),
-                    modifier = Modifier.weight(1f))
-                Text("A", color = a.textColor.copy(alpha = 0.8f), fontSize = 18.sp)
-            }
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(a.textColor.copy(alpha = 0.05f)).padding(10.dp)) {
-                Text("Preview: The quick brown fox jumps over the lazy dog", color = a.textColor.copy(alpha = 0.7f), fontSize = (13 * scale).sp)
-            }
-        }
-    }
-
     // Font
     SettingsGroup("Font", a) {
         SDropdown(FluentIcons.Regular.TextFont, "System font",
@@ -1362,130 +1278,6 @@ private fun AppearanceSettings(a: ScreenArgs) {
             listOf("Default (Roboto)", "Sans-serif", "Serif", "Monospace", "Cursive"),
             a.uiState?.launcherFont ?: "Default (Roboto)", a) { a.vm?.setLauncherFont(it) }
     }
-
-    // Icon size
-    SettingsGroup("Icon size", a) {
-        SDropdown(FluentIcons.Regular.Apps, "Desktop icon size",
-            "Size of app icons on the home screen",
-            listOf("Small", "Medium", "Large", "Extra Large"),
-            a.uiState?.iconSize ?: "Medium", a) { a.vm?.setIconSize(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.BorderAll, "Grid size",
-            "Columns × rows on the home screen",
-            listOf("4 × 5", "4 × 6", "5 × 5", "5 × 6", "6 × 6"),
-            a.uiState?.gridSize ?: "4 × 5", a) { a.vm?.setGridSize(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Tag, "Show app labels",
-            "Display app names below icons",
-            a, a.uiState?.showAppLabels ?: true) { a.vm?.setShowAppLabels(!(a.uiState?.showAppLabels ?: true)) }
-    }
-
-    // Corner radius
-    SettingsGroup("Shape & corners", a) {
-        SSlider(FluentIcons.Regular.Resize, "Corner radius",
-            "Roundness of cards and menus",
-            a.uiState?.cornerRadius ?: 0.5f, 0f..1f,
-            when { (a.uiState?.cornerRadius ?: 0.5f) < 0.25f -> "Sharp"; (a.uiState?.cornerRadius ?: 0.5f) < 0.6f -> "Rounded"; else -> "Pill" },
-            a) { a.vm?.setCornerRadius(it) }
-    }
-
-    // Visual effects
-    SettingsGroup("Visual effects", a) {
-        SToggle(FluentIcons.Regular.Blur, "Transparency & blur",
-            "Acrylic/blur effect on panels",
-            a, a.uiState?.transparencyEffects ?: true) { a.vm?.setTransparencyEffects(!(a.uiState?.transparencyEffects ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SSlider(FluentIcons.Regular.TopSpeed, "Animation speed",
-            "Controls launcher transition speed",
-            a.uiState?.animationSpeed ?: 1f, 0f..2f,
-            when { (a.uiState?.animationSpeed ?: 1f) < 0.1f -> "Off"; (a.uiState?.animationSpeed ?: 1f) < 0.75f -> "Slow"; (a.uiState?.animationSpeed ?: 1f) < 1.25f -> "Normal"; else -> "Fast" },
-            a) { a.vm?.setAnimationSpeed(it) }
-    }
-
-    // Layout
-    SettingsGroup("Layout", a) {
-        SDropdown(FluentIcons.Regular.Grid, "Taskbar position",
-            "Where the taskbar appears on screen",
-            listOf("Bottom", "Left", "Right"),
-            a.uiState?.taskbarPosition ?: "Bottom", a) { a.vm?.setTaskbarPosition(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.Grid, "Start menu layout",
-            "Balance of pinned apps vs. recommendations",
-            listOf("More pins", "Balanced", "More recommendations"),
-            a.uiState?.startMenuLayout ?: "Balanced", a) { a.vm?.setStartMenuLayout(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.ArrowSort, "Status bar clock position",
-            "Where the clock appears in the status bar",
-            listOf("Left", "Center", "Right"),
-            a.uiState?.statusBarClockPosition ?: "Right", a) { a.vm?.setStatusBarClockPosition(it) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GESTURES  (new section)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun GestureSettings(a: ScreenArgs) {
-    SettingsGroup("Home screen gestures", a) {
-        SDropdown(FluentIcons.Regular.SwipeUp, "Swipe up",
-            "Action when swiping up on the home screen",
-            listOf("App drawer", "Notification shade", "Search", "Nothing"),
-            a.uiState?.gestureSwipeUp ?: "App drawer", a) { a.vm?.setGestureSwipeUp(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.SwipeDown, "Swipe down",
-            "Action when swiping down on the home screen",
-            listOf("Notification shade", "Quick settings", "Search", "Nothing"),
-            a.uiState?.gestureSwipeDown ?: "Notification shade", a) { a.vm?.setGestureSwipeDown(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.TapDouble, "Double-tap home",
-            "Action when double-tapping on empty space",
-            listOf("Lock screen", "Search", "Nothing"),
-            a.uiState?.gestureDoubleTap ?: "Lock screen", a) { a.vm?.setGestureDoubleTap(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.ZoomIn, "Pinch to open",
-            "Pinch gesture on the home screen",
-            listOf("App drawer", "Overview", "Nothing"),
-            a.uiState?.gesturePinch ?: "Overview", a) { a.vm?.setGesturePinch(it) }
-    }
-
-    SettingsGroup("App icon gestures", a) {
-        SToggle(FluentIcons.Regular.SwipeRight, "Swipe-up shortcut on icons",
-            "Assign an action to swiping up on any app icon",
-            a, a.uiState?.iconSwipeUpEnabled ?: false) { a.vm?.setIconSwipeUp(!(a.uiState?.iconSwipeUpEnabled ?: false)) }
-    }
-
-    SettingsGroup("Navigation gestures", a) {
-        SToggle(FluentIcons.Regular.ArrowRight, "Navigation bar gestures",
-            "Use swipe gestures instead of buttons",
-            a, a.uiState?.navBarGestures ?: true) { a.vm?.setNavBarGestures(!(a.uiState?.navBarGestures ?: true)) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// APPS
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun AppsSettings(a: ScreenArgs) {
-    var sortOrder by remember { mutableStateOf("A–Z") }
-
-    SettingsGroup("App drawer", a) {
-        SDropdown(FluentIcons.Regular.ArrowSort, "Sort order",
-            "How apps appear in the drawer",
-            listOf("A–Z", "Z–A", "Most used", "Recently installed"),
-            sortOrder, a) { sortOrder = it }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.EyeOff, "Hide apps",
-            "Choose apps to hide from the drawer",
-            a, a.uiState?.hideAppsEnabled ?: false) { a.vm?.setHideApps(!(a.uiState?.hideAppsEnabled ?: false)) }
-    }
-
-    // "Search apps" box removed — it only fed a filtered/sorted list that was
-    // rendered in the "Installed apps" section below it, which has also been
-    // removed (its rows opened Android's per-app info screen rather than
-    // anything Bluebird controls). Without that list, the search box had
-    // nothing left to actually show results in.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1792,99 +1584,6 @@ private fun PrivacySecuritySettings(a: ScreenArgs) {
     // Clear app data) only opened Android's own settings screens rather than
     // anything Bluebird itself manages.
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BACKUP & RESTORE  (new section)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun BackupRestoreSettings(a: ScreenArgs) {
-    val scale = a.scale
-
-    SettingsGroup("Backup", a) {
-        SToggle(FluentIcons.Regular.Cloud, "Auto backup",
-            "Automatically back up launcher settings to device storage",
-            a, a.uiState?.autoBackup ?: false) { a.vm?.setAutoBackup(!(a.uiState?.autoBackup ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SNav(FluentIcons.Regular.ArrowDownload, "Export settings",
-            "Save a backup file to your Downloads folder", a = a) {
-            a.vm?.exportSettings(a.ctx)
-        }
-    }
-
-    SettingsGroup("Restore", a) {
-        SNav(FluentIcons.Regular.FolderOpen, "Import settings",
-            "Restore from a previously exported backup", a = a) {
-            a.vm?.importSettings(a.ctx)
-        }
-    }
-
-    SettingsGroup("Reset", a) {
-        var showConfirm by remember { mutableStateOf(false) }
-        SNav(FluentIcons.Regular.ArrowCounterclockwise, "Reset all settings",
-            "Restore launcher defaults — this cannot be undone", a = a) {
-            showConfirm = true
-        }
-        if (showConfirm) {
-            AlertDialog(
-                onDismissRequest = { showConfirm = false },
-                title = { Text("Reset all settings?") },
-                text  = { Text("This will restore all launcher settings to their defaults. Your apps and data will not be affected.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        a.vm?.resetAllSettings()
-                        showConfirm = false
-                    }, colors = ButtonDefaults.textButtonColors(contentColor = DS.badgeRed)) {
-                        Text("Reset")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showConfirm = false }) { Text("Cancel") }
-                }
-            )
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SEARCH  (new section)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun SearchSettings(a: ScreenArgs) {
-    SettingsGroup("Search bar", a) {
-        SToggle(FluentIcons.Regular.Search, "Show search bar",
-            "Display the search bar on the home screen",
-            a, a.uiState?.showSearchBar ?: true) { a.vm?.setShowSearchBar(!(a.uiState?.showSearchBar ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.LocalLanguage, "Default search engine",
-            "Used for web searches from the home screen",
-            listOf("Google", "Bing", "DuckDuckGo", "Yahoo", "Brave Search"),
-            a.uiState?.searchEngine ?: "Google", a) { a.vm?.setSearchEngine(it) }
-    }
-
-    SettingsGroup("Search results include", a) {
-        SToggle(FluentIcons.Regular.Apps, "Apps",
-            "Show installed apps in search results",
-            a, a.uiState?.searchIncludeApps ?: true) { a.vm?.setSearchIncludeApps(!(a.uiState?.searchIncludeApps ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Settings, "Settings",
-            "Show settings pages in search results",
-            a, a.uiState?.searchIncludeSettings ?: true) { a.vm?.setSearchIncludeSettings(!(a.uiState?.searchIncludeSettings ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Globe, "Web results",
-            "Show web suggestions while typing",
-            a, a.uiState?.searchWebSuggestions ?: true) { a.vm?.setSearchWebSuggestions(!(a.uiState?.searchWebSuggestions ?: true)) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LAUNCHER UPDATE
-// BUG FIX: SettingsCategory.UPDATE routed to this composable, but it didn't exist
-// anywhere in the file — selecting "Launcher Update" would have failed to compile.
-// ─────────────────────────────────────────────────────────────────────────────
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STORAGE HELPER  (improved — no deprecated API)

@@ -52,16 +52,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.norbertweb.bluebird.RealNotification
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 // ─── Unified Toast Model ───────────────────────────────────────────────────────
 //
-// Both your notification sources (device notifications + Bluebird remote
-// announcements) get mapped into this one shape so a single toast host/renderer
-// can serve either.
+// This is now fed by exactly two things: LauncherViewModel.postTip() (tips —
+// "double-click a file to open it," etc., shown on a slow rotating interval
+// or once after an app update) and LauncherViewModel.postSystemNotification()
+// used directly for real system-status alerts like battery-low. There is no
+// notification history anywhere behind this — a toast that isn't caught is
+// just gone, same as it would be for a tip.
 
 data class ToastNotifData(
     val id: String,
@@ -74,32 +76,6 @@ data class ToastNotifData(
     val packageName: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
-
-fun RealNotification.toToastData(): ToastNotifData = ToastNotifData(
-    id          = id,
-    appLabel    = appName,
-    title       = title,
-    body        = body,
-    accent      = bluebirdColors.AccentBlue,
-    packageName = packageName,
-    createdAt   = time
-)
-
-fun BluebirdRemoteNotification.toToastData(): ToastNotifData {
-    val accent = try {
-        Color(android.graphics.Color.parseColor(badgeColor))
-    } catch (e: Exception) { bluebirdColors.AccentBlue }
-
-    return ToastNotifData(
-        id          = id,
-        appLabel    = "Bluebird",
-        title       = title,
-        body        = body,
-        accent      = accent,
-        actionLabel = actionLabel,
-        actionUrl   = actionUrl
-    )
-}
 
 // ─── Toast Host ────────────────────────────────────────────────────────────────
 //

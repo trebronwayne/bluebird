@@ -84,14 +84,18 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val systemDarkTheme = isSystemInDarkTheme()
 
-            // Ask for a fresh copy of the Bluebird team's notify.json on every
-            // app launch. This is one of two triggers for it (the other is
-            // Action Center opening, in ActionCenter.kt) — both go through
-            // refreshRemoteNotificationsIfDue(), which only actually hits the
-            // network if it's been more than ~2h since the last attempt, so
-            // this is safe to call on every single launch/recomposition.
+            // Tips are the only thing left that's shown on a schedule like this
+            // (remote Bluebird announcements were removed along with the rest
+            // of the notification system). Both calls are no-ops most of the
+            // time — maybeShowScheduledTip() only actually posts a toast once
+            // every ~6h, and checkForUpdateTip() only posts once per version
+            // bump — so it's safe to call on every launch/recomposition.
             LaunchedEffect(Unit) {
-                viewModel.refreshRemoteNotificationsIfDue()
+                viewModel.maybeShowScheduledTip()
+                // Pass a real "what's new" string here if/when you want the
+                // one-time post-update nudge; null just tracks the version
+                // silently without ever posting a tip for it.
+                viewModel.checkForUpdateTip(updateTipText = null)
             }
 
             LaunchedEffect(uiState.brightness) {
@@ -148,6 +152,7 @@ class MainActivity : ComponentActivity() {
                 when {
                     state.isWidgetsOpen -> viewModel.toggleWidgets()
                     state.isStartMenuOpen || state.isActionCenterOpen ||
+                            state.isCalendarOpen ||
                             state.isSearchOpen || state.isPowerMenuOpen ||
                             state.isDesktopContextMenuOpen -> viewModel.dismissAllOverlays()
                     state.openWindows.isNotEmpty() -> state.activeWindowId?.let {
@@ -174,11 +179,6 @@ class MainActivity : ComponentActivity() {
         window?.attributes = window?.attributes?.apply {
             screenBrightness = viewModel.uiState.value.brightness
         }
-
-        // Also covers "coming back from another app", not just a fresh
-        // process launch — still throttled internally to ~2h, so this is
-        // cheap even if the user is switching in and out constantly.
-        viewModel.refreshRemoteNotificationsIfDue()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

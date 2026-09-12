@@ -262,7 +262,8 @@ fun bluebirdTaskbar(
                     uiState = uiState,
                     settings = TaskbarSettings(),
                     isDark = isDark,
-                    onClickActionCenter = { viewModel.toggleActionCenter() }
+                    onClickActionCenter = { viewModel.toggleActionCenter() },
+                    onClickCalendar = { viewModel.toggleCalendar() }
                 )
             }
         }
@@ -643,41 +644,53 @@ private fun SystemTray(
     uiState: LauncherUiState,
     settings: TaskbarSettings,
     isDark: Boolean,
-    onClickActionCenter: () -> Unit
+    onClickActionCenter: () -> Unit,
+    onClickCalendar: () -> Unit
 ) {
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClickActionCenter)
-            .padding(horizontal = 6.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(1.dp)
     ) {
-        if (settings.showNetwork) {
-            Icon(
-                imageVector = if (uiState.isWifiOn) FluentIcon.Wifi else FluentIcon.WifiOff,
-                contentDescription = "Wi-Fi",
-                tint = textColor,
-                modifier = Modifier.size(13.dp)
-            )
+        // Wifi + volume + battery are one tap target -> Action Center
+        // (quick settings only; no notifications live here anymore).
+        if (settings.showNetwork || settings.showVolume || settings.showBattery) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onClickActionCenter)
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                if (settings.showNetwork) {
+                    Icon(
+                        imageVector = if (uiState.isWifiOn) FluentIcon.Wifi else FluentIcon.WifiOff,
+                        contentDescription = "Wi-Fi",
+                        tint = textColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                if (settings.showVolume) {
+                    Icon(
+                        imageVector = when {
+                                uiState.volume < 0.01f -> FluentIcon.SpeakerMute
+                                uiState.volume < 0.5f  -> FluentIcon.Speaker1
+                                else                   -> FluentIcon.Speaker2
+                            },
+                        contentDescription = "Volume",
+                        tint = textColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                if (settings.showBattery) {
+                    Icon(imageVector = FluentIcon.Battery10, contentDescription = "Battery", tint = textColor,
+                        modifier = Modifier.size(13.dp))
+                }
+            }
         }
-        if (settings.showVolume) {
-            Icon(
-                imageVector = when {
-                        uiState.volume < 0.01f -> FluentIcon.SpeakerMute
-                        uiState.volume < 0.5f  -> FluentIcon.Speaker1
-                        else                   -> FluentIcon.Speaker2
-                    },
-                contentDescription = "Volume",
-                tint = textColor,
-                modifier = Modifier.size(13.dp)
-            )
-        }
-        if (settings.showBattery) {
-            Icon(imageVector = FluentIcon.Battery10, contentDescription = "Battery", tint = textColor,
-                modifier = Modifier.size(13.dp))
-        }
+
+        // Clock + date is its own tap target -> Calendar flyout.
         if (settings.showClock) {
             val nowText by produceState(initialValue = "") {
                 while (true) {
@@ -699,7 +712,10 @@ private fun SystemTray(
             val parts = nowText.split('\u0000', limit = 2)
             Column(
                 horizontalAlignment = Alignment.End,
-                modifier = Modifier.padding(start = 2.dp)
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onClickCalendar)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {
                 Text(parts.getOrElse(0) { "" }, color = textColor, fontSize = 10.sp,
                     fontWeight = FontWeight.Medium, lineHeight = 12.sp)
