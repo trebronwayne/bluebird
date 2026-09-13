@@ -269,7 +269,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         fontSize = 16.sp
                     )
                     Text(
-                        "Items you delete will appear here",
+                        "Items you delete in bluebird will appear here",
                         color = textColor.copy(alpha = 0.3f),
                         fontSize = 13.sp
                     )

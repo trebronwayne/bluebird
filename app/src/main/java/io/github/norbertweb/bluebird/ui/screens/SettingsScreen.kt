@@ -1863,7 +1863,7 @@ private fun AboutSettings(a: ScreenArgs) {
         // in a personal inbox.
         SNav(FluentIcons.Regular.Bug, "Report a bug", "Open an issue on GitHub", a = a) {
             a.ctx.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Norbert-web/Bluebird/issues"))
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/trebronwayne/bluebird-releases/issues"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
