@@ -1,19 +1,15 @@
 package io.github.norbertweb.bluebird
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,8 +20,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -38,10 +32,6 @@ import io.github.norbertweb.bluebird.ui.theme.bluebirdTheme
 class MainActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
-
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* Permissions handled */ }
 
     // Context wrapper — handles Views and XML inflation outside Compose
     override fun attachBaseContext(base: Context) {
@@ -64,20 +54,6 @@ class MainActivity : ComponentActivity() {
         // built-in Media Player), matching normal Android/desktop behavior.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
-
-        // Request POST_NOTIFICATIONS permission on Android 13+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    1001
-                )
-            }
-        }
 
         setContent {
             val uiState by viewModel.uiState.collectAsState()

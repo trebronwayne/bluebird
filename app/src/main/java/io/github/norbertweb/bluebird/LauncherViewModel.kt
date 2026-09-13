@@ -127,7 +127,11 @@ enum class BgAnimationType {
 enum class LiveWallpaperType { NONE, AURORA, NEBULA, WAVES, BOKEH }
 
 data class BackgroundEffectsState(
-    val activeAnimations: Set<BgAnimationType> = emptySet(),  // multiple = "mix" mode
+    // FIX: Snow on by default so a fresh install shows an animation immediately
+    // instead of a bare wallpaper. loadBackgroundEffects() only overwrites this
+    // once the user has actually saved a choice (the "bg_effects" pref exists),
+    // so anyone who deliberately turns animations off still stays off after that.
+    val activeAnimations: Set<BgAnimationType> = setOf(BgAnimationType.SNOW),  // multiple = "mix" mode
     val intensity: Int = 50,                                   // 10-100
     val liveWallpaper: LiveWallpaperType = LiveWallpaperType.NONE
 )
@@ -216,6 +220,12 @@ data class LauncherUiState(
     // Multiple players can call setMediaPlaying independently (e.g. a background
     // download preview + the main player) via the id-keyed set below.
     val activeMediaPlaybackIds: Set<String> = emptySet(),
+    // True for exactly one composition of the desktop right after setup finishes —
+    // DesktopScreen shows the "set as default launcher" prompt while this is true,
+    // then calls dismissDefaultLauncherPrompt() to clear it. Deliberately NOT
+    // persisted to prefs (same reasoning as activeMediaPlaybackIds above): it
+    // should never resume "stuck on" from a saved state on a later launch.
+    val showDefaultLauncherPrompt: Boolean = false,
     val wallpaper: WallpaperState = WallpaperState(),
     val installedApps: List<AppInfo> = emptyList(),
     val pinnedTaskbarApps: List<AppInfo> = emptyList(),
@@ -862,9 +872,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val inputStream = context.contentResolver.openInputStream(uri) ?: return@launch
-                val destFile    = File(context.filesDir, "profile_picture.jpg")
+                // FIX: every previous save used the exact same fixed filename
+                // ("profile_picture.jpg"), so profilePicturePath never actually changed
+                // when a new photo was picked — same string in, same string out. Compose
+                // saw no state change and skipped recomposition, and Coil's cache is keyed
+                // by that same path, so even a forced recomposition would've kept showing
+                // the old bitmap. The picture only ever looked updated after fully
+                // reopening Settings, which re-mounted AsyncImage from scratch. Appending a
+                // timestamp makes each save a genuinely new path, and the previous file is
+                // deleted right after so app storage doesn't accumulate old pictures.
+                val oldPath = _uiState.value.userProfile.profilePicturePath
+                val destFile = File(context.filesDir, "profile_picture_${System.currentTimeMillis()}.jpg")
                 inputStream.use { input ->
                     destFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (oldPath.isNotEmpty() && oldPath != destFile.absolutePath) {
+                    runCatching { File(oldPath).delete() }
                 }
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
@@ -882,8 +905,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun completeSetup() {
-        _uiState.value = _uiState.value.copy(hasCompletedSetup = true, setupStep = 4)
+        _uiState.value = _uiState.value.copy(
+            hasCompletedSetup = true,
+            setupStep = 4,
+            showDefaultLauncherPrompt = true
+        )
         saveAll()
+    }
+
+    /** Called by DesktopScreen once the "set as default launcher" prompt has been
+     *  shown and the user has made a choice (or dismissed it), so it doesn't
+     *  reappear on the next recomposition. */
+    fun dismissDefaultLauncherPrompt() {
+        _uiState.value = _uiState.value.copy(showDefaultLauncherPrompt = false)
     }
 
     // ─── Apps ────────────────────────────────────────────────────────────────

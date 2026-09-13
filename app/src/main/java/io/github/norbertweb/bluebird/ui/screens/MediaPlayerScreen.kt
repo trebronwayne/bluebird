@@ -61,6 +61,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
@@ -1159,52 +1161,84 @@ fun MediaPlayerScreen(
         }
     }
 
-    if (state.showSettings) SettingsSheet(state, isDark, tc, tcs, tcm, surface, border, ctx) { state.showSettings = false }
+    if (state.showSettings) {
+        AnimatedOverlay(
+            onDismissed = { state.showSettings = false },
+            contentAlignment = Alignment.CenterEnd,
+            scrimAlpha = 0.4f,
+            contentEnter = slideInHorizontally(tween(220)) { it } + fadeIn(tween(180)),
+            contentExit  = slideOutHorizontally(tween(200)) { it } + fadeOut(tween(150))
+        ) { dismiss -> SettingsSheet(state, isDark, tc, tcs, tcm, surface, border, ctx, onDismiss = dismiss) }
+    }
 
     state.showTagEditor?.let { t ->
-        TagEditorSheet(t, isDark, tc, tcs, surface, border,
-            onSave = { newTitle, newArtist, newAlbum ->
-                t.editTitle  = newTitle.takeIf { it.isNotBlank() }
-                t.editArtist = newArtist.takeIf { it.isNotBlank() }
-                t.editAlbum  = newAlbum.takeIf { it.isNotBlank() }
-                scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) }
-                state.showTagEditor = null
-            },
-            onDismiss = { state.showTagEditor = null }
-        )
+        AnimatedOverlay(
+            onDismissed = { state.showTagEditor = null },
+            contentEnter = scaleIn(tween(200), initialScale = 0.9f) + fadeIn(tween(180)),
+            contentExit  = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130))
+        ) { dismiss ->
+            TagEditorSheet(t, isDark, tc, tcs, surface, border,
+                onSave = { newTitle, newArtist, newAlbum ->
+                    t.editTitle  = newTitle.takeIf { it.isNotBlank() }
+                    t.editArtist = newArtist.takeIf { it.isNotBlank() }
+                    t.editAlbum  = newAlbum.takeIf { it.isNotBlank() }
+                    scope.launch(Dispatchers.IO) { saveTrackMeta(ctx, t) }
+                    state.showTagEditor = null
+                },
+                onDismiss = dismiss
+            )
+        }
     }
 
     state.showAddToPlaylist?.let { t ->
-        AddToPlaylistDialog(
-            state = state, track = t, isDark = isDark, tc = tc, tcs = tcs, tcm = tcm, surface = surface, border = border,
-            onCreateNew = { name ->
-                val pl = state.createPlaylist(ctx, name)
-                state.addTrackToPlaylist(ctx, pl.id, t)
-            },
-            onToggle = { playlistId, alreadyIn ->
-                if (alreadyIn) state.removeTrackFromPlaylist(ctx, playlistId, t)
-                else state.addTrackToPlaylist(ctx, playlistId, t)
-            },
-            onDismiss = { state.showAddToPlaylist = null }
-        )
+        AnimatedOverlay(
+            onDismissed = { state.showAddToPlaylist = null },
+            contentEnter = scaleIn(tween(200), initialScale = 0.9f) + fadeIn(tween(180)),
+            contentExit  = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130))
+        ) { dismiss ->
+            AddToPlaylistDialog(
+                state = state, track = t, isDark = isDark, tc = tc, tcs = tcs, tcm = tcm, surface = surface, border = border,
+                onCreateNew = { name ->
+                    val pl = state.createPlaylist(ctx, name)
+                    state.addTrackToPlaylist(ctx, pl.id, t)
+                },
+                onToggle = { playlistId, alreadyIn ->
+                    if (alreadyIn) state.removeTrackFromPlaylist(ctx, playlistId, t)
+                    else state.addTrackToPlaylist(ctx, playlistId, t)
+                },
+                onDismiss = dismiss
+            )
+        }
     }
 
     if (state.showNewPlaylistDialog) {
-        NamePromptDialog(
-            title = "New playlist", initialValue = "", isDark = isDark, tc = tc, surface = surface, border = border,
-            onConfirm = { name -> state.createPlaylist(ctx, name); state.showNewPlaylistDialog = false },
-            onDismiss = { state.showNewPlaylistDialog = false }
-        )
+        AnimatedOverlay(
+            onDismissed = { state.showNewPlaylistDialog = false },
+            contentEnter = scaleIn(tween(200), initialScale = 0.9f) + fadeIn(tween(180)),
+            contentExit  = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130))
+        ) { dismiss ->
+            NamePromptDialog(
+                title = "New playlist", initialValue = "", isDark = isDark, tc = tc, surface = surface, border = border,
+                onConfirm = { name -> state.createPlaylist(ctx, name); state.showNewPlaylistDialog = false },
+                onDismiss = dismiss
+            )
+        }
     }
 
     state.editingPlaylistId?.let { id ->
         val pl = state.userPlaylists.firstOrNull { it.id == id }
         if (pl != null) {
-            NamePromptDialog(
-                title = "Rename playlist", initialValue = pl.name, isDark = isDark, tc = tc, surface = surface, border = border,
-                onConfirm = { name -> state.renamePlaylist(ctx, id, name); state.editingPlaylistId = null },
-                onDismiss = { state.editingPlaylistId = null }
-            )
+            AnimatedOverlay(
+                onDismissed = { state.editingPlaylistId = null },
+                contentEnter = scaleIn(tween(200), initialScale = 0.9f) + fadeIn(tween(180)),
+                contentExit  = scaleOut(tween(150), targetScale = 0.9f) + fadeOut(tween(130))
+            ) { dismiss ->
+                NamePromptDialog(
+                    title = "Rename playlist", initialValue = pl.name, isDark = isDark, tc = tc, surface = surface, border = border,
+                    onConfirm = { name -> state.renamePlaylist(ctx, id, name); state.editingPlaylistId = null },
+                    onDismiss = dismiss
+                )
+            }
         }
     }
 }
@@ -1544,7 +1578,8 @@ private fun LibraryPane(
                             onAddToPlaylist = { state.showAddToPlaylist = t },
                             onShare    = { shareTrack(ctx, t) },
                             onTagEdit  = { state.showTagEditor = t },
-                            onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
+                            onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null,
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -1632,7 +1667,8 @@ private fun LibraryPane(
                                 onAddToPlaylist = { state.showAddToPlaylist = t },
                                 onShare    = { shareTrack(ctx, t) },
                                 onTagEdit  = { state.showTagEditor = t },
-                                onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
+                                onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null,
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }
@@ -1654,7 +1690,8 @@ private fun LibraryPane(
                                 onAddToPlaylist = { state.showAddToPlaylist = t },
                                 onShare    = { shareTrack(ctx, t) },
                                 onTagEdit  = { state.showTagEditor = t },
-                                onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
+                                onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null,
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }
@@ -1676,7 +1713,8 @@ private fun LibraryPane(
                             onAddToPlaylist = { state.showAddToPlaylist = t },
                             onShare    = { shareTrack(ctx, t) },
                             onTagEdit  = { state.showTagEditor = t },
-                            onLoadSubtitle = null
+                            onLoadSubtitle = null,
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -1696,7 +1734,8 @@ private fun LibraryPane(
                             onAddToPlaylist = { state.showAddToPlaylist = t },
                             onShare    = { shareTrack(ctx, t) },
                             onTagEdit  = { state.showTagEditor = t },
-                            onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null
+                            onLoadSubtitle = if (t.isVideo) { { pickSubtitleFor(t, onPickSubtitle, state) } } else null,
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -1882,13 +1921,14 @@ private fun LibraryRow(
     onAddToPlaylist: () -> Unit = {},
     onShare: () -> Unit,
     onTagEdit: () -> Unit,
-    onLoadSubtitle: (() -> Unit)? = null
+    onLoadSubtitle: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val rowBg by animateColorAsState(if (isActive) FTV.SelectedBg else Color.Transparent, label = "rowbg")
 
     Row(
-        Modifier.fillMaxWidth().background(rowBg)
+        modifier.fillMaxWidth().background(rowBg)
             .pointerInput(Unit) { detectTapGestures(onTap = { onClick() }, onLongPress = { showMenu = true }) }
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2074,7 +2114,12 @@ private fun PlayerPane(
     }
 
     if (state.showMoreControls) {
-        MoreControlsSheet(state, isDark, tc, tcs, tcm, surface, border, dynamicAccent) { state.showMoreControls = false }
+        AnimatedOverlay(
+            onDismissed = { state.showMoreControls = false },
+            contentAlignment = Alignment.BottomCenter,
+            contentEnter = slideInVertically(tween(220)) { it } + fadeIn(tween(180)),
+            contentExit  = slideOutVertically(tween(200)) { it } + fadeOut(tween(150))
+        ) { dismiss -> MoreControlsSheet(state, isDark, tc, tcs, tcm, surface, border, dynamicAccent, dismiss) }
     }
 }
 
@@ -2324,11 +2369,16 @@ private fun MainControls(state: PlayerState, tc: Color, accent: Color = FTV.Acce
     ) {
         ControlBtn(FI.Shuffle, if (state.isShuffle) accent else tc.copy(0.5f), 20.dp) { state.isShuffle = !state.isShuffle }
         ControlBtn(FI.SkipPrevious, tc, 28.dp) { state.skipPrev() }
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed by interactionSource.collectIsPressedAsState()
+        val pressScale by animateFloatAsState(if (isPressed) 0.92f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "playbtn_scale")
         Box(
             Modifier.size(72.dp)
+                .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                 .shadow(14.dp, CircleShape, spotColor = accent, ambientColor = accent)
+                .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(accent, accent.copy(alpha = 0.85f))), CircleShape)
-                .clickable { state.togglePlayPause() },
+                .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { state.togglePlayPause() },
             contentAlignment = Alignment.Center
         ) {
             Icon(if (state.isPlaying) FI.Pause else FI.Play, null, tint = Color.White, modifier = Modifier.size(36.dp))
@@ -2447,6 +2497,48 @@ private fun SleepTimerChip(state: PlayerState, bgTint: Color) {
 // in PlayerPane's toolbar.
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * N-09: every sheet/dialog in this file was popping in and out instantly —
+ * full opacity, final position, one frame. This drives the scrim and the
+ * content off a single shared transition (via
+ * AnimatedVisibilityScope.animateEnterExit, so they're not just similarly
+ * timed but the literal same transition), and defers calling [onDismissed]
+ * — which is what actually clears the caller's show-state and removes this
+ * composable from the tree — until the exit transition has genuinely
+ * finished playing. Without that deferral, dismissing would just cut the
+ * slide/fade off mid-animation the instant the state flag flipped.
+ */
+@Composable
+private fun AnimatedOverlay(
+    onDismissed: () -> Unit,
+    contentEnter: EnterTransition,
+    contentExit: ExitTransition,
+    contentAlignment: Alignment = Alignment.Center,
+    scrimAlpha: Float = 0.5f,
+    content: @Composable (dismiss: () -> Unit) -> Unit
+) {
+    val transitionState = remember { MutableTransitionState(false) }
+    LaunchedEffect(Unit) { transitionState.targetState = true }
+    LaunchedEffect(transitionState.currentState, transitionState.targetState) {
+        if (!transitionState.targetState && !transitionState.currentState) onDismissed()
+    }
+    val dismiss: () -> Unit = { transitionState.targetState = false }
+
+    AnimatedVisibility(visibleState = transitionState, enter = EnterTransition.None, exit = ExitTransition.None) {
+        Box(
+            Modifier.fillMaxSize()
+                .animateEnterExit(enter = fadeIn(tween(200)), exit = fadeOut(tween(180)))
+                .background(Color.Black.copy(alpha = scrimAlpha))
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = dismiss),
+            contentAlignment = contentAlignment
+        ) {
+            Box(Modifier.animateEnterExit(enter = contentEnter, exit = contentExit).clickable(enabled = false) {}) {
+                content(dismiss)
+            }
+        }
+    }
+}
+
 @Composable
 private fun MoreControlsSheet(
     state: PlayerState, isDark: Boolean,
@@ -2456,8 +2548,7 @@ private fun MoreControlsSheet(
     onDismiss: () -> Unit
 ) {
     val track = state.currentTrack
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.BottomCenter) {
-        Column(
+    Column(
             Modifier.fillMaxWidth()
                 .shadow(16.dp, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
@@ -2571,7 +2662,6 @@ private fun MoreControlsSheet(
             Spacer(Modifier.height(4.dp))
         }
     }
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Aspect ratio chip
@@ -2611,8 +2701,7 @@ private fun SettingsSheet(
     ctx: Context,
     onDismiss: () -> Unit
 ) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f)).clickable(onClick = onDismiss), contentAlignment = Alignment.CenterEnd) {
-        Column(
+    Column(
             Modifier.width(320.dp).fillMaxHeight()
                 .shadow(16.dp, RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
@@ -2697,7 +2786,6 @@ private fun SettingsSheet(
                 )
             }
         }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2717,11 +2805,12 @@ private fun TagEditorSheet(
     var artist by remember { mutableStateOf(track.displayArtist) }
     var album  by remember { mutableStateOf(track.displayAlbum) }
 
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.width(360.dp).clip(RoundedCornerShape(12.dp))
+    Column(
+            Modifier.width(360.dp)
+                .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
+                .clip(RoundedCornerShape(16.dp))
                 .background(if (isDark) FTV.Surface else FTV.LSurface)
-                .border(1.dp, border, RoundedCornerShape(12.dp))
+                .border(1.dp, border, RoundedCornerShape(16.dp))
                 .clickable(enabled = false) {}
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -2755,7 +2844,6 @@ private fun TagEditorSheet(
                 }
             }
         }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2812,8 +2900,7 @@ private fun AddToPlaylistDialog(
     var showNewRow by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
 
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-        Column(
+    Column(
             Modifier.width(320.dp).heightIn(max = 480.dp)
                 .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
                 .clip(RoundedCornerShape(16.dp))
@@ -2887,7 +2974,6 @@ private fun AddToPlaylistDialog(
                 }
             }
         }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2906,8 +2992,7 @@ private fun NamePromptDialog(
     onDismiss: () -> Unit
 ) {
     var value by remember { mutableStateOf(initialValue) }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-        Column(
+    Column(
             Modifier.width(300.dp)
                 .shadow(20.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
                 .clip(RoundedCornerShape(16.dp))
@@ -2938,5 +3023,4 @@ private fun NamePromptDialog(
                     modifier = Modifier.clickable { if (value.isNotBlank()) onConfirm(value) }.padding(8.dp))
             }
         }
-    }
 }

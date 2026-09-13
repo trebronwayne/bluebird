@@ -38,6 +38,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,7 +71,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -103,6 +103,10 @@ import fluent.ui.system.icons.regular.ShieldCheckmark
 import fluent.ui.system.icons.regular.TopSpeed
 import fluent.ui.system.icons.regular.WeatherMoon
 import io.github.norbertweb.bluebird.LauncherViewModel
+import io.github.norbertweb.bluebird.ui.components.DS
+import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 
 // ─────────────────────────────────────────────────────────
 // Fluent icon set — every icon this screen uses, centralized in one place
@@ -219,7 +223,7 @@ fun SetupScreen(
                 add(
                     PermissionItem(
                         title = "Notifications",
-                        description = "Allows Bluebird to deliver its own notifications when notification features are enabled.",
+                        description = "Only used to show media playback controls and track updates in the notification shade while you're using the media player.",
                         icon = SetupFI.Notifications,
                         permissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
                         optional = true
@@ -255,11 +259,24 @@ fun SetupScreen(
         }
     }
 
+    // NOTE ON PERMISSION TIMING: this effect only *reads* current grant state via
+    // ContextCompat.checkSelfPermission — it never calls permLauncher.launch() or
+    // otherwise triggers a system permission dialog. Permissions are only ever
+    // requested below, either by the auto-request sequence once the user reaches
+    // PermissionsStep (step 1), or by an explicit tap on a PermissionCard — and
+    // step 1 itself is only reachable after tapping "Get started" on WelcomeStep
+    // (step 0). So no permission prompt can appear before that tap.
     LaunchedEffect(permissionItems) {
         permissionItems.forEach(::refreshPermissionState)
     }
 
     var requestedItem by remember { mutableStateOf<PermissionItem?>(null) }
+
+    // Set only while the auto-request sequence (below) is waiting on a result for
+    // `requestedItem`. The launcher callback resolves it instead of opening the
+    // rationale dialog, so a denial during the sequence doesn't interrupt the flow.
+    var autoRequestDeferred by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -270,7 +287,13 @@ fun SetupScreen(
                 item.permissions.all { results[it] == true }
             }
             grantedStates[item.title] = granted
-            if (!granted && item.permissions.isNotEmpty()) showPermissionRationale = item
+            val deferred = autoRequestDeferred
+            if (deferred != null) {
+                autoRequestDeferred = null
+                deferred.complete(granted)
+            } else if (!granted && item.permissions.isNotEmpty()) {
+                showPermissionRationale = item
+            }
         }
         requestedItem = null
     }
@@ -281,18 +304,43 @@ fun SetupScreen(
         permissionItems.filter { it.requiresSettingsIntent }.forEach(::refreshPermissionState)
     }
 
-    LaunchedEffect(Unit) {
-        permissionItems.forEach(::refreshPermissionState)
+    // Which permission card (if any) is currently showing the "requesting" spinner —
+    // drives the sequential auto-request flow below and the UI in PermissionCard.
+    var autoRequestingItem by remember { mutableStateOf<PermissionItem?>(null) }
+
+    // Auto-drives the permission requests one at a time, the way most onboarding
+    // flows do, instead of making the user tap "Allow" on every card individually.
+    // Only runs while the user is actually on PermissionsStep (step 1) — never
+    // earlier. "All files access" is deliberately excluded: it opens a Settings
+    // page rather than a runtime dialog, so it stays a manual, explicit tap.
+    LaunchedEffect(step, permissionItems) {
+        if (step != 1) {
+            autoRequestingItem = null
+            return@LaunchedEffect
+        }
+        val queue = permissionItems.filter { !it.isManageAllFiles && it.permissions.isNotEmpty() }
+        for (item in queue) {
+            if (grantedStates[item.title] == true) continue
+            autoRequestingItem = item
+            delay(5000) // circling indicator — gives the user a moment to read the card first
+            if (grantedStates[item.title] == true) continue // granted manually while we waited
+            val deferred = CompletableDeferred<Boolean>()
+            autoRequestDeferred = deferred
+            requestedItem = item
+            permLauncher.launch(item.permissions.toTypedArray())
+            deferred.await()
+        }
+        autoRequestingItem = null
     }
 
     val colorScheme = MaterialTheme.colorScheme
     val isDark = isSystemInDarkTheme()
-    val panel = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
-    val panelBorder = if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
-    val primary = Color(0xFF0078D4)
-    val textPrimary = if (isDark) Color.White else Color(0xFF1A1A1A)
-    val textSecondary = if (isDark) Color.White.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.62f)
-    val rootBackground = if (isDark) Color(0xFF181818) else Color(0xFFF2F2F2)
+    val panel = setupPanel(isDark)
+    val panelBorder = setupBorder(isDark)
+    val primary = setupPrimary()
+    val textPrimary = setupTextPrimary(isDark)
+    val textSecondary = setupTextSecondary(isDark)
+    val rootBackground = panel
 
     Box(
         modifier = Modifier
@@ -328,6 +376,7 @@ fun SetupScreen(
                             uiState = uiState,
                             permissionItems = permissionItems,
                             grantedStates = grantedStates,
+                            autoRequestingItem = autoRequestingItem,
                             onRequestPermission = { item ->
                                 if (item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                     val intent = Intent(item.settingsIntentAction).apply {
@@ -360,6 +409,7 @@ fun SetupScreen(
                             uiState = uiState,
                             permissionItems = permissionItems,
                             grantedStates = grantedStates,
+                            autoRequestingItem = autoRequestingItem,
                             onRequestPermission = { item ->
                                 if (item.isManageAllFiles && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                     val intent = Intent(item.settingsIntentAction).apply {
@@ -422,6 +472,7 @@ private fun StepContent(
     uiState: io.github.norbertweb.bluebird.LauncherUiState,
     permissionItems: List<PermissionItem>,
     grantedStates: Map<String, Boolean>,
+    autoRequestingItem: PermissionItem?,
     onRequestPermission: (PermissionItem) -> Unit,
     onBack: () -> Unit,
     onSetupCompleted: () -> Unit
@@ -436,6 +487,7 @@ private fun StepContent(
         1 -> PermissionsStep(
             permissionItems = permissionItems,
             grantedStates = grantedStates,
+            autoRequestingItem = autoRequestingItem,
             onRequestPermission = onRequestPermission,
             onNext = { viewModel.advanceSetupStep() },
             onBack = onBack
@@ -456,11 +508,11 @@ private fun StepContent(
     }
 }
 
-private fun setupPanel(isDark: Boolean): Color = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
-private fun setupBorder(isDark: Boolean): Color = if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
-private fun setupPrimary(): Color = Color(0xFF0078D4)
-private fun setupTextPrimary(isDark: Boolean): Color = if (isDark) Color.White else Color(0xFF1A1A1A)
-private fun setupTextSecondary(isDark: Boolean): Color = if (isDark) Color.White.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.62f)
+private fun setupPanel(isDark: Boolean): Color = if (isDark) DS.surfaceDark else DS.surfaceLight
+private fun setupBorder(isDark: Boolean): Color = if (isDark) DS.borderDark else DS.borderLight
+private fun setupPrimary(): Color = DS.accentStart
+private fun setupTextPrimary(isDark: Boolean): Color = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+private fun setupTextSecondary(isDark: Boolean): Color = setupTextPrimary(isDark).copy(alpha = 0.65f)
 
 // ─────────────────────────────────────────────────────────
 // Phone Top Step Bar
@@ -530,7 +582,7 @@ private fun LeftSidebar(currentStep: Int, modifier: Modifier = Modifier) {
                 }
                 Column {
                     Text("Bluebird", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                    Text("OS setup", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+                    Text("Setup", style = MaterialTheme.typography.labelSmall, color = textSecondary)
                 }
             }
             Spacer(Modifier.height(28.dp))
@@ -542,8 +594,8 @@ private fun LeftSidebar(currentStep: Int, modifier: Modifier = Modifier) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             HorizontalDivider(color = border, thickness = 0.5.dp, modifier = Modifier.padding(bottom = 10.dp))
-            Text("Bluebird OS", style = MaterialTheme.typography.labelSmall, color = textPrimary)
-            Text("A desktop experience for Android", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+            Text("Bluebird ", style = MaterialTheme.typography.labelSmall, color = textPrimary)
+            Text("A desktop launcher experience for Android", style = MaterialTheme.typography.labelSmall, color = textSecondary)
         }
     }
 }
@@ -634,7 +686,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
     val textSecondary = setupTextSecondary(dark)
     StepContainer(
         title = "Welcome to Bluebird",
-        subtitle = "A modern desktop-style experience for Android, tuned for a clean and responsive first run.",
+        subtitle = "A modern desktop-style launcher experience for Android, tuned for a clean and responsive first run.",
         icon = SetupFI.Home
     ) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(panel).border(1.dp,border,RoundedCornerShape(14.dp)).padding(18.dp)) {
@@ -643,7 +695,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
                 Text("Bluebird will guide you through access and profile settings. You stay in control of every permission.", style = MaterialTheme.typography.bodySmall, color = textSecondary, lineHeight = 19.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        SetupFI.Dashboard to "Windows-inspired desktop shell",
+                        SetupFI.Dashboard to "Desktop styled UI",
                         SetupFI.FolderOpen to "Real file and media access",
                         SetupFI.Person to "A personal Bluebird profile"
                     ).forEach { (icon, label) ->
@@ -669,6 +721,7 @@ private fun PermissionCard(
     desc: String,
     isGranted: Boolean,
     isOptional: Boolean,
+    isRequesting: Boolean,
     grantLabel: String,
     onGrant: () -> Unit
 ) {
@@ -730,7 +783,15 @@ private fun PermissionCard(
                 lineHeight = 17.sp
             )
 
-            if (isOptional) {
+            if (isRequesting) {
+                Text(
+                    text = "Requesting…",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = primary,
+                    letterSpacing = 0.2.sp
+                )
+            } else if (isOptional) {
                 Text(
                     text = "Optional",
                     style = MaterialTheme.typography.labelSmall,
@@ -745,6 +806,12 @@ private fun PermissionCard(
                 contentDescription = "Granted",
                 tint = primary,
                 modifier = Modifier.size(22.dp)
+            )
+        } else if (isRequesting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+                color = primary
             )
         } else {
             Box(
@@ -768,13 +835,14 @@ private fun PermissionCard(
 private fun PermissionsStep(
     permissionItems: List<PermissionItem>,
     grantedStates: Map<String, Boolean>,
+    autoRequestingItem: PermissionItem?,
     onRequestPermission: (PermissionItem) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
     StepContainer(
         title = "Give Bluebird the access it needs",
-        subtitle = "Nothing is requested silently. Optional access can be skipped and enabled later from Android Settings.",
+        subtitle = "Bluebird will ask for each permission in turn — just respond to the system prompt as it appears. Optional access can be skipped and enabled later from Android Settings.",
         icon = SetupFI.Lock
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -785,12 +853,22 @@ private fun PermissionsStep(
                     desc = item.description,
                     isGranted = grantedStates[item.title] == true,
                     isOptional = item.optional,
+                    isRequesting = autoRequestingItem?.title == item.title,
                     grantLabel = when {
                         grantedStates[item.title] == true -> "Granted"
                         item.isManageAllFiles -> "Open settings"
                         else -> "Allow"
                     },
-                    onGrant = { onRequestPermission(item) }
+                    onGrant = {
+                        // While the auto-sequence is driving requests, block manual
+                        // taps on runtime-permission cards so we never have two
+                        // concurrent permLauncher.launch() calls in flight. The
+                        // settings-intent item (All files access) isn't part of the
+                        // sequence, so it stays tappable at any time.
+                        if (item.isManageAllFiles || autoRequestingItem == null) {
+                            onRequestPermission(item)
+                        }
+                    }
                 )
             }
         }

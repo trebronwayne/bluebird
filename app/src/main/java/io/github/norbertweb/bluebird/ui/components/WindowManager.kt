@@ -141,7 +141,7 @@ private fun defaultSizeFor(screen: LauncherScreen): Pair<Float, Float> = when (s
     LauncherScreen.WORD_IMPRESS           -> 420f to 600f
     LauncherScreen.BLUEBIRD_STORE        -> 500f to 560f
     LauncherScreen.CALENDAR        -> 560f to 480f
-    LauncherScreen.TERMINAL        -> 700f to 480f
+
     LauncherScreen.PROGRAM_MANAGER -> 760f to 560f
     LauncherScreen.COPY_PROGRESS   -> 360f to 300f
     else                           -> 750f to 520f
@@ -1009,7 +1009,7 @@ fun WindowContent(
                 LauncherScreen.WORD_IMPRESS      -> PhoneScreen(isDark, initialPath = extras["filePath"] ?: "")
 
                 LauncherScreen.RECYCLE_BIN -> RecycleBinScreen(isDark, viewModel)
-                LauncherScreen.TERMINAL    -> TerminalScreen(isDark)
+
                 LauncherScreen.PROGRAM_MANAGER -> {
                     val bpkPath = extras["bpkPath"]
                     if (!bpkPath.isNullOrBlank()) {

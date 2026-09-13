@@ -1193,7 +1193,15 @@ private fun WidgetEditPanel(
                             .size(40.dp)
                             .clip(RoundedCornerShape(11.dp))
                             .background(if (isDragged) accent.copy(alpha = 0.20f) else textColor.copy(alpha = 0.05f))
-                            .pointerInput(localOrder) {
+                            // Keyed on the row's own stable id, NOT on
+                            // localOrder — detectDragGesturesAfterLongPress
+                            // already loops forever internally to handle one
+                            // drag after another. Keying this on localOrder
+                            // (which mutates on every swap) tore the gesture
+                            // coroutine down and rebuilt it mid-drag, which
+                            // cancelled the drag you were actively doing the
+                            // instant it crossed the first swap threshold.
+                            .pointerInput(id) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
                                         draggingId = id; dragOffset = 0f

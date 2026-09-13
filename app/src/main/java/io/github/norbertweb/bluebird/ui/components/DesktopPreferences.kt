@@ -89,10 +89,56 @@ class DesktopPreferences(context: Context) {
         get() = prefs.getInt("wallpaper_image_index", 0)
         set(v) = prefs.edit().putInt("wallpaper_image_index", v).apply()
 
-    // custom wallpaper URI (empty = none)
+    // ── Default wallpaper selection (multi-select) ──────────────────
+    // Which of DEFAULT_WALLPAPERS the user has chosen to use. Stored as a set of
+    // indices into that list. When more than one is selected, Desktop.kt rotates
+    // through only these indices every hour — a fixed interval that isn't
+    // user-configurable, replacing the old manual "wallpaper slideshow" toggle
+    // (which only persisted a flag and never actually rotated anything).
+    var defaultWallpaperSelection: Set<Int>
+        get() {
+            val raw = prefs.getStringSet("wallpaper_default_selection", null)
+            return raw?.mapNotNull { it.toIntOrNull() }?.toSet()
+                ?: setOf(wallpaperImageIndex) // migrate from the old single-index prefs
+        }
+        set(v) {
+            prefs.edit()
+                .putStringSet("wallpaper_default_selection", v.map { it.toString() }.toSet())
+                .apply()
+        }
+
+    // custom wallpaper URI (empty = none) — the currently ACTIVE custom image.
+    // Desktop.kt renders this one when wallpaperMode == CUSTOM.
     var customWallpaperUri: String
         get() = prefs.getString("custom_wallpaper_uri", "") ?: ""
         set(v) = prefs.edit().putString("custom_wallpaper_uri", v).apply()
+
+    // ── Custom wallpaper history (multi-select, like the default wallpapers) ──
+    // Every image the user has picked from the gallery for the desktop
+    // background, so Settings can show them as a set of tiles to switch
+    // between — not just the single currently-active one. Stored as an
+    // ordered JSON array of app-private file:// paths (each image is copied
+    // into app storage when picked, so the entries stay valid across restarts
+    // even if the original gallery picker URI's permission has expired).
+    var customWallpaperHistory: List<String>
+        get() {
+            val json = prefs.getString("custom_wallpaper_history", null) ?: run {
+                // Migrate a pre-existing single custom_wallpaper_uri into the history
+                // so upgrading users don't lose the wallpaper they already picked.
+                return if (customWallpaperUri.isNotEmpty()) listOf(customWallpaperUri) else emptyList()
+            }
+            return try {
+                val arr = JSONArray(json)
+                buildList { for (i in 0 until arr.length()) add(arr.getString(i)) }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        set(v) {
+            val arr = JSONArray()
+            v.forEach { arr.put(it) }
+            prefs.edit().putString("custom_wallpaper_history", arr.toString()).apply()
+        }
 
 
     // ── Settings deep-link ─────────────────────────────────────────

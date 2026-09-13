@@ -353,6 +353,13 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                 } catch (e: Exception) { e.printStackTrace() }
             }
         )
+
+        // ── 13. "Set as default launcher" prompt — shown once, right after setup
+        //    finishes, now that the desktop itself is what's on screen (not the
+        //    setup flow). See DefaultLauncherPrompt.kt for why it lives here. ──
+        if (uiState.showDefaultLauncherPrompt) {
+            DefaultLauncherPrompt(onDismiss = { viewModel.dismissDefaultLauncherPrompt() })
+        }
     }
 }
 

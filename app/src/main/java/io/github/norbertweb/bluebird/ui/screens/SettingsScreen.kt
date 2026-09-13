@@ -146,12 +146,26 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -172,7 +186,8 @@ import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.LiveWallpaperType
 import io.github.norbertweb.bluebird.BackgroundEffectsState
-import io.github.norbertweb.bluebird.WallpaperTarget
+// WallpaperTarget import removed with the dead "Home screen"/"Lock screen"
+// buttons — see PersonalizationSection for why they were removed.
 // Personalization (Background + Effects) now lives in this file instead of its
 // own dialog in Desktop.kt — these are the same symbols that file already used,
 // exposed here so PersonalizationSection can render identical UI/behavior.
@@ -287,9 +302,12 @@ fun SettingsScreen(
                 ) {
                     Box(modifier = Modifier.size(40.dp)) {
                         if (uiState.userProfile.profilePicturePath.isNotEmpty()) {
+                            // FIX: same Crop fix as the Accounts screen avatar — without it,
+                            // non-square photos are letterboxed (Fit) into a thin vertical strip.
                             AsyncImage(
                                 model = Uri.parse(uiState.userProfile.profilePicturePath),
                                 contentDescription = "Profile picture",
+                                contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize().clip(CircleShape)
                             )
                         } else {
@@ -867,6 +885,16 @@ private fun PersonalizationSection(a: ScreenArgs) {
     var wallpaperMode by remember { mutableStateOf(prefs.wallpaperMode) }
     var gradientIdx   by remember { mutableStateOf(prefs.wallpaperGradientIndex) }
     var imageIdx      by remember { mutableStateOf(prefs.wallpaperImageIndex) }
+    // Which bundled wallpapers are selected (multi-select). More than one
+    // selected means Desktop.kt rotates through them automatically every hour —
+    // a fixed interval, not something the user can change.
+    var imageSelection by remember { mutableStateOf(prefs.defaultWallpaperSelection) }
+    // Every custom image the user has picked from the gallery, plus which one
+    // is currently active — lets Settings show "which wallpapers already
+    // exist" and switch between them, instead of only ever showing one with
+    // no way to tell what it is or pick a previous one back.
+    var customHistory by remember { mutableStateOf(prefs.customWallpaperHistory) }
+    var activeCustomUri by remember { mutableStateOf(prefs.customWallpaperUri) }
 
     val gradientNames = remember {
         listOf("Ocean Depth", "Midnight Blue", "Carbon", "Sunset Tricolor", "Forest Lime")
@@ -876,29 +904,73 @@ private fun PersonalizationSection(a: ScreenArgs) {
     val effectsState = a.uiState
     val bgEffects = effectsState?.backgroundEffects ?: BackgroundEffectsState()
 
-    // Use Android's document picker directly here.  The old implementation
-    // changed the mode before a URI existed and relied on a ViewModel result
-    // path that did not always update the already-mounted Desktop.
+    // FIX: GetContent() opens the device's photo picker / gallery app directly,
+    // instead of OpenDocument()'s generic Storage Access Framework browser which
+    // lets people navigate the whole filesystem. "Browse Gallery" should actually
+    // open the gallery.
+    //
+    // GetContent() (unlike OpenDocument()) doesn't reliably support persistable
+    // URI permission grants, so a raw content:// URI can stop resolving after
+    // the app restarts. The picked image is copied into app-private storage
+    // immediately — the same pattern LauncherViewModel already uses for the
+    // profile picture and the Home/Lock screen wallpaper pickers — so the
+    // custom wallpaper keeps working across restarts regardless of grant support.
+    //
+    // FIX: the destination used a single fixed filename ("desktop_custom_wallpaper.jpg"),
+    // so every new pick silently overwrote the last one — there was never any way to
+    // build a history or tell which images had already been chosen. Each pick now
+    // gets its own timestamped file and is APPENDED to customWallpaperHistory rather
+    // than replacing it, so past choices stay picked and selectable as tiles below.
+    val scope = rememberCoroutineScope()
     val customWallpaperLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            runCatching {
-                a.ctx.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val destFile = File(a.ctx.filesDir, "desktop_custom_wallpaper_${System.currentTimeMillis()}.jpg")
+                    a.ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    val persistedUri = Uri.fromFile(destFile).toString()
+                    withContext(Dispatchers.Main) {
+                        val updatedHistory = prefs.customWallpaperHistory + persistedUri
+                        prefs.customWallpaperHistory = updatedHistory
+                        prefs.customWallpaperUri = persistedUri
+                        prefs.wallpaperMode = DesktopWallpaperMode.CUSTOM
+                        prefs.wallpaperModeEverSet = true
+                        customHistory = updatedHistory
+                        activeCustomUri = persistedUri
+                        wallpaperMode = DesktopWallpaperMode.CUSTOM
+                    }
+                } catch (_: Exception) { /* keep previous wallpaper on failure */ }
             }
-            val uriString = uri.toString()
-            prefs.customWallpaperUri = uriString
-            prefs.wallpaperMode = DesktopWallpaperMode.CUSTOM
-            prefs.wallpaperModeEverSet = true
-            wallpaperMode = DesktopWallpaperMode.CUSTOM
         }
     }
 
     val pickCustomWallpaper = {
-        customWallpaperLauncher.launch(arrayOf("image/*"))
+        customWallpaperLauncher.launch("image/*")
+    }
+
+    // Switch the active custom wallpaper to a previously-picked one, without
+    // opening the gallery again.
+    val selectCustomWallpaper: (String) -> Unit = { uriString ->
+        prefs.customWallpaperUri = uriString
+        activeCustomUri = uriString
+    }
+
+    // Remove a picked image from history (and its backing file). If it was the
+    // active one, fall back to the most recent remaining entry.
+    val removeCustomWallpaper: (String) -> Unit = { uriString ->
+        val updatedHistory = customHistory - uriString
+        prefs.customWallpaperHistory = updatedHistory
+        customHistory = updatedHistory
+        runCatching { Uri.parse(uriString).path?.let { File(it).delete() } }
+        if (activeCustomUri == uriString) {
+            val fallback = updatedHistory.lastOrNull() ?: ""
+            prefs.customWallpaperUri = fallback
+            activeCustomUri = fallback
+        }
     }
 
     SettingsGroup("Personalization", a) {
@@ -1018,6 +1090,10 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     if (wallpaperMode == DesktopWallpaperMode.DEFAULT) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Wallpaper image", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "Select one or more. With more than one selected, they rotate automatically every hour.",
+                                color = tcm.copy(alpha = 0.7f), fontSize = (10 * scale).sp
+                            )
                             if (DEFAULT_WALLPAPERS.all { it == 0 }) {
                                 Box(
                                     Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(8.dp))
@@ -1025,7 +1101,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "Add 5 wallpapers to res/drawable\nas desktop_wp_1.png … desktop_wp_5.png",
+                                        "Add wallpapers to res/drawable\nas desktop_wp_1.png, desktop_wp_2.png, …",
                                         color = tcm, fontSize = (11 * scale).sp, textAlign = TextAlign.Center
                                     )
                                 }
@@ -1035,17 +1111,36 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     DEFAULT_WALLPAPERS.forEachIndexed { idx, resId ->
-                                        val isActive = idx == imageIdx
+                                        val isSelected = idx in imageSelection
                                         Box(
                                             Modifier
                                                 .size(72.dp, 48.dp)
                                                 .clip(RoundedCornerShape(6.dp))
                                                 .border(
-                                                    width = if (isActive) 2.dp else 0.dp,
-                                                    color = if (isActive) acc else Color.Transparent,
+                                                    width = if (isSelected) 2.dp else 0.dp,
+                                                    color = if (isSelected) acc else Color.Transparent,
                                                     shape = RoundedCornerShape(6.dp)
                                                 )
-                                                .clickable { imageIdx = idx; prefs.wallpaperImageIndex = idx }
+                                                .clickable {
+                                                    // Toggle membership, but never allow the last
+                                                    // selection to be removed — DEFAULT mode always
+                                                    // needs at least one wallpaper to show.
+                                                    val updated = if (isSelected) {
+                                                        if (imageSelection.size > 1) imageSelection - idx else imageSelection
+                                                    } else {
+                                                        imageSelection + idx
+                                                    }
+                                                    imageSelection = updated
+                                                    prefs.defaultWallpaperSelection = updated
+                                                    // Keep the single "current" index valid and pointed
+                                                    // at a selected wallpaper so DEFAULT mode always has
+                                                    // something to render even before the next rotation.
+                                                    if (imageIdx !in updated) {
+                                                        val first = updated.minOrNull() ?: 0
+                                                        imageIdx = first
+                                                        prefs.wallpaperImageIndex = first
+                                                    }
+                                                }
                                         ) {
                                             if (resId != 0) {
                                                 Image(
@@ -1057,7 +1152,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                             } else {
                                                 Box(Modifier.fillMaxSize().background(Color(0xFF1A1A2E)))
                                             }
-                                            if (isActive) {
+                                            if (isSelected) {
                                                 Box(
                                                     Modifier.fillMaxSize().background(acc.copy(alpha = 0.25f)),
                                                     contentAlignment = Alignment.Center
@@ -1075,52 +1170,93 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     // ── Custom wallpaper — shown/hidden instantly ──
                     if (wallpaperMode == DesktopWallpaperMode.CUSTOM) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Pick an image from your device", color = tcm, fontSize = (11 * scale).sp)
-                            Button(
-                                onClick = { pickCustomWallpaper() },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(6.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = acc)
+                            Text("Your wallpapers", color = tc, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "Tap one to use it, or add another from your gallery.",
+                                color = tcm, fontSize = (10 * scale).sp
+                            )
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(FluentIcons.Regular.Image, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Browse Gallery…", fontWeight = FontWeight.Medium, fontSize = (13 * scale).sp)
+                                customHistory.forEach { uriString ->
+                                    val isActive = uriString == activeCustomUri
+                                    Box(
+                                        Modifier
+                                            .size(72.dp, 48.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .border(
+                                                width = if (isActive) 2.dp else 0.dp,
+                                                color = if (isActive) acc else Color.Transparent,
+                                                shape = RoundedCornerShape(6.dp)
+                                            )
+                                            .clickable { selectCustomWallpaper(uriString) }
+                                    ) {
+                                        AsyncImage(
+                                            model = Uri.parse(uriString),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        if (isActive) {
+                                            Box(
+                                                Modifier.fillMaxSize().background(acc.copy(alpha = 0.2f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(FluentIcons.Regular.Checkmark, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                        // Delete affordance — only when more than a single
+                                        // wallpaper exists, so Custom mode always has one to fall
+                                        // back on rather than being left with nothing to show.
+                                        if (customHistory.size > 1) {
+                                            Box(
+                                                Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(2.dp)
+                                                    .size(16.dp)
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(Color.Black.copy(alpha = 0.55f))
+                                                    .clickable { removeCustomWallpaper(uriString) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(FluentIcons.Regular.Dismiss, null, tint = Color.White, modifier = Modifier.size(10.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                                Box(
+                                    Modifier
+                                        .size(72.dp, 48.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .border(1.dp, tcm, RoundedCornerShape(6.dp))
+                                        .clickable { pickCustomWallpaper() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(FluentIcons.Regular.Add, null, tint = tcm, modifier = Modifier.size(20.dp))
+                                }
                             }
                         }
                     }
 
                     Divider(color = tcm.copy(alpha = 0.15f))
 
-                    // Slideshow + lock screen, previously a separate "Background" group
-                    SToggle(FluentIcons.Regular.ImageMultiple, "Wallpaper slideshow",
-                        "Rotate wallpaper automatically", a, a.uiState?.wallpaperSlideshow ?: false) {
-                        a.vm?.setWallpaperSlideshow(!(a.uiState?.wallpaperSlideshow ?: false))
-                    }
-                    if (a.uiState?.wallpaperSlideshow == true) {
-                        SDropdown(FluentIcons.Regular.Timer, "Change every", "",
-                            listOf("15 minutes", "30 minutes", "1 hour", "6 hours", "Daily"),
-                            a.uiState.wallpaperSlideshowInterval ?: "1 hour", a) { a.vm?.setWallpaperSlideshowInterval(it) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { a.vm?.openWallpaperPicker(WallpaperTarget.HOME) },
-                            border  = BorderStroke(1.dp, acc),
-                            colors  = ButtonDefaults.outlinedButtonColors(contentColor = acc)
-                        ) {
-                            Icon(FluentIcons.Regular.Image, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Home screen", fontSize = (12 * scale).sp)
-                        }
-                        OutlinedButton(
-                            onClick = { a.vm?.openWallpaperPicker(WallpaperTarget.LOCK_SCREEN) },
-                            border  = BorderStroke(1.dp, acc),
-                            colors  = ButtonDefaults.outlinedButtonColors(contentColor = acc)
-                        ) {
-                            Icon(FluentIcons.Regular.LockClosedKey, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Lock screen", fontSize = (12 * scale).sp)
-                        }
-                    }
+                    // The old "Wallpaper slideshow" toggle + "Change every" interval
+                    // dropdown only persisted flags that nothing ever read — no timer
+                    // actually rotated the wallpaper, so the switch did nothing. Real
+                    // automatic rotation now happens whenever more than one default
+                    // wallpaper is selected above, on a fixed 1-hour interval that
+                    // isn't user-configurable, so there's nothing to toggle here.
+                    //
+                    // The "Home screen" / "Lock screen" buttons that used to sit here
+                    // called vm.openWallpaperPicker(...), which drove a second, entirely
+                    // separate wallpaper system (WallpaperState / setBuiltInWallpaper /
+                    // setCustomWallpaper) that never talked to the actual Bluebird desktop
+                    // wallpaper this whole section configures (DesktopPreferences). It
+                    // opened its own picker with its own bundled colours/images, so picking
+                    // something there had no visible effect on the desktop and just
+                    // duplicated (and conflicted with) the wallpaper controls above.
+                    // Removed rather than left as a second, disconnected wallpaper picker.
                 }
             } else {
                 // ── Effects tab: particle animations (mix-able) + live wallpapers ──
@@ -1271,13 +1407,9 @@ private fun AppearanceSettings(a: ScreenArgs) {
     // Settings directly to this category (see Desktop.kt's onPersonalize).
     PersonalizationSection(a)
 
-    // Font
-    SettingsGroup("Font", a) {
-        SDropdown(FluentIcons.Regular.TextFont, "System font",
-            "Choose the font used across the launcher",
-            listOf("Default (Roboto)", "Sans-serif", "Serif", "Monospace", "Cursive"),
-            a.uiState?.launcherFont ?: "Default (Roboto)", a) { a.vm?.setLauncherFont(it) }
-    }
+    // "System font" removed — launcherFont was only ever written back to itself
+    // (persisted, exported, imported, reset) but never read anywhere to actually
+    // change any rendered font, so the dropdown had no visible effect.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1285,43 +1417,32 @@ private fun AppearanceSettings(a: ScreenArgs) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun RenameAccountDialog(
-    currentName: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf(currentName) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(FluentIcons.Regular.Edit, contentDescription = null) },
-        title = { Text("Change username") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
-                placeholder = { Text("Display name") },
-                colors = OutlinedTextFieldDefaults.colors(),
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank(),
-                onClick = { onConfirm(name.trim()) }
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-@Composable
 private fun AccountsSettings(a: ScreenArgs) {
     val scale = a.scale
-    var showRenameDialog by remember { mutableStateOf(false) }
+    // FIX: "Change username" opened a full AlertDialog popup for what's a
+    // one-line edit — replaced with an inline text field that swaps in for
+    // the row itself, matching how the rest of Settings edits values in place
+    // (e.g. the rename-in-place pattern desktop icons already use) instead of
+    // interrupting with a modal.
+    var isEditingName by remember { mutableStateOf(false) }
+    var editedName by remember { mutableStateOf("") }
+    val nameFocusRequester = remember { FocusRequester() }
+
+    // FIX: "Change profile picture" previously only called
+    // vm.openProfilePicturePicker(), which flips a one-shot StateFlow that
+    // nothing observed or acted on — no picker was ever launched, so tapping
+    // the row did nothing and the picture never changed. GetContent() opens
+    // the system photo picker directly from here (rememberLauncherForActivityResult
+    // must be called from a composable, so it lives in this screen), and its
+    // result is handed straight to the already-working vm.setProfilePicture(),
+    // which copies the image into app storage and persists the path.
+    val profilePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            a.vm?.setProfilePicture(a.ctx, uri)
+        }
+    }
 
     SettingsGroup("Your account", a) {
         if (a.uiState != null && a.vm != null) {
@@ -1329,8 +1450,13 @@ private fun AccountsSettings(a: ScreenArgs) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(modifier = Modifier.size(56.dp)) {
                     if (a.uiState.userProfile.profilePicturePath.isNotEmpty()) {
+                        // FIX: ContentScale.Crop so a portrait (or any non-square) photo
+                        // fills the circular frame instead of being letterboxed inside it
+                        // (Coil's default Fit scaling), which is what made pictures look
+                        // squeezed into a thin vertical strip.
                         AsyncImage(model = Uri.parse(a.uiState.userProfile.profilePicturePath),
                             contentDescription = null,
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize().clip(CircleShape))
                     } else {
                         Box(modifier = Modifier.fillMaxSize().background(a.accent, CircleShape), contentAlignment = Alignment.Center) {
@@ -1344,23 +1470,51 @@ private fun AccountsSettings(a: ScreenArgs) {
                 }
             }
             Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-            SNav(FluentIcons.Regular.Edit,      "Change username",        "Update your display name",         a = a) {
-                showRenameDialog = true
-            }
-            Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-            SNav(FluentIcons.Regular.CameraAdd, "Change profile picture", "Pick a photo from your gallery",   a = a) {
-                a.vm.openProfilePicturePicker()
+
+            if (isEditingName) {
+                LaunchedEffect(Unit) {
+                    delay(80)
+                    try { nameFocusRequester.requestFocus() } catch (_: Exception) {}
+                }
+                fun commit() {
+                    val trimmed = editedName.trim()
+                    if (trimmed.isNotEmpty()) a.vm.setUserName(trimmed)
+                    isEditingName = false
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(FluentIcons.Regular.Edit, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it },
+                        singleLine = true,
+                        placeholder = { Text("Display name") },
+                        colors = OutlinedTextFieldDefaults.colors(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(nameFocusRequester)
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp && event.key == Key.Enter) {
+                                    commit(); true
+                                } else false
+                            }
+                    )
+                    TextButton(enabled = editedName.isNotBlank(), onClick = { commit() }) { Text("Save") }
+                    TextButton(onClick = { isEditingName = false }) { Text("Cancel") }
+                }
+            } else {
+                SNav(FluentIcons.Regular.Edit, "Change username", "Update your display name", a = a) {
+                    editedName = a.uiState.userProfile.userName
+                    isEditingName = true
+                }
             }
 
-            if (showRenameDialog) {
-                RenameAccountDialog(
-                    currentName = a.uiState.userProfile.userName,
-                    onConfirm = { newName ->
-                        a.vm.setUserName(newName)
-                        showRenameDialog = false
-                    },
-                    onDismiss = { showRenameDialog = false }
-                )
+            Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+            SNav(FluentIcons.Regular.CameraAdd, "Change profile picture", "Pick a photo from your gallery",   a = a) {
+                profilePictureLauncher.launch("image/*")
             }
         }
     }
@@ -1671,15 +1825,15 @@ private fun StorageLegend(label: String, color: Color, value: String) {
 private fun AboutSettings(a: ScreenArgs) {
     val scale   = a.scale
     val pm      = a.ctx.packageManager
-    // PERF FIX: getPackageInfo() and getMemoryInfo() are Binder IPC calls to system
-    // services. They were previously run directly in the composable body, so every
-    // single recomposition of this screen (e.g. from an unrelated state read) re-hit
-    // both system services. `remember` runs them once and reuses the result.
+    // PERF FIX: getPackageInfo() is a Binder IPC call to a system service. It was
+    // previously run directly in the composable body, so every single recomposition
+    // of this screen (e.g. from an unrelated state read) re-hit it. `remember` runs
+    // it once and reuses the result.
+    // Build number and package name rows were removed — end users have no use for
+    // internal build metadata, and RAM stats were removed from this screen (a
+    // per-app "About" page isn't the right place to show whole-device memory usage,
+    // and it duplicated the device's own Settings > About).
     val pkgInfo = remember(a.ctx) { try { pm.getPackageInfo(a.ctx.packageName, 0) } catch (_: Exception) { null } }
-    val memInfo = remember(a.ctx) {
-        val am = a.ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-    }
 
     SettingsGroup("Device", a) {
         listOf(
@@ -1687,9 +1841,7 @@ private fun AboutSettings(a: ScreenArgs) {
             "Manufacturer"    to Build.MANUFACTURER,
             "Android version" to Build.VERSION.RELEASE,
             "API level"       to Build.VERSION.SDK_INT.toString(),
-            "Processor"       to Build.HARDWARE,
-            "Total RAM"       to fmtBytes(memInfo.totalMem),
-            "Available RAM"   to fmtBytes(memInfo.availMem)
+            "Processor"       to Build.HARDWARE
         ).forEachIndexed { i, (label, value) ->
             if (i > 0) Divider(color = a.textColor.copy(alpha = 0.04f), modifier = Modifier.padding(horizontal = 12.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -1700,25 +1852,20 @@ private fun AboutSettings(a: ScreenArgs) {
     }
 
     SettingsGroup("Bluebird Launcher", a) {
-        listOf(
-            "Version" to (pkgInfo?.versionName ?: "1.0"),
-            "Build"   to (pkgInfo?.longVersionCode?.toString() ?: "1"),
-            "Package" to a.ctx.packageName
-        ).forEachIndexed { i, (label, value) ->
-            if (i > 0) Divider(color = a.textColor.copy(alpha = 0.04f), modifier = Modifier.padding(horizontal = 12.dp))
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(label, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
-                Text(value, color = a.textColor, fontSize = (12 * scale).sp)
-            }
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text("Version", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
+            Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (12 * scale).sp)
         }
         Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        // Contact info moved to structured nav items, not in subtitle strings
-        SNav(FluentIcons.Regular.Star,      "Rate this launcher",   "Leave a review or send feedback",         a = a) {
-            a.ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:trebronwayne@gmail.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SNav(FluentIcons.Regular.Bug, "Report a bug",         "Send a bug report to the developer",      a = a) {
-            a.ctx.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:nlamn.dev@outlook.com?subject=Bug%20Report")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        // "Rate this launcher" removed — there's no store listing to rate. Bug
+        // reports now go straight to the GitHub issue tracker instead of email,
+        // so reports are visible, searchable, and trackable rather than landing
+        // in a personal inbox.
+        SNav(FluentIcons.Regular.Bug, "Report a bug", "Open an issue on GitHub", a = a) {
+            a.ctx.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Norbert-web/Bluebird/issues"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         }
         Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
         // Not a nav row — it's a one-line privacy statement, not a link to

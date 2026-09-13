@@ -406,16 +406,31 @@ internal fun LiveWallpaperRenderer(
             LiveWallpaperType.NEBULA -> {
                 drawRect(Color(0xFF05040F))
                 val rng = kotlin.random.Random(42)
-                repeat(140) {
+                // FIX: was `sin(t*2π*3 + sx)` — sx is a raw pixel coordinate (often in the
+                // hundreds), so it only ever shifted each star's phase, never its amplitude;
+                // combined with a very tight 0.4–1.0 alpha range, the twinkle was too subtle
+                // to read as motion on a full screen. Phase now uses the star's index instead
+                // of its pixel position (same "each star twinkles independently" effect,
+                // clearer math) and swings through a wider, more visible alpha range.
+                repeat(140) { i ->
                     val sx = rng.nextFloat() * w
                     val sy = rng.nextFloat() * h
-                    val twinkle = 0.4f + 0.6f * ((kotlin.math.sin(t * 6.283f * 3f + sx) + 1f) / 2f)
-                    drawCircle(Color.White.copy(alpha = twinkle * 0.8f), radius = rng.nextFloat() * 1.6f + 0.4f, center = Offset(sx, sy))
+                    val twinkle = 0.25f + 0.75f * ((kotlin.math.sin(t * 6.283f * 2f + i * 0.7f) + 1f) / 2f)
+                    drawCircle(Color.White.copy(alpha = twinkle * 0.85f), radius = rng.nextFloat() * 1.6f + 0.4f, center = Offset(sx, sy))
                 }
+                // FIX: the glow used a linear ramp (0.3f + 0.4f*t) under RepeatMode.Restart,
+                // so every 10s it teleported back from x=0.7w to x=0.3w instead of drifting
+                // continuously — that hard jump-cut is what made Nebula read as "static" the
+                // rest of the time (a slow, one-directional creep with an abrupt reset,
+                // versus Aurora/Waves/Bokeh's continuous back-and-forth sine motion). Now
+                // drifts smoothly in both x and y with sin/cos, same as its siblings, with no
+                // discontinuity at the loop boundary.
+                val driftX = w * (0.5f + 0.22f * kotlin.math.sin(t * 6.283f))
+                val driftY = h * (0.4f + 0.18f * kotlin.math.cos(t * 6.283f * 0.8f))
                 drawRect(
                     brush = Brush.radialGradient(
-                        listOf(Color(0xFF7A2CFF).copy(alpha = 0.18f), Color.Transparent),
-                        center = Offset(w * (0.3f + 0.4f * t), h * 0.4f), radius = w * 0.5f
+                        listOf(Color(0xFF7A2CFF).copy(alpha = 0.22f), Color.Transparent),
+                        center = Offset(driftX, driftY), radius = w * 0.5f
                     )
                 )
             }
@@ -1307,7 +1322,7 @@ private val BLUEBIRD_DEFAULT_APPS = listOf(
     DefaultShortcut("Image Viewer", builtInScreen = LauncherScreen.IMAGE_VIEWER),
     DefaultShortcut("Word Impress", builtInScreen = LauncherScreen.WORD_IMPRESS),
     DefaultShortcut("Text Editor", builtInScreen = LauncherScreen.PremiumTextEditorScreen),
-    DefaultShortcut("Terminal", builtInScreen = LauncherScreen.TERMINAL),
+
 
     DefaultShortcut("Recycle Bin", builtInScreen = LauncherScreen.RECYCLE_BIN),
 
@@ -1350,7 +1365,10 @@ private fun createDefaultShortcuts(desktopDir: File, pm: PackageManager, prefs: 
 // ─────────────────────────────────────────────────────────────────
 // Wallpaper crossfade helper
 // ─────────────────────────────────────────────────────────────────
-private const val WALLPAPER_CYCLE_MS = 5 * 60 * 1000L   // 5 minutes
+// Fixed rotation interval for multi-selected default wallpapers — not user
+// configurable (the old "change every" dropdown let people pick this; that UI
+// and its backing pref were removed since it never actually drove any timer).
+private const val WALLPAPER_CYCLE_MS = 60 * 60 * 1000L   // 1 hour
 
 // ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1550,6 +1568,9 @@ fun Desktop(
         var gradientIndex         by remember { mutableStateOf(prefs.wallpaperGradientIndex) }
         var defaultImageIndex     by remember { mutableStateOf(prefs.wallpaperImageIndex) }
         var customWallpaperUri    by remember { mutableStateOf(prefs.customWallpaperUri) }
+        // Which DEFAULT_WALLPAPERS indices the user selected in Settings. Falls
+        // back to just defaultImageIndex if nothing was ever explicitly selected.
+        var defaultWallpaperSelection by remember { mutableStateOf(prefs.defaultWallpaperSelection) }
 
         // Settings edits the same DesktopPreferences file while this desktop stays mounted.
         // Observe the shared store so wallpaper selectors update immediately.
@@ -1574,6 +1595,7 @@ fun Desktop(
                     "wallpaper_gradient_index" -> gradientIndex = prefs.wallpaperGradientIndex
                     "wallpaper_image_index" -> defaultImageIndex = prefs.wallpaperImageIndex
                     "custom_wallpaper_uri" -> customWallpaperUri = prefs.customWallpaperUri
+                    "wallpaper_default_selection" -> defaultWallpaperSelection = prefs.defaultWallpaperSelection
                 }
             }
             shared.registerOnSharedPreferenceChangeListener(listener)
@@ -1605,8 +1627,12 @@ fun Desktop(
             onWallpaperAccent(accent)
         }
 
-        // Auto-cycle wallpaper when no custom wallpaper is set
-        LaunchedEffect(wallpaperMode) {
+        // Auto-cycle wallpaper when no custom wallpaper is set.
+        // DEFAULT only rotates when the user has selected more than one bundled
+        // wallpaper in Settings (Appearance > Wallpaper image, multi-select) — a
+        // single selection just stays put. The interval is fixed at
+        // WALLPAPER_CYCLE_MS (1 hour) and is not user-configurable.
+        LaunchedEffect(wallpaperMode, defaultWallpaperSelection) {
             while (true) {
                 delay(WALLPAPER_CYCLE_MS)
                 when (wallpaperMode) {
@@ -1615,8 +1641,16 @@ fun Desktop(
                         prefs.wallpaperGradientIndex = gradientIndex
                     }
                     DesktopWallpaperMode.DEFAULT -> {
-                        defaultImageIndex = (defaultImageIndex + 1) % DEFAULT_WALLPAPERS.size
-                        prefs.wallpaperImageIndex = defaultImageIndex
+                        val selected = defaultWallpaperSelection
+                            .filter { it in DEFAULT_WALLPAPERS.indices }
+                            .sorted()
+                        if (selected.size > 1) {
+                            val currentPos = selected.indexOf(defaultImageIndex)
+                            val nextPos = if (currentPos == -1) 0 else (currentPos + 1) % selected.size
+                            defaultImageIndex = selected[nextPos]
+                            prefs.wallpaperImageIndex = defaultImageIndex
+                        }
+                        // A single (or no) selection: nothing to rotate to, leave as-is.
                     }
                     DesktopWallpaperMode.CUSTOM -> return@LaunchedEffect  // BUG 9 FIX: break exits `when`, not `while`; use return instead
                 }
@@ -2757,52 +2791,6 @@ fun Desktop(
                         } // stable key: item.id
                     }
 
-                    // Desktop-full is a deliberate dialog, not a transient toast: the
-                    // user needs a clear path to the complete Desktop directory.
-                    // ── File-access toast ──────────────────────────────────
-                    if (showFileAccessToast) {
-                        LaunchedEffect(Unit) {
-                            delay(6000)
-                            showFileAccessToast = false
-                        }
-                        Row(
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 72.dp)
-                                .background(desktopSurfaceFill(isDark), RoundedCornerShape(8.dp))
-                                .border(0.5.dp, DS.accentStart.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment    = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = FluentIcon.FolderProhibited, contentDescription = null,
-                                tint     = DS.accentStart,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                "File access not granted",
-                                color    = desktopTextPrimary(isDark),
-                                fontSize = 13.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(
-                                onClick = {
-                                    showFileAccessToast = false
-                                    try {
-                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.fromParts("package", context.packageName, null)
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (_: ActivityNotFoundException) {}
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                            ) {
-                                Text("Grant", color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-
                     // Lasso selection rectangle
                     if (isSelecting) {
                         Canvas(Modifier.fillMaxSize()) {
@@ -3006,6 +2994,56 @@ fun Desktop(
                 }
             }
 
+            // "File access not granted" toast — moved here from inside the icon-rendering
+            // loop, where it sat behind the desktop icons because it was composed earlier
+            // in that scope's z-order. This is the SAME instance used both for the
+            // startup all-files-access check (LaunchedEffect(desktopDir.absolutePath)
+            // above) and for a failed shortcut creation (onConfirm below) — one dialog,
+            // positioned and layered exactly like the working "Desktop full" toast above,
+            // instead of a separate copy that could reintroduce the same layering bug.
+            if (showFileAccessToast) {
+                LaunchedEffect(Unit) {
+                    delay(6000)
+                    showFileAccessToast = false
+                }
+                Row(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 72.dp)
+                        .background(desktopSurfaceFill(isDark), RoundedCornerShape(8.dp))
+                        .border(0.5.dp, DS.accentStart.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment    = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = FluentIcon.FolderProhibited, contentDescription = null,
+                        tint     = DS.accentStart,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        "File access not granted",
+                        color    = desktopTextPrimary(isDark),
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = {
+                            showFileAccessToast = false
+                            try {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: ActivityNotFoundException) {}
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("Grant", color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
             // ── Icon context menu ──
             iconCtxTarget?.let { target ->
                 bluebirdIconContextMenu(
@@ -3159,21 +3197,39 @@ fun Desktop(
                             // Shortcuts are real-path references only. A SAF URI that cannot
                             // be resolved to a filesystem path is not copied into cache and is
                             // not saved as a URI shortcut.
-                            val pathIsValid = !(trimmed.startsWith("content://") || trimmed.startsWith("file://")) || resolvedPath != null
+                            val isSafSource = trimmed.startsWith("content://") || trimmed.startsWith("file://")
+                            val pathIsValid = !isSafSource || resolvedPath != null
                             val finalPath = resolvedPath ?: trimmed
                             val finalTarget = File(finalPath)
-                            if (!pathIsValid || !finalTarget.exists()) {
+                            // For files picked through the SAF file picker, resolveSafUriToFilePath()
+                            // has already done the real access check (it only returns non-null when
+                            // the path is genuinely readable, e.g. via MediaStore/DocumentsContract
+                            // resolution). Many such paths — especially individual files rather than
+                            // whole folders — are virtual/synthetic and don't back a real inode, so
+                            // File.exists() on them returns false even though access is fully granted.
+                            // That mismatch was exactly why folder shortcuts worked (their resolved
+                            // paths tend to be real filesystem trees) while file shortcuts always
+                            // reported "access not granted". Only fall back to File.exists() for
+                            // paths the user typed in directly, which were never SAF-resolved.
+                            val targetAccessible = if (isSafSource) pathIsValid else finalTarget.exists()
+                            if (!pathIsValid || !targetAccessible) {
                                 showFileAccessToast = true
                             } else {
                                 val content = "type=${if (finalIsFolder || finalTarget.isDirectory) "folder" else "file"}\npath=$finalPath\nlabel=${label.trim()}\n"
                                 try {
                                     f.writeText(content)
-                                    if (placeNewItemAtClickPosition(f.absolutePath)) {
-                                        shortcutPickedUri = null
-                                        shortcutPickedIsFolder = false
-                                        showShortcutDialog = false
-                                        scheduleRefresh()
-                                    }
+                                    // The shortcut file is already written at this point, so the
+                                    // dialog must close regardless of whether pixel-perfect manual
+                                    // placement succeeded. placeNewItemAtClickPosition() legitimately
+                                    // returns false when autoArrange is on (placement is irrelevant
+                                    // then) or when the desktop grid is full — neither case means the
+                                    // shortcut creation itself failed, so gating dismissal on that
+                                    // return value left the dialog stuck open after a successful create.
+                                    placeNewItemAtClickPosition(f.absolutePath)
+                                    shortcutPickedUri = null
+                                    shortcutPickedIsFolder = false
+                                    showShortcutDialog = false
+                                    scheduleRefresh()
                                 } catch (_: Exception) {
                                     showFileAccessToast = true
                                 }
@@ -3286,7 +3342,7 @@ private fun DesktopIcon(
             LauncherScreen.IMAGE_VIEWER -> FluentIcon.Image
             LauncherScreen.WORD_IMPRESS -> FluentIcon.DocumentText
             LauncherScreen.PremiumTextEditorScreen -> FluentIcon.TextFont
-            LauncherScreen.TERMINAL -> FluentIcon.Console
+
 
             LauncherScreen.RECYCLE_BIN -> FluentIcon.Delete
             LauncherScreen.BLUEBIRD_STORE -> FluentIcon.Moon
@@ -4248,7 +4304,7 @@ fun AppPickerDialog(
                             "Image Viewer" to LauncherScreen.IMAGE_VIEWER,
                             "Word Impress" to LauncherScreen.WORD_IMPRESS,
                             "Text Editor" to LauncherScreen.PremiumTextEditorScreen,
-                            "Terminal" to LauncherScreen.TERMINAL,
+
 
                             "Recycle Bin" to LauncherScreen.RECYCLE_BIN,
 

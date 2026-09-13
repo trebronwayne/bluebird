@@ -261,7 +261,7 @@ internal val builtInApps = listOf(
     Triple("Image Viewer", FluentIcon.Image,         LauncherScreen.IMAGE_VIEWER),
     Triple("Text Editor",  FluentIcon.TextFont,      LauncherScreen.PremiumTextEditorScreen),
 
-    Triple("Terminal", FluentIcon.Console,          LauncherScreen.TERMINAL),
+
 
 
 

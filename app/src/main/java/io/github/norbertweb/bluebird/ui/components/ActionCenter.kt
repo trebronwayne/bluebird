@@ -7,16 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,9 +65,8 @@ fun ActionCenter(
     // surface/border language through AcrylicSurface + DS/bluebirdColors.
     AcrylicSurface(
         modifier = modifier
-            .fillMaxWidth(0.76f)
-            .widthIn(min = 264.dp, max = 320.dp)
-            .heightIn(min = 168.dp, max = 220.dp),
+            .widthIn(min = 248.dp, max = 288.dp)
+            .wrapContentHeight(),
         isDark = isDark,
         accent = accent,
         cornerRadius = 12.dp,
@@ -77,10 +74,10 @@ fun ActionCenter(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .wrapContentHeight()
                 .background(if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8), RoundedCornerShape(12.dp))
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 11.dp, vertical = 10.dp)
+                .padding(horizontal = 10.dp, vertical = 9.dp)
         ) {
             // ── Compact header ───────────────────────────────────────────────
             Row(
@@ -91,8 +88,8 @@ fun ActionCenter(
                 Text(
                     "Quick Settings",
                     color = textColor,
-                    fontSize = (14f * textScale).sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontSize = (13f * textScale).sp,
+                    fontWeight = FontWeight.Bold
                 )
                 SmallActionIcon(
                     icon = FluentIcon.Settings,
@@ -102,7 +99,7 @@ fun ActionCenter(
                 )
             }
 
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(6.dp))
 
             // Static reference tiles: no fake On/Off/Connected labels. Taps
             // only navigate to a real Android/Bluebird destination where one
@@ -124,11 +121,11 @@ fun ActionCenter(
                 FluentIcon.Settings
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 quickRefs.chunked(3).forEachIndexed { rowIndex, row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         row.forEachIndexed { colIndex, (label, action) ->
                             ReferenceQuickTile(
@@ -145,9 +142,9 @@ fun ActionCenter(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
             HorizontalDivider(color = divColor, thickness = 0.5.dp)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
 
             // ── Real controls, compactly represented ─────────────────────────
             CompactSliderSection(
@@ -163,7 +160,7 @@ fun ActionCenter(
                 textScale = textScale,
                 onValueChange = { viewModel.setVolume(it, context) }
             )
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(4.dp))
             CompactSliderSection(
                 icon = FluentIcon.BrightnessHigh,
                 label = "Brightness",
@@ -208,15 +205,22 @@ private fun ReferenceQuickTile(
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     Column(
         modifier = modifier
-            .heightIn(min = 40.dp)
+            .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(7.dp))
             .background(if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.032f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.82f), modifier = Modifier.size(14.dp))
-        Text(label, color = textColor.copy(alpha = 0.82f), fontSize = (9.5f * textScale).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.85f), modifier = Modifier.size(13.dp))
+        Text(
+            label,
+            color = textColor.copy(alpha = 0.9f),
+            fontSize = (9.5f * textScale).sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -238,13 +242,13 @@ private fun CompactSliderSection(
         Icon(icon, contentDescription = label, tint = textColor.copy(alpha = 0.84f), modifier = Modifier.size(17.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = textColor, fontSize = (10.5f * textScale).sp, fontWeight = FontWeight.Medium)
-                Text("${(value * 100).toInt()}%", color = textColor.copy(alpha = 0.44f), fontSize = (9.5f * textScale).sp)
+                Text(label, color = textColor, fontSize = (10.5f * textScale).sp, fontWeight = FontWeight.Bold)
+                Text("${(value * 100).toInt()}%", color = textColor.copy(alpha = 0.55f), fontSize = (9.5f * textScale).sp, fontWeight = FontWeight.SemiBold)
             }
             Slider(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth().height(23.dp),
+                modifier = Modifier.fillMaxWidth().height(21.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = bluebirdColors.AccentBlue,
                     activeTrackColor = bluebirdColors.AccentBlue,
