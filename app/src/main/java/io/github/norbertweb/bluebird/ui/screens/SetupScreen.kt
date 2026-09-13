@@ -322,7 +322,7 @@ fun SetupScreen(
         for (item in queue) {
             if (grantedStates[item.title] == true) continue
             autoRequestingItem = item
-            delay(5000) // circling indicator — gives the user a moment to read the card first
+            delay(3000) // circling indicator — gives the user a moment to read the card first
             if (grantedStates[item.title] == true) continue // granted manually while we waited
             val deferred = CompletableDeferred<Boolean>()
             autoRequestDeferred = deferred
