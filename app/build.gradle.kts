@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.norbertweb.bluebird"
+        applicationId = "io.github.trebronwayne.bluebird"
         minSdk = 26
         targetSdk = 36
         versionCode = 12
