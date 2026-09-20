@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -40,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,7 +64,9 @@ import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private enum class SearchFilter(val label: String, val icon: ImageVector) {
     All("All", FluentIcon.Apps),
@@ -102,16 +107,20 @@ fun SearchOverlay(
     val mutedText = textColor.copy(alpha = 0.58f)
     val subtleText = textColor.copy(alpha = 0.42f)
 
-    var localSearchQuery by rememberSaveable { mutableStateOf(uiState.searchQuery) }
+    // Search always starts blank and owns its own text independently of
+    // Start's search box. Do NOT seed this from uiState.searchQuery: both
+    // Search and Start used to read/write that same shared field, so
+    // whichever one you typed in last would leak its text into the other
+    // the moment the field was focused.
+    var localSearchQuery by rememberSaveable { mutableStateOf("") }
     var activeFilter by remember { mutableStateOf(SearchFilter.All) }
     val recentSearches = remember {
         mutableStateListOf<String>().apply { addAll(loadRecentSearches(context)) }
     }
 
-    LaunchedEffect(uiState.searchQuery) {
-        if (uiState.searchQuery != localSearchQuery) localSearchQuery = uiState.searchQuery
-    }
-
+    // One-way only: still publish to the shared ViewModel field in case other
+    // UI (e.g. a taskbar indicator) wants to observe it, but never pull it
+    // back into our own local state - that pull is what caused the leak.
     LaunchedEffect(localSearchQuery) {
         delay(100)
         if (localSearchQuery != uiState.searchQuery) {
@@ -126,6 +135,12 @@ fun SearchOverlay(
         runCatching { keyboardController?.show() }
     }
 
+    // Reset the shared field when Search closes so a stale query can't leak
+    // into Start (or back into Search) the next time either one opens.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { viewModel.updateSearchQuery("") }
+    }
+
     val searchQuery = localSearchQuery.trim()
     val normalizedQuery = searchQuery.lowercase()
     val isWideSearchLayout = configuration.screenWidthDp >= 560
@@ -138,6 +153,44 @@ fun SearchOverlay(
                 it.name.contains(normalizedQuery, ignoreCase = true) ||
                     it.packageName.contains(normalizedQuery, ignoreCase = true)
             }
+        }
+    }
+
+    // Shared by both the idle "Top apps" grid and, now, the results view's
+    // "Recent" section - so recently-opened apps don't just vanish the
+    // moment you start typing.
+    val topApps = remember(uiState.installedApps) {
+        uiState.installedApps
+            .map { it to getAppOpenCount(context, it.packageName) }
+            .sortedWith(
+                compareByDescending<Pair<AppInfo, Int>> { it.second }
+                    .thenBy { it.first.name.lowercase() }
+            )
+            .map { it.first }
+            .take(8)
+            .ifEmpty { uiState.installedApps.take(8) }
+    }
+
+    // Last 6 installed apps, same PackageManager.firstInstallTime technique
+    // Start's own "Recently installed" list already uses. Note: this can
+    // only surface an app once it shows up in uiState.installedApps - if the
+    // app list itself is stale, a just-installed app won't appear here
+    // either until that list refreshes.
+    val recentlyInstalledApps by produceState(
+        initialValue = emptyList<AppInfo>(),
+        key1 = uiState.installedApps
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val pm = context.packageManager
+            uiState.installedApps
+                .sortedByDescending { app ->
+                    try {
+                        pm.getPackageInfo(app.packageName, 0).firstInstallTime
+                    } catch (_: Exception) {
+                        0L
+                    }
+                }
+                .take(6)
         }
     }
 
@@ -157,23 +210,17 @@ fun SearchOverlay(
 
     // Windows Search is a single floating Acrylic surface. There is deliberately
     // no second card, no size-picker control, and no inner blur region.
-    // Match the polished Bluebird Start Menu shell while allowing Search
-    // a little extra height for its result hierarchy.
-    // Search is intentionally larger than Start while sharing its exact shell tone.
-    val width = minOf(configuration.screenWidthDp.dp * 0.96f, 680.dp)
-    val height = if (configuration.screenWidthDp > configuration.screenHeightDp) {
-        minOf(configuration.screenHeightDp.dp * 0.90f, 860.dp)
-    } else {
-        minOf(configuration.screenHeightDp.dp * 0.90f, 900.dp)
-    }
-
+    // Sized identically to the Start Menu shell (see StartMenu's sizing
+    // modifiers) rather than its own wider/taller calculation.
     val radius = 12.dp
     val panelShape = RoundedCornerShape(radius)
 
     Box(
         modifier = modifier
-            .width(width)
-            .heightIn(min = 560.dp, max = height)
+            .fillMaxWidth(0.94f)
+            .fillMaxHeight(0.82f)
+            .widthIn(min = 320.dp, max = 640.dp)
+            .heightIn(min = 520.dp, max = 760.dp)
             .imePadding()
             .softShadow(
                 cornerRadius = 12.dp,
@@ -200,14 +247,28 @@ fun SearchOverlay(
         ) {
             // Windows-style search field: same visual family as the polished
             // Start Menu, with the Bluebird colored search XML asset.
+            // Elevated header: a soft shadow lifts the bar off the panel and
+            // a faint accent tint gives it a touch of color elevation
+            // without overpowering the field.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(40.dp)
+                    .softShadow(
+                        cornerRadius = 18.dp,
+                        blurRadius = 12.dp,
+                        alpha = 0.14f,
+                        offsetY = 2.dp
+                    )
                     .clip(RoundedCornerShape(18.dp))
                     .background(
-                        if (isDark) Color.White.copy(alpha = 0.075f)
-                        else Color.White.copy(alpha = 0.82f)
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                accent.copy(alpha = if (isDark) 0.07f else 0.05f),
+                                if (isDark) Color.White.copy(alpha = 0.075f)
+                                else Color.White.copy(alpha = 0.82f)
+                            )
+                        )
                     )
                     .border(
                         1.dp,
@@ -231,22 +292,32 @@ fun SearchOverlay(
                     onValueChange = { localSearchQuery = it },
                     modifier = Modifier
                         .weight(1f)
+                        .height(20.dp)
                         .focusRequester(focusRequester),
                     textStyle = androidx.compose.ui.text.TextStyle(
                         color = textColor,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        lineHeight = 14.sp,
+                        platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                            includeFontPadding = false
+                        )
                     ),
                     singleLine = true,
                     cursorBrush = SolidColor(bluebirdColors.AccentBlue),
                     decorationBox = { inner ->
-                        if (localSearchQuery.isEmpty()) {
-                            androidx.compose.material3.Text(
-                                "Search apps, settings, and documents",
-                                color = textColor.copy(alpha = 0.48f),
-                                fontSize = 14.sp
-                            )
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (localSearchQuery.isEmpty()) {
+                                androidx.compose.material3.Text(
+                                    "Search apps, settings, and documents",
+                                    color = textColor.copy(alpha = 0.48f),
+                                    fontSize = 14.sp
+                                )
+                            }
+                            inner()
                         }
-                        inner()
                     }
                 )
 
@@ -291,6 +362,8 @@ fun SearchOverlay(
                     IdleSearchContent(
                         uiState = uiState,
                         recentSearches = recentSearches,
+                        topApps = topApps,
+                        recentlyInstalledApps = recentlyInstalledApps,
                         isDark = isDark,
                         textColor = textColor,
                         isWideLayout = isWideSearchLayout,
@@ -309,8 +382,16 @@ fun SearchOverlay(
                         activeFilter = activeFilter,
                         isDark = isDark,
                         textColor = textColor,
+                        recentSearches = recentSearches,
+                        recentApps = topApps,
+                        recentlyInstalledApps = recentlyInstalledApps,
                         onAppClick = { viewModel.openApp(context, it) },
-                        onWebSearch = { performWebSearch(it) }
+                        onWebSearch = { performWebSearch(it) },
+                        onRecentQueryClick = { localSearchQuery = it },
+                        onClearRecent = {
+                            recentSearches.clear()
+                            saveRecentSearches(context, emptyList())
+                        }
                     )
                 }
             }
@@ -332,9 +413,79 @@ fun SearchOverlay(
 }
 
 @Composable
+private fun RecentSection(
+    recentSearches: List<String>,
+    topApps: List<AppInfo>,
+    recentlyInstalledApps: List<AppInfo>,
+    isDark: Boolean,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    onRecentClick: (String) -> Unit,
+    onAppClick: (AppInfo) -> Unit,
+    onClearRecent: () -> Unit
+) {
+    Column(modifier = modifier) {
+        SectionHeader(
+            title = "Recent",
+            icon = FluentIcon.List,
+            textColor = textColor,
+            action = if (recentSearches.isNotEmpty()) "Clear" to onClearRecent else null
+        )
+        Spacer(Modifier.height(7.dp))
+
+        if (recentSearches.isNotEmpty()) {
+            recentSearches.take(6).forEach { query ->
+                RecentSearchRow(
+                    query = query,
+                    textColor = textColor,
+                    onClick = { onRecentClick(query) }
+                )
+            }
+        } else if (topApps.isNotEmpty()) {
+            // There is no separate Windows-style local file index in
+            // Bluebird yet, so a fresh install shows real installed apps
+            // rather than a fabricated recent-file list.
+            topApps.take(4).forEach { app ->
+                SuggestedAppRow(
+                    app = app,
+                    isDark = isDark,
+                    textColor = textColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onAppClick(app) }
+                )
+            }
+        } else {
+            Text(
+                "No recent searches yet",
+                color = textColor.copy(alpha = 0.42f),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        if (recentlyInstalledApps.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            SectionHeader("Recently installed", FluentIcon.Apps, textColor)
+            Spacer(Modifier.height(6.dp))
+            recentlyInstalledApps.take(6).forEach { app ->
+                SuggestedAppRow(
+                    app = app,
+                    isDark = isDark,
+                    textColor = textColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onAppClick(app) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun IdleSearchContent(
     uiState: LauncherUiState,
     recentSearches: List<String>,
+    topApps: List<AppInfo>,
+    recentlyInstalledApps: List<AppInfo>,
     isDark: Boolean,
     textColor: Color,
     isWideLayout: Boolean,
@@ -343,64 +494,23 @@ private fun IdleSearchContent(
     onRecentClick: (String) -> Unit,
     onClearRecent: () -> Unit
 ) {
-    val context = LocalContext.current
-
     // Windows Search reference hierarchy: Recent on the left; Quick searches
     // at upper-right; Top apps directly underneath. Everything stays inside
     // the same continuous Bluebird Acrylic surface as Start.
-    val topApps = remember(uiState.installedApps) {
-        uiState.installedApps
-            .map { it to getAppOpenCount(context, it.packageName) }
-            .sortedWith(
-                compareByDescending<Pair<AppInfo, Int>> { it.second }
-                    .thenBy { it.first.name.lowercase() }
-            )
-            .map { it.first }
-            .take(6)
-            .ifEmpty { uiState.installedApps.take(6) }
-    }
 
     @Composable
     fun RecentColumn(modifier: Modifier = Modifier) {
-        Column(modifier = modifier) {
-            SectionHeader(
-                title = "Recent",
-                icon = FluentIcon.List,
-                textColor = textColor,
-                action = if (recentSearches.isNotEmpty()) "Clear" to onClearRecent else null
-            )
-            Spacer(Modifier.height(7.dp))
-
-            if (recentSearches.isNotEmpty()) {
-                recentSearches.take(6).forEach { query ->
-                    RecentSearchRow(
-                        query = query,
-                        textColor = textColor,
-                        onClick = { onRecentClick(query) }
-                    )
-                }
-            } else if (topApps.isNotEmpty()) {
-                // There is no separate Windows-style local file index in
-                // Bluebird yet, so a fresh install shows real installed apps
-                // rather than a fabricated recent-file list.
-                topApps.take(4).forEach { app ->
-                    SuggestedAppRow(
-                        app = app,
-                        isDark = isDark,
-                        textColor = textColor,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { onAppClick(app) }
-                    )
-                }
-            } else {
-                Text(
-                    "No recent searches yet",
-                    color = textColor.copy(alpha = 0.42f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-        }
+        RecentSection(
+            recentSearches = recentSearches,
+            topApps = topApps,
+            recentlyInstalledApps = recentlyInstalledApps,
+            isDark = isDark,
+            textColor = textColor,
+            modifier = modifier,
+            onRecentClick = onRecentClick,
+            onAppClick = onAppClick,
+            onClearRecent = onClearRecent
+        )
     }
 
     @Composable
@@ -435,11 +545,11 @@ private fun IdleSearchContent(
             Spacer(Modifier.height(7.dp))
 
             if (topApps.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    topApps.chunked(2).forEach { rowApps ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    topApps.chunked(4).forEach { rowApps ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowApps.forEach { app ->
                                 TopAppItem(
@@ -449,7 +559,9 @@ private fun IdleSearchContent(
                                     onClick = { onAppClick(app) }
                                 )
                             }
-                            if (rowApps.size == 1) Spacer(Modifier.weight(1f))
+                            // Pad a short final row so tiles stay a fixed
+                            // width instead of stretching to fill the row.
+                            repeat(4 - rowApps.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
@@ -488,8 +600,13 @@ private fun SearchResultsContent(
     activeFilter: SearchFilter,
     isDark: Boolean,
     textColor: Color,
+    recentSearches: List<String>,
+    recentApps: List<AppInfo>,
+    recentlyInstalledApps: List<AppInfo>,
     onAppClick: (AppInfo) -> Unit,
-    onWebSearch: (String) -> Unit
+    onWebSearch: (String) -> Unit,
+    onRecentQueryClick: (String) -> Unit,
+    onClearRecent: () -> Unit
 ) {
     val showApps = activeFilter == SearchFilter.All || activeFilter == SearchFilter.Apps
     val showWeb = activeFilter == SearchFilter.All || activeFilter == SearchFilter.Web
@@ -534,17 +651,23 @@ private fun SearchResultsContent(
             textColor = textColor,
             onClick = { onWebSearch(query) }
         )
-
-        Spacer(Modifier.height(5.dp))
-
-        generateWebSuggestions(query).take(4).forEach { suggestion ->
-            WebSuggestionRow(
-                suggestion = suggestion,
-                textColor = textColor,
-                onClick = { onWebSearch(suggestion) }
-            )
-        }
     }
+
+    // Recent no longer lives only in the idle screen or only under "Search
+    // the web" - it's the same persistent block shown here regardless of
+    // what's typed or which filter is active, exactly like the idle state,
+    // instead of vanishing the moment a query comes in.
+    Spacer(Modifier.height(14.dp))
+    RecentSection(
+        recentSearches = recentSearches,
+        topApps = recentApps,
+        recentlyInstalledApps = recentlyInstalledApps,
+        isDark = isDark,
+        textColor = textColor,
+        onRecentClick = onRecentQueryClick,
+        onAppClick = onAppClick,
+        onClearRecent = onClearRecent
+    )
 }
 
 @Composable
@@ -757,27 +880,36 @@ private fun TopAppItem(
 ) {
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
 
+    // Windows 11 "All apps" tile: a real bounded surface (fill + hairline
+    // border) rather than a bare icon+label floating in the grid.
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
+            .background(DS.controlFill(isDark, 0.90f))
+            .border(
+                1.dp,
+                if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.07f),
+                RoundedCornerShape(10.dp)
+            )
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 9.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AppIconSmall(
             drawable = app.icon,
             contentDescription = app.name,
             modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(30.dp)
+                .clip(RoundedCornerShape(8.dp))
         )
         Spacer(Modifier.height(5.dp))
         androidx.compose.material3.Text(
             app.name,
-            color = textColor.copy(alpha = 0.78f),
-            fontSize = 10.sp,
+            color = textColor.copy(alpha = 0.80f),
+            fontSize = 9.5.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
@@ -975,13 +1107,6 @@ private fun IconButton(
         Icon(icon, null, tint = tint, modifier = Modifier.size(size))
     }
 }
-
-private fun generateWebSuggestions(query: String): List<String> = listOf(
-    "$query - Wikipedia",
-    "$query tutorial",
-    "$query near me",
-    "How to $query"
-)
 
 private val quickSearchItems = listOf(
     "Weather" to FluentIcon.WeatherSunny,

@@ -73,6 +73,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -291,20 +292,30 @@ fun StartMenu(
     LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
 
     var activeTab by rememberSaveable { mutableStateOf(StartMenuTab.PINNED) }
-    var localSearchQuery by rememberSaveable { mutableStateOf(uiState.searchQuery) }
+    // Start's search box always starts blank and owns its own text
+    // independently of Search's overlay field. Do NOT seed this from
+    // uiState.searchQuery: both Start and Search used to read/write that
+    // same shared field, so whichever one you typed in last would leak
+    // its text into the other the moment the field was focused.
+    var localSearchQuery by rememberSaveable { mutableStateOf("") }
     val isDark = LocalIsDarkTheme.current
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val textSecondary = textPrimary.copy(alpha = 0.62f)
     val panelShape = RoundedCornerShape(12.dp)
     val controlShape = RoundedCornerShape(6.dp)
 
-    LaunchedEffect(uiState.searchQuery) {
-        if (uiState.searchQuery != localSearchQuery) localSearchQuery = uiState.searchQuery
-    }
-
+    // One-way only: still publish to the shared ViewModel field in case other
+    // UI wants to observe it, but never pull it back into our own local
+    // state - that pull is what caused the leak.
     LaunchedEffect(localSearchQuery) {
         delay(100)
         if (localSearchQuery != uiState.searchQuery) viewModel.updateSearchQuery(localSearchQuery)
+    }
+
+    // Reset the shared field when Start closes so a stale query can't leak
+    // into Search (or back into Start) the next time either one opens.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { viewModel.updateSearchQuery("") }
     }
 
     Box(
@@ -352,6 +363,7 @@ fun StartMenu(
                 Windows11StartSearchBar(
                     query = localSearchQuery,
                     isDark = isDark,
+                    accent = accent,
                     onQueryChange = {
                         localSearchQuery = it
                         activeTab = if (it.isBlank()) StartMenuTab.PINNED else StartMenuTab.SEARCH
@@ -451,45 +463,67 @@ fun StartMenu(
 private fun Windows11StartSearchBar(
     query: String,
     isDark: Boolean,
+    accent: Color,
     onQueryChange: (String) -> Unit
 ) {
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val fill = if (isDark) Color.White.copy(alpha = 0.075f) else Color.White.copy(alpha = 0.82f)
     val border = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
 
-    val searchShape = RoundedCornerShape(20.dp)
-    Box(
+    // Exactly the same shell as the Search overlay's bar: same height,
+    // shape, soft shadow and faint accent tint, so Start and Search read
+    // as the same control rather than two different-looking search fields.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .clip(searchShape)
-            .background(fill)
-            .border(1.dp, border, searchShape)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_bluebird_start_search),
-                contentDescription = "Search",
-                modifier = Modifier.size(18.dp),
-                contentScale = ContentScale.Fit
+            .height(40.dp)
+            .softShadow(
+                cornerRadius = 18.dp,
+                blurRadius = 12.dp,
+                alpha = 0.14f,
+                offsetY = 2.dp
             )
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        accent.copy(alpha = if (isDark) 0.07f else 0.05f),
+                        if (isDark) Color.White.copy(alpha = 0.075f)
+                        else Color.White.copy(alpha = 0.82f)
+                    )
+                )
+            )
+            .border(1.dp, border, RoundedCornerShape(20.dp))
+            .padding(horizontal = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_bluebird_start_search),
+            contentDescription = "Search",
+            modifier = Modifier.size(18.dp),
+            contentScale = ContentScale.Fit
+        )
 
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    color = textPrimary,
-                    fontSize = 14.sp
-                ),
-                modifier = Modifier.weight(1f),
-                decorationBox = { inner ->
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = textPrimary,
+                fontSize = 14.sp,
+                lineHeight = 14.sp,
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                    includeFontPadding = false
+                )
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .height(20.dp),
+            decorationBox = { inner ->
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
                     if (query.isBlank()) {
                         Text(
                             "Search apps, settings, and documents",
@@ -499,18 +533,18 @@ private fun Windows11StartSearchBar(
                     }
                     inner()
                 }
-            )
-
-            if (query.isNotBlank()) {
-                Icon(
-                    FluentIcon.Dismiss,
-                    contentDescription = "Clear search",
-                    tint = textPrimary.copy(alpha = 0.55f),
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clickable { onQueryChange("") }
-                )
             }
+        )
+
+        if (query.isNotBlank()) {
+            Icon(
+                FluentIcon.Dismiss,
+                contentDescription = "Clear search",
+                tint = textPrimary.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable { onQueryChange("") }
+            )
         }
     }
 }
@@ -1258,7 +1292,7 @@ private fun RecentAppsView(
                 } catch (_: Exception) {
                     0L
                 }
-            }.take(12)
+            }.take(6)
 
             val openCounts = uiState.installedApps.associate { app ->
                 app.packageName to getAppOpenCount(context, app.packageName)
