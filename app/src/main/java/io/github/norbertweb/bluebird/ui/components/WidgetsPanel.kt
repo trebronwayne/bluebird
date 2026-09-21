@@ -135,6 +135,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import io.github.norbertweb.bluebird.LauncherUiState
+import io.github.norbertweb.bluebird.LauncherScreen
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
@@ -707,7 +708,13 @@ fun WidgetsPanel(
     viewModel: LauncherViewModel,
     hazeState: dev.chrisbanes.haze.HazeState,
     accent: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Defaults to actually opening the photo — openWindow() already reuses
+    // an existing Image Viewer window instead of stacking a new one, so this
+    // works out of the box without the caller needing to wire anything up.
+    onOpenPhoto: (Uri) -> Unit = { uri ->
+        viewModel.openWindow(LauncherScreen.IMAGE_VIEWER, extras = mapOf("filePath" to uri.toString()))
+    }
 ) {
     val context    = LocalContext.current
     // Follows the system's light/dark setting directly instead of the app's
@@ -952,7 +959,7 @@ fun WidgetsPanel(
                 key(id) {
                     when {
                         id == "clock"      -> ClockWidget(isDark, context, effectiveTextScale)
-                        id == "photos"     -> PhotosWidget(isDark, context, effectiveTextScale)
+                        id == "photos"     -> PhotosWidget(isDark, context, effectiveTextScale, onOpenPhoto = onOpenPhoto)
                         id == "todo"       -> TodoWidget(isDark, context, effectiveTextScale)
                         id == "notes"      -> StickyNotesWidget(isDark, context, effectiveTextScale)
                         id == "alarm"      -> AlarmWidget(isDark, context, effectiveTextScale)
@@ -2080,29 +2087,66 @@ private fun getUpcomingEvents(context: Context, maxResults: Int): List<CalendarE
 // 8. Photos Widget (fixed permission refresh)
 // ─────────────────────────────────────────────────────────
 @Composable
-private fun PhotosWidget(isDark: Boolean, context: Context, textScale: Float) {
+private fun PhotosWidget(
+    isDark: Boolean,
+    context: Context,
+    textScale: Float,
+    onOpenPhoto: (Uri) -> Unit = {}
+) {
     val textColor = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
 
-    val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES
-    else Manifest.permission.READ_EXTERNAL_STORAGE
-
-    var hasPermission by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED)
+    // Mirrors ImageViewerScreen's hasImageAccess(): on API 34+ a user can grant
+    // "Select photos" (READ_MEDIA_VISUAL_USER_SELECTED) instead of full access.
+    // Checking only READ_MEDIA_IMAGES meant this widget got stuck on the
+    // permission prompt (or silently returned nothing) for anyone who picked
+    // that option in the viewer, even though the viewer itself works fine.
+    fun hasPhotoAccess(): Boolean = when {
+        Build.VERSION.SDK_INT >= 34 ->
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, "android.permission.READ_MEDIA_VISUAL_USER_SELECTED") ==
+                PackageManager.PERMISSION_GRANTED
+        Build.VERSION.SDK_INT >= 33 ->
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                PackageManager.PERMISSION_GRANTED
+        else ->
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
     }
-    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        hasPermission = granted
+
+    var hasPermission by remember { mutableStateOf(hasPhotoAccess()) }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        hasPermission = hasPhotoAccess()
     }
     var photos by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+    val windowRuntime = LocalWindowRuntime.current
     LaunchedEffect(hasPermission) {
         if (!hasPermission) return@LaunchedEffect
-        photos = withContext(Dispatchers.IO) { getRecentPhotos(context, 10) }
+        // Keep refreshing while the panel is visible so a newly taken/imported
+        // photo actually shows up here instead of the list freezing at
+        // whatever was recent the first time permission was granted.
+        while (isActive) {
+            photos = withContext(Dispatchers.IO) { getRecentPhotos(context, 10) }
+            delay(if (windowRuntime.isMinimized) 15000 else 4000)
+        }
     }
 
     WidgetCard(isDark) {
         WidgetHeader("Photos", FluentIcon.Image, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         when {
-            !hasPermission -> TextButton(onClick = { permLauncher.launch(permission) }) {
+            !hasPermission -> TextButton(onClick = {
+                val perms = when {
+                    Build.VERSION.SDK_INT >= 34 -> arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+                    )
+                    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+                    else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+                permLauncher.launch(perms)
+            }) {
                 Text("Grant photo access", fontSize = (12 * textScale).sp)
             }
             photos.isEmpty() -> Text("No recent photos", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
@@ -2112,6 +2156,7 @@ private fun PhotosWidget(isDark: Boolean, context: Context, textScale: Float) {
                         model = uri, contentDescription = null,
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp))
                             .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                            .clickable { onOpenPhoto(uri) }
                     )
                 }
             }
@@ -2126,8 +2171,10 @@ private fun getRecentPhotos(context: Context, maxCount: Int): List<Uri> {
     else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
     try {
         context.contentResolver.query(
-            collection, arrayOf(MediaStore.Images.Media._ID), null, null,
-            "${MediaStore.Images.Media.DATE_ADDED} DESC"
+            collection,
+            arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_MODIFIED),
+            null, null,
+            "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
         )?.use { cursor ->
             val col = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             var n = 0

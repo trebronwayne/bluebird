@@ -13,6 +13,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,12 +23,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
@@ -48,7 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -125,27 +128,42 @@ import io.github.norbertweb.bluebird.wordprocessor.formatDate
 import io.github.norbertweb.bluebird.wordprocessor.formatFileSize
 
 // ────────────────────────────────────────────────────────
-// Windows 11-inspired light palette (matched to the Bluebird Explorer reference)
+// Windows 11 Fluent palette — tuned to match real Explorer's Mica layering:
+// a slightly translucent-feeling background, a marginally lighter/darker
+// "card" surface for panes and the command surfaces, and a crisp accent
+// with distinct hover/pressed/selected states (Fluent uses 4 states, not 2).
 // ────────────────────────────────────────────────────────
-private val ExplorerLightBackground = Color(0xFFFAFBFD)
-private val ExplorerLightNav = Color(0xFFF1F5FB)
-private val ExplorerLightSurface = Color(0xFFF3F6FA)
-private val ExplorerLightField = Color(0xFFFBFCFE)
-private val ExplorerLightBorder = Color(0xFFDCE5EF)
-private val ExplorerLightText = Color(0xFF193557)
-private val ExplorerLightSecondaryText = Color(0xFF5D718C)
-private val ExplorerAccentBlue = Color(0xFF0078D4)
-private val ExplorerSelectionBlue = Color(0xFFD8E9F8)
+private val ExplorerLightBackground = Color(0xFFFAFAFA)   // Mica base
+private val ExplorerLightNav = Color(0xFFF3F3F3)          // Nav pane (slightly recessed)
+private val ExplorerLightSurface = Color(0xFFF9F9F9)      // Ribbon / header strip
+private val ExplorerLightField = Color(0xFFFFFFFF)        // Text fields, search box
+private val ExplorerLightBorder = Color(0xFFE5E5E5)
+private val ExplorerLightText = Color(0xFF1A1A1A)
+private val ExplorerLightSecondaryText = Color(0xFF5F5F5F)
+private val ExplorerAccentBlue = Color(0xFF0067C0)        // Win11 system accent (default blue)
+private val ExplorerAccentBlueLight = Color(0xFF2899F5)
+private val ExplorerSelectionBlue = Color(0xFFDDEBFA)
+private val ExplorerHoverLight = Color(0xFF000000)        // used with low alpha for hover
+private val ExplorerPressedLight = Color(0xFF000000)      // used with slightly higher alpha
 
-private val ExplorerDarkBackground = Color(0xFF202020)
-private val ExplorerDarkNav = Color(0xFF242424)
-private val ExplorerDarkSurface = Color(0xFF2B2B2B)
-private val ExplorerDarkField = Color(0xFF202020)
-private val ExplorerDarkBorder = Color(0xFF3A3A3A)
-private val ExplorerDarkText = Color(0xFFF3F6FA)
-private val ExplorerDarkSecondaryText = Color(0xFFB8C4D1)
-private val ExplorerDarkAccent = Color(0xFF60B5FF)
-private val ExplorerDarkSelection = Color(0xFF234A70)
+private val ExplorerDarkBackground = Color(0xFF202020)    // Win11 dark Mica base
+private val ExplorerDarkNav = Color(0xFF272727)
+private val ExplorerDarkSurface = Color(0xFF2C2C2C)
+private val ExplorerDarkField = Color(0xFF1E1E1E)
+private val ExplorerDarkBorder = Color(0xFF3D3D3D)
+private val ExplorerDarkText = Color(0xFFFFFFFF)
+private val ExplorerDarkSecondaryText = Color(0xFFC5C5C5)
+private val ExplorerDarkAccent = Color(0xFF60CDFF)        // Win11 dark-mode accent
+private val ExplorerDarkAccentLight = Color(0xFF98D9FF)
+private val ExplorerDarkSelection = Color(0xFF2B4256)
+private val ExplorerHoverDark = Color(0xFFFFFFFF)
+private val ExplorerPressedDark = Color(0xFFFFFFFF)
+
+// Fluent's four interaction-state alphas, shared across light/dark since only the
+// base hover/pressed color (black vs white) differs.
+private const val FluentHoverAlpha = 0.06f
+private const val FluentPressedAlpha = 0.09f
+private const val FluentSelectedHoverAlpha = 0.16f
 
 // ────────────────────────────────────────────────────────
 // Data & Helpers
@@ -328,11 +346,14 @@ private class FileExplorerState(initialDir: File) {
     var contextMenuFile by mutableStateOf<RealFileItem?>(null)
     var contextMenuOffset by mutableStateOf(Offset.Zero)
     var showBackgroundContextMenu by mutableStateOf(false)
-    var showRenameDialog by mutableStateOf(false)
     var showDeleteDialog by mutableStateOf(false)
-    var renameTarget by mutableStateOf<RealFileItem?>(null)
-    var showNewFolderDialog by mutableStateOf(false)
     var propertiesTarget by mutableStateOf<RealFileItem?>(null)
+
+    // Inline rename — like real Windows 11 Explorer, F2/"Rename" turns the item's own
+    // label in the list/grid into an editable field in place, instead of popping a
+    // separate dialog. Tracked by path so ListFileItem/GridFileItem can each check
+    // "is it me?" without needing the whole RealFileItem passed back down.
+    var renamingPath by mutableStateOf<String?>(null)
     // Clipboard now lives in the ViewModel (shared with Desktop) — see vmUiState.clipboardFiles
 
     fun navigateTo(dir: File) {
@@ -341,6 +362,7 @@ private class FileExplorerState(initialDir: File) {
         if (dir != currentDir) {
             pathHistory = pathHistory + currentDir
             currentDir = dir
+            renamingPath = null
         }
     }
 
@@ -352,6 +374,7 @@ private class FileExplorerState(initialDir: File) {
         currentDir = root
         searchQuery = ""
         selectedFiles = emptySet()
+        renamingPath = null
     }
 
     fun navigateDevice() {
@@ -361,6 +384,7 @@ private class FileExplorerState(initialDir: File) {
         currentDir = externalRoot
         searchQuery = ""
         selectedFiles = emptySet()
+        renamingPath = null
     }
 
     fun goBack() {
@@ -373,6 +397,7 @@ private class FileExplorerState(initialDir: File) {
             isDeviceDashboard = false
             currentDir = pathHistory.last()
             pathHistory = pathHistory.dropLast(1)
+            renamingPath = null
         }
     }
 
@@ -384,6 +409,7 @@ private class FileExplorerState(initialDir: File) {
             isDeviceDashboard = false
             pathHistory = pathHistory + currentDir
             currentDir = parent
+            renamingPath = null
         }
     }
 }
@@ -555,8 +581,7 @@ private fun FileExplorerContent(
     }
     fun beginRename() {
         primarySelection()?.let {
-            state.renameTarget = it
-            state.showRenameDialog = true
+            state.renamingPath = it.file.absolutePath
             state.contextMenuFile = null
         }
     }
@@ -616,12 +641,20 @@ private fun FileExplorerContent(
     }
 
     // ── File Loading ──
+    // Windows 11 Explorer never blanks the pane to a spinner when you create,
+    // delete, or rename something inside the folder you're already looking at —
+    // the list just gains or loses a row in place. It only shows a loading state
+    // when you *navigate* into a folder it hasn't read yet. `silent = true` is
+    // used for refreshes triggered by our own file operations (new folder, delete,
+    // rename, paste) so `state.isLoading` — which drives the full-pane spinner in
+    // FileListArea — is left untouched; `silent = false` (the default, used by the
+    // navigation LaunchedEffect below) shows it normally.
     var loadGeneration by remember { mutableIntStateOf(0) }
-    val loadFiles: (File) -> Unit = { dir ->
+    val loadFiles: (File, Boolean) -> Unit = { dir, silent ->
         val generation = loadGeneration + 1
         loadGeneration = generation
         scope.launch {
-            state.isLoading = true
+            if (!silent) state.isLoading = true
             withContext(Dispatchers.IO) {
                 try {
                     if (!dir.exists() || !dir.canRead()) {
@@ -645,6 +678,13 @@ private fun FileExplorerContent(
                             state.allFiles = loaded
                             val loadedPaths = loaded.asSequence().map { it.file.absolutePath }.toHashSet()
                             state.selectedFiles = state.selectedFiles.filterTo(linkedSetOf()) { it in loadedPaths }
+                            // An inline rename field that's still open for a file which just
+                            // vanished from disk (deleted elsewhere, or the rename's own
+                            // renameTo() already succeeded) would otherwise be left floating
+                            // with nothing backing it — drop it along with the stale selection.
+                            if (state.renamingPath != null && state.renamingPath !in loadedPaths) {
+                                state.renamingPath = null
+                            }
                         }
                     }
                 } catch (e: SecurityException) {
@@ -661,7 +701,24 @@ private fun FileExplorerContent(
     }
 
     LaunchedEffect(state.currentDir, state.showHidden) {
-        loadFiles(state.currentDir)
+        loadFiles(state.currentDir, false)
+    }
+
+    // Windows 11 Explorer silently re-reads the folder whenever its window regains
+    // focus, so deleting an app (or a file) from outside Explorer — e.g. finishing
+    // an uninstall confirmation, or a share-sheet action that deletes a temp copy —
+    // is reflected the moment you're looking at the list again, with no manual
+    // refresh needed. ON_RESUME is the Android equivalent of "window regained focus".
+    // This is also silent: focus regaining shouldn't blank the list either.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, state.currentDir) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                loadFiles(state.currentDir, true)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Auto-refresh this folder's listing once a copy/move job that targets it finishes —
@@ -673,7 +730,28 @@ private fun FileExplorerContent(
                 it.status != io.github.norbertweb.bluebird.CopyJobStatus.RUNNING &&
                 it.status != io.github.norbertweb.bluebird.CopyJobStatus.SCANNING
         } ?: false
-        if (justFinished) loadFiles(state.currentDir)
+        if (justFinished) loadFiles(state.currentDir, true)
+    }
+
+    // Real Windows 11 Explorer never asks "what do you want to call it?" up front —
+    // New Folder appears instantly as "New folder" (auto-numbered if that name is
+    // taken) and is immediately in rename mode so you can just start typing over
+    // it. No modal, no extra tap to confirm a name you're likely to change anyway.
+    fun createNewFolder() {
+        var name = "New folder"
+        var suffix = 2
+        while (File(state.currentDir, name).exists()) {
+            name = "New folder ($suffix)"
+            suffix++
+        }
+        val folder = File(state.currentDir, name)
+        if (folder.mkdir()) {
+            state.selectedFiles = setOf(folder.absolutePath)
+            state.renamingPath = folder.absolutePath
+            loadFiles(state.currentDir, true)
+        } else {
+            android.widget.Toast.makeText(context, "Could not create folder", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ── Layout ──
@@ -726,11 +804,16 @@ private fun FileExplorerContent(
                         state.files.lastOrNull()?.let { state.selectedFiles = setOf(it.file.absolutePath); selectionAnchor = it.file.absolutePath }; true
                     }
                     event.key == Key.Escape -> {
-                        state.contextMenuFile = null
-                        state.selectedFiles = emptySet()
-                        state.showRenameDialog = false
-                        state.showDeleteDialog = false
-                        state.propertiesTarget = null
+                        if (state.renamingPath != null) {
+                            // Windows 11: Escape while renaming only cancels the rename
+                            // and keeps the item selected — it doesn't also clear selection.
+                            state.renamingPath = null
+                        } else {
+                            state.contextMenuFile = null
+                            state.selectedFiles = emptySet()
+                            state.showDeleteDialog = false
+                            state.propertiesTarget = null
+                        }
                         true
                     }
                     alt && event.key == Key.DirectionUp -> { state.goUp(); true }
@@ -743,7 +826,7 @@ private fun FileExplorerContent(
         CommandBar(
             onBack = { state.goBack() },
             onUp = { state.goUp() },
-            onRefresh = { loadFiles(state.currentDir) },
+            onRefresh = { loadFiles(state.currentDir, true) },
             pathParts = when {
                 state.isHomeDashboard -> listOf("Home" to Environment.getExternalStorageDirectory())
                 state.isDeviceDashboard -> listOf("This Device" to Environment.getExternalStorageDirectory())
@@ -774,7 +857,7 @@ private fun FileExplorerContent(
         )
 
         Ribbon(
-            onNewFolder = { state.showNewFolderDialog = true },
+            onNewFolder = { createNewFolder() },
             onCut = {
                 if (state.selectedFiles.isNotEmpty() && viewModel != null) {
                     viewModel.setClipboard(state.selectedFiles.map { File(it) }, cut = true)
@@ -788,6 +871,7 @@ private fun FileExplorerContent(
             onPaste = {
                 viewModel?.pasteClipboard(state.currentDir)
             },
+            onRename = { beginRename() },
             onDelete = {
                 if (state.selectedFiles.isNotEmpty()) {
                     state.showDeleteDialog = true
@@ -802,6 +886,8 @@ private fun FileExplorerContent(
             onSortChange = { by, asc -> state.sortBy = by; state.sortAscending = asc },
             showHidden = state.showHidden,
             onToggleHidden = { state.showHidden = !state.showHidden },
+            hasSelection = state.selectedFiles.isNotEmpty(),
+            isSingleSelection = state.selectedFiles.size == 1,
             clipboardActive = vmUiState?.clipboardFiles?.isNotEmpty() ?: false,
             textColor = textColor,
             surfaceBg = surfaceBg,
@@ -858,7 +944,8 @@ private fun FileExplorerContent(
                         state.contextMenuOffset = offset
                         state.showBackgroundContextMenu = true
                         state.contextMenuFile = null
-                    }
+                    },
+                    onReload = { loadFiles(state.currentDir, true) }
                 )
             }
         }
@@ -881,7 +968,8 @@ private fun FileExplorerContent(
         isDark = isDark,
         context = context,
         clipboardActive = vmUiState?.clipboardFiles?.isNotEmpty() == true,
-        onReload = { loadFiles(state.currentDir) }
+        onReload = { loadFiles(state.currentDir, true) },
+        onCreateNewFolder = { createNewFolder() }
     )
 }
 
@@ -1150,12 +1238,14 @@ private fun HomeDashboard(
 // File List Area — extracted composable
 // ────────────────────────────────────────────────────────
 
-private fun LayoutCoordinates.trueScreenPosition(view: android.view.View): Offset {
-    val loc = IntArray(2)
-    view.getLocationOnScreen(loc)
-    val inWindow = positionInWindow()
-    return Offset(loc[0] + inWindow.x, loc[1] + inWindow.y)
-}
+// A Compose Popup's PopupPositionProvider always works in *window-relative*
+// coordinates (its `windowSize` param is the window's size, not the screen's).
+// The previous helper added the view's on-screen location on top of that,
+// double-counting the window's own screen offset — every context menu opened
+// with a fixed, wrong offset whenever this Explorer window wasn't drawn at the
+// screen's (0,0), which is normal for a windowed/multi-window desktop shell.
+// Plain positionInWindow() is the correct, sufficient value.
+private fun LayoutCoordinates.windowRelativePosition(): Offset = positionInWindow()
 
 @Composable
 private fun FileListArea(
@@ -1166,16 +1256,31 @@ private fun FileListArea(
     isDark: Boolean,
     context: android.content.Context,
     viewModel: LauncherViewModel?,
-    onBackgroundContextMenu: (Offset) -> Unit
+    onBackgroundContextMenu: (Offset) -> Unit,
+    onReload: () -> Unit
 ) {
-    val localView = LocalView.current
     var listOrigin by remember { mutableStateOf(Offset.Zero) }
+
+    // Shared by both the grid and list rename fields: validates + performs the
+    // rename, updates selection/renaming state, and reloads the folder so the
+    // sorted listing (and any icon it affects, e.g. extension change) is correct.
+    fun commitRename(fileItem: RealFileItem, newName: String): Boolean {
+        val target = fileItem.file
+        return commitInlineRename(target, newName, context) { dest ->
+            state.renamingPath = null
+            state.selectedFiles = state.selectedFiles.mapTo(linkedSetOf()) {
+                if (it == target.absolutePath) dest.absolutePath else it
+            }
+            onReload()
+        }
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxHeight()
             .background(bgColor)
             .onGloballyPositioned { coords ->
-                listOrigin = coords.trueScreenPosition(localView)
+                listOrigin = coords.windowRelativePosition()
             }
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -1240,6 +1345,7 @@ private fun FileListArea(
                         GridFileItem(
                             item = fileItem,
                             isSelected = fileItem.file.absolutePath in state.selectedFiles,
+                            isRenaming = fileItem.file.absolutePath == state.renamingPath,
                             textColor = textColor,
                             isDark = isDark,
                             onClick = {
@@ -1255,7 +1361,9 @@ private fun FileListArea(
                                 if (fileItem.isDirectory) state.navigateTo(fileItem.file)
                                 else openFileFromExplorer(fileItem, context, viewModel)
                             },
-                            onLongPress = { offset -> state.contextMenuOffset = listOrigin + offset; state.contextMenuFile = fileItem }
+                            onLongPress = { offset -> state.contextMenuOffset = offset; state.contextMenuFile = fileItem },
+                            onCommitRename = { newName -> commitRename(fileItem, newName) },
+                            onCancelRename = { state.renamingPath = null }
                         )
                     }
                 }
@@ -1271,6 +1379,7 @@ private fun FileListArea(
                             ListFileItem(
                                 item = fileItem,
                                 isSelected = fileItem.file.absolutePath in state.selectedFiles,
+                                isRenaming = fileItem.file.absolutePath == state.renamingPath,
                                 textColor = textColor,
                                 isDark = isDark,
                                 onClick = {
@@ -1281,7 +1390,9 @@ private fun FileListArea(
                                     if (fileItem.isDirectory) state.navigateTo(fileItem.file)
                                     else openFileFromExplorer(fileItem, context, viewModel)
                                 },
-                                onLongPress = { offset -> state.contextMenuOffset = listOrigin + offset; state.contextMenuFile = fileItem }
+                                onLongPress = { offset -> state.contextMenuOffset = offset; state.contextMenuFile = fileItem },
+                                onCommitRename = { newName -> commitRename(fileItem, newName) },
+                                onCancelRename = { state.renamingPath = null }
                             )
                         }
                     }
@@ -1302,9 +1413,12 @@ private fun FileListHeader(surfaceBg: Color, textColor: Color) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("Name", color = textColor.copy(alpha = 0.62f), fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        Text("Date modified", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(128.dp))
-        Text("Type", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(68.dp))
-        Text("Size", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(62.dp))
+        Spacer(Modifier.width(16.dp))
+        Text("Date modified", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(120.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Type", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(64.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Size", color = textColor.copy(alpha = 0.58f), fontSize = 11.sp, modifier = Modifier.width(62.dp), textAlign = TextAlign.End)
     }
 }
 
@@ -1319,12 +1433,16 @@ private fun FileExplorerDialogs(
     isDark: Boolean,
     context: android.content.Context,
     clipboardActive: Boolean,
-    onReload: () -> Unit
+    onReload: () -> Unit,
+    onCreateNewFolder: () -> Unit
 ) {
     // Context Menu
     state.contextMenuFile?.let { fileItem ->
+        val isPartOfMultiSelection = fileItem.file.absolutePath in state.selectedFiles && state.selectedFiles.size > 1
+        val selectionCount = if (isPartOfMultiSelection) state.selectedFiles.size else 1
         FileContextMenu(
             fileItem = fileItem,
+            selectionCount = selectionCount,
             offset = state.contextMenuOffset,
             isDark = isDark,
             onDismiss = { state.contextMenuFile = null },
@@ -1348,7 +1466,7 @@ private fun FileExplorerDialogs(
                 viewModel?.pasteClipboard(fileItem.file)
                 state.contextMenuFile = null
             }) else null,
-            onRename = { state.renameTarget = fileItem; state.showRenameDialog = true; state.contextMenuFile = null },
+            onRename = { state.renamingPath = fileItem.file.absolutePath; state.contextMenuFile = null },
             onDelete = { state.showDeleteDialog = true },
             onCreateShortcut = {
                 viewModel?.addDesktopShortcutFromFile(fileItem.file.absolutePath, fileItem.name)
@@ -1369,7 +1487,7 @@ private fun FileExplorerDialogs(
             onDismiss = { state.showBackgroundContextMenu = false },
             onRefresh = { onReload() },
             onPaste = { viewModel?.pasteClipboard(state.currentDir) },
-            onNewFolder = { state.showNewFolderDialog = true },
+            onNewFolder = { onCreateNewFolder() },
             onNewTextFile = {
                 var index = 0
                 var name: String
@@ -1377,43 +1495,17 @@ private fun FileExplorerDialogs(
                     name = if (index == 0) "New Text Document.txt" else "New Text Document ($index).txt"
                     index++
                 } while (File(state.currentDir, name).exists())
-                runCatching { File(state.currentDir, name).createNewFile() }
+                val created = File(state.currentDir, name)
+                if (runCatching { created.createNewFile() }.getOrDefault(false)) {
+                    // Same "land straight in rename mode" treatment as New Folder —
+                    // Explorer doesn't make you confirm a name you'll likely retype anyway.
+                    state.selectedFiles = setOf(created.absolutePath)
+                    state.renamingPath = created.absolutePath
+                }
                 onReload()
             },
             onSelectAll = { state.selectedFiles = state.files.mapTo(linkedSetOf()) { it.file.absolutePath } },
             onToggleHidden = { state.showHidden = !state.showHidden }
-        )
-    }
-
-    // Rename Dialog
-    if (state.showRenameDialog && state.renameTarget != null) {
-        RenameDialog(
-            target = state.renameTarget!!,
-            isDark = isDark,
-            onConfirm = { newName ->
-                val target = state.renameTarget?.file
-                val cleanName = newName.trim()
-                if (target == null) {
-                    state.showRenameDialog = false
-                } else if (cleanName.isBlank() || cleanName == "." || cleanName == ".." || cleanName.contains(File.separatorChar)) {
-                    android.widget.Toast.makeText(context, "Invalid file name", android.widget.Toast.LENGTH_SHORT).show()
-                } else {
-                    val dest = File(target.parentFile, cleanName)
-                    if (dest.exists() && !dest.absolutePath.equals(target.absolutePath, ignoreCase = true)) {
-                        android.widget.Toast.makeText(context, "A file with that name already exists", android.widget.Toast.LENGTH_SHORT).show()
-                    } else if (!target.renameTo(dest)) {
-                        android.widget.Toast.makeText(context, "Rename failed", android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        state.showRenameDialog = false
-                        state.renameTarget = null
-                        state.selectedFiles = state.selectedFiles.mapTo(linkedSetOf()) {
-                            if (it == target.absolutePath) dest.absolutePath else it
-                        }
-                        onReload()
-                    }
-                }
-            },
-            onDismiss = { state.showRenameDialog = false }
         )
     }
 
@@ -1447,30 +1539,6 @@ private fun FileExplorerDialogs(
         )
     }
 
-    // New Folder Dialog
-    if (state.showNewFolderDialog) {
-        NewFolderDialog(
-            isDark = isDark,
-            onConfirm = { folderName ->
-                val cleanName = folderName.trim()
-                if (cleanName.isBlank() || cleanName == "." || cleanName == ".." || cleanName.contains(File.separatorChar)) {
-                    android.widget.Toast.makeText(context, "Invalid folder name", android.widget.Toast.LENGTH_SHORT).show()
-                } else {
-                    val folder = File(state.currentDir, cleanName)
-                    if (folder.exists()) {
-                        android.widget.Toast.makeText(context, "A file or folder with that name already exists", android.widget.Toast.LENGTH_SHORT).show()
-                    } else if (!folder.mkdir()) {
-                        android.widget.Toast.makeText(context, "Could not create folder", android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        state.showNewFolderDialog = false
-                        onReload()
-                    }
-                }
-            },
-            onDismiss = { state.showNewFolderDialog = false }
-        )
-    }
-
     state.propertiesTarget?.let { target ->
         FilePropertiesDialog(
             target = target,
@@ -1484,46 +1552,6 @@ private fun FileExplorerDialogs(
 // ────────────────────────────────────────────────────────
 // Individual Dialog Composables
 // ────────────────────────────────────────────────────────
-
-@Composable
-private fun RenameDialog(
-    target: RealFileItem,
-    isDark: Boolean,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    // Real Windows Explorer pre-selects the base name (not the extension) when you hit
-    // Rename, so typing immediately overwrites just the name. TextFieldValue lets us set
-    // that initial selection instead of leaving the caret at the end like a plain String.
-    val dotIndex = target.name.lastIndexOf('.')
-    val baseNameEnd = if (!target.isDirectory && dotIndex > 0) dotIndex else target.name.length
-    var newName by remember {
-        mutableStateOf(
-            androidx.compose.ui.text.input.TextFieldValue(
-                text = target.name,
-                selection = androidx.compose.ui.text.TextRange(0, baseNameEnd)
-            )
-        )
-    }
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
-    Win11Dialog(
-        isDark = isDark,
-        title = "Rename",
-        onDismissRequest = onDismiss,
-        confirmLabel = "Rename",
-        onConfirm = { onConfirm(newName.text) },
-        onCancel = onDismiss
-    ) { colors ->
-        Win11TextField(
-            value = newName,
-            onValueChange = { newName = it },
-            colors = colors,
-            modifier = Modifier.focusRequester(focusRequester)
-        )
-    }
-}
 
 @Composable
 private fun DeleteDialog(
@@ -1557,42 +1585,6 @@ private fun DeleteDialog(
             OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(4.dp)) { Text("Cancel") }
         }
     )
-}
-
-@Composable
-private fun NewFolderDialog(
-    isDark: Boolean,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    // Same "pre-selected so you can just start typing" behavior as Explorer's real
-    // New Folder dialog — the whole default name is selected, not just cursor-at-end.
-    var folderName by remember {
-        mutableStateOf(
-            androidx.compose.ui.text.input.TextFieldValue(
-                text = "New Folder",
-                selection = androidx.compose.ui.text.TextRange(0, "New Folder".length)
-            )
-        )
-    }
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
-    Win11Dialog(
-        isDark = isDark,
-        title = "New Folder",
-        onDismissRequest = onDismiss,
-        confirmLabel = "Create",
-        onConfirm = { onConfirm(folderName.text) },
-        onCancel = onDismiss
-    ) { colors ->
-        Win11TextField(
-            value = folderName,
-            onValueChange = { folderName = it },
-            colors = colors,
-            modifier = Modifier.focusRequester(focusRequester)
-        )
-    }
 }
 
 // ────────────────────────────────────────────────────────
@@ -1725,6 +1717,43 @@ private fun PropertyRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
+}
+
+// ────────────────────────────────────────────────────────
+// Inline Rename Commit — shared by ListFileItem/GridFileItem's inline text field
+// ────────────────────────────────────────────────────────
+
+/**
+ * Validates and applies a rename typed into an inline text field, matching the
+ * same rules the old Rename dialog enforced (no blank/"."/".."/path separators,
+ * no clobbering an existing different file). Returns true on success so the
+ * caller can drop out of edit mode; on failure it toasts and stays in edit mode,
+ * exactly like Windows 11 Explorer keeps the field open and re-selects the text
+ * on an invalid name instead of silently closing.
+ */
+private fun commitInlineRename(
+    target: File,
+    newName: String,
+    context: android.content.Context,
+    onSuccess: (File) -> Unit
+): Boolean {
+    val cleanName = newName.trim()
+    if (cleanName == target.name) return true // unchanged — treat as a silent success
+    if (cleanName.isBlank() || cleanName == "." || cleanName == ".." || cleanName.contains(File.separatorChar)) {
+        android.widget.Toast.makeText(context, "Invalid file name", android.widget.Toast.LENGTH_SHORT).show()
+        return false
+    }
+    val dest = File(target.parentFile, cleanName)
+    if (dest.exists() && !dest.absolutePath.equals(target.absolutePath, ignoreCase = true)) {
+        android.widget.Toast.makeText(context, "A file with that name already exists", android.widget.Toast.LENGTH_SHORT).show()
+        return false
+    }
+    if (!target.renameTo(dest)) {
+        android.widget.Toast.makeText(context, "Rename failed", android.widget.Toast.LENGTH_SHORT).show()
+        return false
+    }
+    onSuccess(dest)
+    return true
 }
 
 // ────────────────────────────────────────────────────────
@@ -1973,6 +2002,7 @@ private fun Ribbon(
     onCut: () -> Unit,
     onCopy: () -> Unit,
     onPaste: () -> Unit,
+    onRename: () -> Unit,
     onDelete: () -> Unit,
     onSelectAll: () -> Unit,
     sortBy: String,
@@ -1980,6 +2010,8 @@ private fun Ribbon(
     onSortChange: (String, Boolean) -> Unit,
     showHidden: Boolean,
     onToggleHidden: () -> Unit,
+    hasSelection: Boolean,
+    isSingleSelection: Boolean,
     clipboardActive: Boolean,
     textColor: Color,
     surfaceBg: Color,
@@ -1988,6 +2020,10 @@ private fun Ribbon(
 ) {
     val barBg = if (isDark) ExplorerDarkNav else ExplorerLightSurface
     val controlBg = if (isDark) ExplorerDarkSurface else Color(0xFFFEFEFE)
+    // Fluent dims a command's icon+label together rather than just disabling the
+    // click target, so "nothing selected" or "clipboard empty" reads instantly.
+    val activeTint = textColor
+    val dimmedTint = textColor.copy(alpha = 0.32f)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1999,18 +2035,36 @@ private fun Ribbon(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            CommandPill("New", FluentIcons.Regular.FolderAdd, onNewFolder, textColor, controlBg)
-            CommandPill("Cut", FluentIcons.Regular.Cut, onCut, textColor, controlBg)
-            CommandPill("Copy", FluentIcons.Regular.Copy, onCopy, textColor, controlBg)
+            CommandPill("New", FluentIcons.Regular.FolderAdd, onNewFolder, activeTint, controlBg)
+
+            // Cut/Copy/Delete need at least one selected item to act on, exactly
+            // like Explorer's ribbon greys these out over an empty selection.
+            CommandPill(
+                "Cut", FluentIcons.Regular.Cut, onCut,
+                if (hasSelection) activeTint else dimmedTint, controlBg, enabled = hasSelection
+            )
+            CommandPill(
+                "Copy", FluentIcons.Regular.Copy, onCopy,
+                if (hasSelection) activeTint else dimmedTint, controlBg, enabled = hasSelection
+            )
             CommandPill(
                 "Paste",
                 FluentIcons.Regular.ClipboardPaste,
                 onPaste,
-                if (clipboardActive) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.28f),
+                if (clipboardActive) bluebirdColors.AccentBlue else dimmedTint,
                 controlBg,
                 enabled = clipboardActive
             )
-            CommandPill("Delete", FluentIcons.Regular.Delete, onDelete, textColor, controlBg)
+            // Rename only ever targets exactly one item — Explorer disables it the
+            // moment a second item joins the selection instead of renaming "the first one".
+            CommandPill(
+                "Rename", FluentIcons.Regular.Rename, onRename,
+                if (isSingleSelection) activeTint else dimmedTint, controlBg, enabled = isSingleSelection
+            )
+            CommandPill(
+                "Delete", FluentIcons.Regular.Delete, onDelete,
+                if (hasSelection) activeTint else dimmedTint, controlBg, enabled = hasSelection
+            )
 
             Spacer(Modifier.width(3.dp))
             VerticalDivider(modifier = Modifier.height(22.dp), color = textColor.copy(alpha = 0.09f))
@@ -2024,12 +2078,12 @@ private fun Ribbon(
                 controlBg = controlBg
             )
 
-            CommandPill("Select all", FluentIcons.Regular.SelectAllOn, onSelectAll, textColor, controlBg)
+            CommandPill("Select all", FluentIcons.Regular.SelectAllOn, onSelectAll, activeTint, controlBg)
             CommandPill(
                 if (showHidden) "Hide hidden" else "Hidden items",
                 if (showHidden) FluentIcons.Regular.EyeOff else FluentIcons.Regular.Eye,
                 onToggleHidden,
-                textColor,
+                activeTint,
                 controlBg
             )
 
@@ -2053,14 +2107,24 @@ private fun CommandPill(
     background: Color,
     enabled: Boolean = true
 ) {
+    val hoverInteractionSource = remember { MutableInteractionSource() }
+    val isHovered by hoverInteractionSource.collectIsHoveredAsState()
+    // Explorer's ribbon buttons brighten very slightly in place on hover — a soft
+    // neutral lift, not a tint toward the accent color — well before any click.
+    val fillColor = when {
+        !enabled -> background.copy(alpha = 0.55f)
+        isHovered -> androidx.compose.ui.graphics.lerp(background, tint, 0.06f)
+        else -> background
+    }
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = if (enabled) background else background.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, tint.copy(alpha = if (enabled) 0.055f else 0.03f))
+        color = fillColor,
+        border = BorderStroke(1.dp, tint.copy(alpha = if (!enabled) 0.03f else if (isHovered) 0.12f else 0.055f))
     ) {
         TextButton(
             onClick = onClick,
             enabled = enabled,
+            interactionSource = hoverInteractionSource,
             contentPadding = PaddingValues(horizontal = 8.dp),
             modifier = Modifier.height(32.dp)
         ) {
@@ -2070,6 +2134,8 @@ private fun CommandPill(
         }
     }
 }
+
+private val sortFields = listOf("name" to "Name", "date" to "Date modified", "type" to "Type", "size" to "Size")
 
 @Composable
 private fun SortMenuButton(
@@ -2091,38 +2157,114 @@ private fun SortMenuButton(
                 contentPadding = PaddingValues(horizontal = 8.dp),
                 modifier = Modifier.height(32.dp)
             ) {
-                Icon(FluentIcons.Regular.ArrowUp, "Sort", tint = textColor.copy(alpha = 0.78f), modifier = Modifier.size(15.dp))
+                Icon(
+                    FluentIcons.Regular.ArrowUp,
+                    "Sort",
+                    tint = textColor.copy(alpha = 0.78f),
+                    modifier = Modifier
+                        .size(15.dp)
+                        .rotate(if (sortAscending) 0f else 180f)
+                )
                 Spacer(Modifier.width(5.dp))
                 Text("Sort", color = textColor.copy(alpha = 0.84f), fontSize = 11.sp)
                 Spacer(Modifier.width(2.dp))
                 Icon(FluentIcons.Regular.ChevronDown, null, tint = textColor.copy(alpha = 0.50f), modifier = Modifier.size(13.dp))
             }
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf("name", "date", "size", "type").forEach { sort ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(sort.replaceFirstChar { it.uppercase() })
-                            if (sortBy == sort) {
-                                Spacer(Modifier.width(8.dp))
-                                Icon(
-                                    if (sortAscending) FluentIcons.Regular.ChevronUp else FluentIcons.Regular.ChevronDown,
-                                    contentDescription = null,
-                                    tint = bluebirdColors.AccentBlue,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-                    },
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.width(196.dp)
+        ) {
+            // Section 1: which field to sort by — its own radio group, independent
+            // of direction, exactly like Explorer's "Sort by" flyout.
+            SortMenuSectionLabel("Sort by")
+            sortFields.forEach { (key, label) ->
+                SortRadioItem(
+                    label = label,
+                    selected = sortBy == key,
                     onClick = {
-                        if (sortBy == sort) onSortChange(sort, !sortAscending) else onSortChange(sort, true)
+                        onSortChange(key, sortAscending)
                         expanded = false
                     }
                 )
             }
+            Divider(Modifier.padding(vertical = 4.dp), color = textColor.copy(alpha = 0.08f))
+            // Section 2: direction — a second, independent radio group. Explorer never
+            // makes re-clicking the same field flip direction; direction has its own row.
+            SortRadioItem(
+                label = "Ascending",
+                selected = sortAscending,
+                onClick = {
+                    onSortChange(sortBy, true)
+                    expanded = false
+                }
+            )
+            SortRadioItem(
+                label = "Descending",
+                selected = !sortAscending,
+                onClick = {
+                    onSortChange(sortBy, false)
+                    expanded = false
+                }
+            )
         }
     }
+}
+
+@Composable
+private fun SortMenuSectionLabel(label: String) {
+    Text(
+        label,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        fontSize = 10.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun SortRadioItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val accent = bluebirdColors.AccentBlue
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    DropdownMenuItem(
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // A real radio dot rather than an arrow glyph standing in for two
+                // different meanings — Fluent's own Sort by menu uses radio buttons.
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .border(
+                            width = 1.4.dp,
+                            color = if (selected) accent else onSurface.copy(alpha = 0.35f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (selected) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(accent, CircleShape)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    label,
+                    fontSize = 13.sp,
+                    color = onSurface,
+                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
+                )
+            }
+        },
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -2273,6 +2415,11 @@ private fun NavigationPane(
     val videos = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
     val desktop = File(homeDir, "Desktop")
 
+    // "Gallery" (under Home) and "Pictures" (under Folders) used to both point at the
+    // same DIRECTORY_PICTURES folder, so the same folder showed up twice in the nav
+    // pane — confusing, and it made two separate rows highlight together whenever you
+    // were inside Pictures. Gallery is the canonical entry for this folder now; it's
+    // dropped from Folders so each real folder appears exactly once.
     val primary = listOf(
         ExplorerNavDestination("Home", homeDir, R.drawable.ic_explorer_home),
         ExplorerNavDestination("Gallery", pictures, R.drawable.ic_explorer_gallery)
@@ -2281,7 +2428,6 @@ private fun NavigationPane(
         ExplorerNavDestination("Desktop", desktop, R.drawable.ic_explorer_desktop),
         ExplorerNavDestination("Downloads", downloads, R.drawable.ic_explorer_downloads),
         ExplorerNavDestination("Documents", documents, R.drawable.ic_explorer_documents),
-        ExplorerNavDestination("Pictures", pictures, R.drawable.ic_explorer_pictures),
         ExplorerNavDestination("Music", music, R.drawable.ic_explorer_music),
         ExplorerNavDestination("Videos", videos, R.drawable.ic_explorer_videos)
     ).filter { it.directory.exists() }
@@ -2554,28 +2700,119 @@ private fun FileExplorerThumbnail(
     }
 }
 
+// ────────────────────────────────────────────────────────
+// Inline Rename Field — the actual "type over the name in place" editor,
+// matching Windows 11 desktop/Explorer: the base name is pre-selected (not the
+// extension), Enter commits, Escape/focus-loss cancels, invalid names re-open
+// the field with the text re-selected instead of silently reverting.
+// ────────────────────────────────────────────────────────
+@Composable
+private fun InlineRenameField(
+    item: RealFileItem,
+    isDark: Boolean,
+    isGrid: Boolean,
+    modifier: Modifier = Modifier,
+    onCommit: (String) -> Boolean,
+    onCancel: () -> Unit
+) {
+    val dotIndex = item.name.lastIndexOf('.')
+    val baseNameEnd = if (!item.isDirectory && dotIndex > 0) dotIndex else item.name.length
+    var value by remember(item.file.absolutePath) {
+        mutableStateOf(
+            androidx.compose.ui.text.input.TextFieldValue(
+                text = item.name,
+                selection = androidx.compose.ui.text.TextRange(0, baseNameEnd)
+            )
+        )
+    }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(item.file.absolutePath) { focusRequester.requestFocus() }
+
+    val accent = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue
+    val fieldBg = if (isDark) ExplorerDarkField else Color.White
+    val textColor = if (isDark) ExplorerDarkText else ExplorerLightText
+
+    fun commit() {
+        if (!onCommit(value.text)) {
+            // Re-select on failure so the next keystroke overwrites, same as real Explorer.
+            value = value.copy(selection = androidx.compose.ui.text.TextRange(0, value.text.length))
+        }
+    }
+
+    BasicTextField(
+        value = value,
+        onValueChange = { value = it },
+        singleLine = true,
+        textStyle = TextStyle(
+            color = textColor,
+            fontSize = if (isGrid) 12.5.sp else 13.5.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = if (isGrid) TextAlign.Center else TextAlign.Start
+        ),
+        cursorBrush = SolidColor(accent),
+        modifier = modifier
+            .background(fieldBg, RoundedCornerShape(3.dp))
+            .border(1.dp, accent, RoundedCornerShape(3.dp))
+            .padding(horizontal = 4.dp, vertical = 1.dp)
+            .focusRequester(focusRequester)
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when (event.key) {
+                    Key.Enter, Key.NumPadEnter -> { commit(); true }
+                    Key.Escape -> { onCancel(); true }
+                    else -> false
+                }
+            }
+    )
+}
+
 @Composable
 private fun ListFileItem(
     item: RealFileItem,
     isSelected: Boolean,
+    isRenaming: Boolean,
     textColor: Color,
     isDark: Boolean,
     onClick: () -> Unit,
     onDoubleClick: () -> Unit,
-    onLongPress: (Offset) -> Unit
+    onLongPress: (Offset) -> Unit,
+    onCommitRename: (String) -> Boolean = { true },
+    onCancelRename: () -> Unit = {}
 ) {
-    val rowColor = if (isSelected) bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.18f else 0.12f) else Color.Transparent
+    // Same fix as GridFileItem: report this row's own window position so the
+    // context menu opens exactly under the long-press, not near the top of the list.
+    var rowOrigin by remember { mutableStateOf(Offset.Zero) }
+    // Real Windows 11 Explorer highlights a row the instant a mouse crosses it,
+    // well before any click — that subtle pre-click feedback is a big part of why
+    // it reads as "premium" rather than flat. hoverable() only fires for an actual
+    // pointer (mouse/stylus/trackpad); plain touch taps don't trigger a hover state,
+    // so this is purely additive on touch-only devices.
+    val hoverInteractionSource = remember { MutableInteractionSource() }
+    val isHovered by hoverInteractionSource.collectIsHoveredAsState()
+    val hoverTint = if (isDark) ExplorerHoverDark else ExplorerHoverLight
+    // Fluent uses a slightly stronger fill while renaming to make clear the row is
+    // "in edit mode", on top of the same selection tint it already had.
+    val rowColor = when {
+        isRenaming -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.22f else 0.15f)
+        isSelected && isHovered -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) FluentSelectedHoverAlpha + 0.06f else FluentSelectedHoverAlpha)
+        isSelected -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.18f else 0.12f)
+        isHovered -> hoverTint.copy(alpha = FluentHoverAlpha)
+        else -> Color.Transparent
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(42.dp)
             .clip(RoundedCornerShape(7.dp))
             .background(rowColor)
-            .pointerInput(item.file.absolutePath) {
+            .hoverable(hoverInteractionSource)
+            .onGloballyPositioned { coords -> rowOrigin = coords.windowRelativePosition() }
+            .pointerInput(item.file.absolutePath, isRenaming) {
+                if (isRenaming) return@pointerInput
                 detectTapGestures(
                     onTap = { onClick() },
                     onDoubleTap = { onDoubleClick() },
-                    onLongPress = { offset -> onLongPress(offset) }
+                    onLongPress = { offset -> onLongPress(rowOrigin + offset) }
                 )
             }
             .padding(horizontal = 8.dp),
@@ -2587,35 +2824,47 @@ private fun ListFileItem(
             iconSize = 19.dp
         )
         Spacer(Modifier.width(6.dp))
-        Text(
-            item.name,
-            color = textColor,
-            fontSize = 13.5.sp,
-            fontWeight = if (item.isDirectory) FontWeight.SemiBold else FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (isRenaming) {
+            InlineRenameField(
+                item = item,
+                isDark = isDark,
+                isGrid = false,
+                modifier = Modifier.weight(1f),
+                onCommit = onCommitRename,
+                onCancel = onCancelRename
+            )
+        } else {
+            Text(
+                item.name,
+                color = textColor,
+                fontSize = 13.5.sp,
+                fontWeight = if (item.isDirectory) FontWeight.SemiBold else FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Text(
             formatDate(item.lastModified),
             color = textColor.copy(alpha = 0.48f),
             fontSize = 11.sp,
-            modifier = Modifier.width(128.dp),
+            modifier = Modifier.padding(start = 16.dp).width(120.dp),
             maxLines = 1
         )
         Text(
             if (item.isDirectory) "Folder" else item.extension.uppercase().ifEmpty { "File" },
             color = textColor.copy(alpha = 0.48f),
             fontSize = 11.sp,
-            modifier = Modifier.width(68.dp),
+            modifier = Modifier.padding(start = 12.dp).width(64.dp),
             maxLines = 1
         )
         Text(
             if (item.isDirectory) "" else formatFileSize(item.size),
             color = textColor.copy(alpha = 0.48f),
             fontSize = 11.sp,
-            modifier = Modifier.width(62.dp),
-            maxLines = 1
+            modifier = Modifier.padding(start = 12.dp).width(62.dp),
+            maxLines = 1,
+            textAlign = TextAlign.End
         )
     }
 }
@@ -2624,13 +2873,32 @@ private fun ListFileItem(
 private fun GridFileItem(
     item: RealFileItem,
     isSelected: Boolean,
+    isRenaming: Boolean,
     textColor: Color,
     isDark: Boolean,
     onClick: () -> Unit,
     onDoubleClick: () -> Unit,
-    onLongPress: (Offset) -> Unit
+    onLongPress: (Offset) -> Unit,
+    onCommitRename: (String) -> Boolean = { true },
+    onCancelRename: () -> Unit = {}
 ) {
-    val cardColor = if (isSelected) bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.20f else 0.13f) else Color.Transparent
+    // The tap offset from detectTapGestures is local to THIS tile, not the list.
+    // The context menu needs a window-relative point, so we track this tile's own
+    // window position and add the local tap offset to it — previously the caller
+    // added only the list area's origin, which ignored where in the (scrolled) grid
+    // this particular tile actually was, so the menu opened in the wrong place for
+    // any item that wasn't right at the top-left of the visible list.
+    var tileOrigin by remember { mutableStateOf(Offset.Zero) }
+    val hoverInteractionSource = remember { MutableInteractionSource() }
+    val isHovered by hoverInteractionSource.collectIsHoveredAsState()
+    val hoverTint = if (isDark) ExplorerHoverDark else ExplorerHoverLight
+    val cardColor = when {
+        isRenaming -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.22f else 0.15f)
+        isSelected && isHovered -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) FluentSelectedHoverAlpha + 0.06f else FluentSelectedHoverAlpha)
+        isSelected -> bluebirdColors.AccentBlue.copy(alpha = if (isDark) 0.20f else 0.13f)
+        isHovered -> hoverTint.copy(alpha = FluentHoverAlpha)
+        else -> Color.Transparent
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -2638,11 +2906,14 @@ private fun GridFileItem(
             .heightIn(min = 108.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(cardColor)
-            .pointerInput(item.file.absolutePath) {
+            .hoverable(hoverInteractionSource)
+            .onGloballyPositioned { coords -> tileOrigin = coords.windowRelativePosition() }
+            .pointerInput(item.file.absolutePath, isRenaming) {
+                if (isRenaming) return@pointerInput
                 detectTapGestures(
                     onTap = { onClick() },
                     onDoubleTap = { onDoubleClick() },
-                    onLongPress = { offset -> onLongPress(offset) }
+                    onLongPress = { offset -> onLongPress(tileOrigin + offset) }
                 )
             }
             .padding(horizontal = 8.dp, vertical = 10.dp)
@@ -2658,17 +2929,28 @@ private fun GridFileItem(
             )
         }
         Spacer(Modifier.height(6.dp))
-        Text(
-            item.name,
-            color = textColor,
-            fontSize = 12.5.sp,
-            fontWeight = if (item.isDirectory) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            lineHeight = 13.sp
-        )
-        if (!item.isDirectory) {
+        if (isRenaming) {
+            InlineRenameField(
+                item = item,
+                isDark = isDark,
+                isGrid = true,
+                modifier = Modifier.fillMaxWidth(),
+                onCommit = onCommitRename,
+                onCancel = onCancelRename
+            )
+        } else {
+            Text(
+                item.name,
+                color = textColor,
+                fontSize = 12.5.sp,
+                fontWeight = if (item.isDirectory) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                lineHeight = 13.sp
+            )
+        }
+        if (!item.isDirectory && !isRenaming) {
             Text(
                 formatFileSize(item.size),
                 color = textColor.copy(alpha = 0.38f),
@@ -2683,9 +2965,24 @@ private fun GridFileItem(
 // Context Menu
 // ────────────────────────────────────────────────────────
 
+/**
+ * Real Windows 11 varies this menu by what's actually selected:
+ *  - A single file shows "Open" (using its associated app) as the bold default action.
+ *  - A folder never shows "Open" as a separate command — double-click/Enter already
+ *    opens it — but folders are the only targets that can receive a Paste.
+ *  - Video/audio/image files show a media-appropriate open verb ("Play"/"Preview")
+ *    instead of the generic "Open", the same way Explorer's default verb changes
+ *    per file association.
+ *  - Multi-selection drops single-file-only actions (Rename, Create shortcut,
+ *    Properties for a mixed set) since they don't have one unambiguous target.
+ * Every command that doesn't apply stays visible but dimmed, matching Explorer's
+ * own "always show the row, greyed out if it can't run" behavior, rather than the
+ * menu changing shape (and item count) with every different selection.
+ */
 @Composable
 private fun FileContextMenu(
     fileItem: RealFileItem,
+    selectionCount: Int,
     offset: Offset,
     isDark: Boolean,
     onDismiss: () -> Unit,
@@ -2698,21 +2995,61 @@ private fun FileContextMenu(
     onCreateShortcut: () -> Unit,
     onProperties: () -> Unit
 ) {
+    val isMultiSelect = selectionCount > 1
+    val openLabel = when {
+        fileItem.isDirectory -> "Open"
+        fileItem.extension in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp") -> "Play"
+        fileItem.extension in setOf("mp3", "wav", "ogg", "flac", "aac", "m4a") -> "Play"
+        fileItem.extension in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> "Preview"
+        else -> "Open"
+    }
     ExplorerContextPopup(
         offset = offset,
         isDark = isDark,
         onDismiss = onDismiss
     ) {
-        if (!fileItem.isDirectory) ContextMenuItem("Open", FluentIcons.Regular.Open, onOpen)
-        if (fileItem.isDirectory && onPaste != null) ContextMenuItem("Paste", FluentIcons.Regular.ClipboardPaste, onPaste)
+        if (isMultiSelect) {
+            ContextMenuHeader("$selectionCount items selected")
+        }
+        // Folders open via double-click/Enter already, so "Open" only makes sense
+        // as an explicit command for files — and only for a single target.
+        if (!fileItem.isDirectory) {
+            ContextMenuItem(openLabel, FluentIcons.Regular.Open, onOpen, enabled = !isMultiSelect)
+        }
+        // Paste only ever applies to a folder, and only when there's something on
+        // the clipboard — dimmed rather than removed so its position is predictable.
+        ContextMenuItem(
+            "Paste",
+            FluentIcons.Regular.ClipboardPaste,
+            onPaste ?: {},
+            enabled = onPaste != null
+        )
+        Divider(Modifier.padding(vertical = 2.dp))
         ContextMenuItem("Cut", FluentIcons.Regular.Cut, onCut)
         ContextMenuItem("Copy", FluentIcons.Regular.Copy, onCopy)
-        ContextMenuItem("Rename", FluentIcons.Regular.Rename, onRename)
-        ContextMenuItem("Create shortcut", FluentIcons.Regular.Link, onCreateShortcut)
+        ContextMenuItem("Rename", FluentIcons.Regular.Rename, onRename, enabled = !isMultiSelect)
+        ContextMenuItem(
+            "Create shortcut",
+            FluentIcons.Regular.Link,
+            onCreateShortcut,
+            enabled = !isMultiSelect
+        )
         ContextMenuItem("Delete", FluentIcons.Regular.Delete, onDelete, tint = bluebirdColors.DangerRed)
         Divider(Modifier.padding(vertical = 2.dp))
-        ContextMenuItem("Properties", FluentIcons.Regular.Info, onProperties)
+        ContextMenuItem("Properties", FluentIcons.Regular.Info, onProperties, enabled = !isMultiSelect)
     }
+}
+
+@Composable
+private fun ContextMenuHeader(label: String) {
+    Text(
+        label,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+    )
+    Divider(Modifier.padding(vertical = 2.dp))
 }
 
 @Composable
@@ -2726,26 +3063,49 @@ private fun ExplorerContextPopup(
     Popup(
         popupPositionProvider = object : PopupPositionProvider {
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+                // Real Windows 11 opens the menu with its top-left corner pinned to the
+                // cursor/tap point, then flips to the opposite side of that point — never
+                // just slides along an edge — whenever the default placement would run
+                // off the window. Flipping keeps the menu anchored to where you clicked;
+                // clamping (the old behavior) can leave it looking unrelated to the tap.
                 val margin = 8
+                val fitsRight = position.x + popupContentSize.width <= windowSize.width - margin
+                val x = if (fitsRight) {
+                    position.x
+                } else {
+                    // Open to the left of the tap point instead of past the right edge.
+                    (position.x - popupContentSize.width).coerceAtLeast(margin)
+                }
+
+                val fitsBelow = position.y + popupContentSize.height <= windowSize.height - margin
+                val y = if (fitsBelow) {
+                    position.y
+                } else {
+                    // Open above the tap point instead of past the bottom edge.
+                    (position.y - popupContentSize.height).coerceAtLeast(margin)
+                }
+
                 return IntOffset(
-                    position.x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
-                    position.y.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin))
+                    x.coerceIn(margin, (windowSize.width - popupContentSize.width - margin).coerceAtLeast(margin)),
+                    y.coerceIn(margin, (windowSize.height - popupContentSize.height - margin).coerceAtLeast(margin))
                 )
             }
         },
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true)
     ) {
-        val bg = if (isDark) Color(0xFA1E1E1E) else Color(0xFCEFF4F9)
-        val border = if (isDark) ExplorerDarkBorder else ExplorerLightBorder
+        // Fluent flyout: layered Mica-style surface with a soft border and shadow,
+        // matching Windows 11's context-menu chrome rather than a flat card.
+        val bg = if (isDark) Color(0xFA2C2C2C) else Color(0xFCFCFCFC)
+        val border = if (isDark) ExplorerDarkBorder.copy(alpha = 0.7f) else ExplorerLightBorder
         Surface(
-            modifier = Modifier.width(204.dp),
-            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.width(212.dp),
+            shape = RoundedCornerShape(8.dp),
             color = bg,
-            shadowElevation = 8.dp,
+            shadowElevation = 16.dp,
             border = BorderStroke(1.dp, border)
         ) {
-            Column(Modifier.padding(vertical = 3.dp), content = content)
+            Column(Modifier.padding(vertical = 4.dp), content = content)
         }
     }
 }
@@ -2765,7 +3125,12 @@ private fun ExplorerBackgroundContextMenu(
 ) {
     ExplorerContextPopup(offset, isDark, onDismiss) {
         ContextMenuItem("Refresh", FluentIcons.Regular.ArrowClockwise, { onRefresh(); onDismiss() })
-        if (hasPaste) ContextMenuItem("Paste", FluentIcons.Regular.ClipboardPaste, { onPaste(); onDismiss() })
+        ContextMenuItem(
+            "Paste",
+            FluentIcons.Regular.ClipboardPaste,
+            { onPaste(); onDismiss() },
+            enabled = hasPaste
+        )
         Divider(Modifier.padding(vertical = 2.dp))
         ContextMenuItem("New folder", FluentIcons.Regular.FolderAdd, { onNewFolder(); onDismiss() })
         ContextMenuItem("New text document", FluentIcons.Regular.Document, { onNewTextFile(); onDismiss() })
@@ -2779,17 +3144,26 @@ private fun ContextMenuItem(
     label: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    tint: Color = MaterialTheme.colorScheme.primary
+    tint: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true
 ) {
+    // Windows 11 keeps inapplicable commands visible but greyed out and inert —
+    // e.g. Paste always shows in the menu, just disabled when the clipboard is
+    // empty — rather than making the menu jump around by hiding rows outright.
+    val effectiveTint = if (enabled) tint else tint.copy(alpha = 0.35f)
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(17.dp))
-        Text(label, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface)
+        Icon(icon, null, tint = effectiveTint, modifier = Modifier.size(17.dp))
+        Text(
+            label,
+            fontSize = 13.5.sp,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        )
     }
 }

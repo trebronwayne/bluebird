@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -605,8 +606,12 @@ fun ImageViewerScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!state.loaded) loadPhotos()
+    // Keyed on initialPath rather than Unit: when this same window instance
+    // gets reused for a different photo (WindowManager keeps one Image Viewer
+    // window and swaps its extras instead of opening a new window), this needs
+    // to re-run and jump to the new photo — not just load once and sit still.
+    LaunchedEffect(initialPath) {
+        loadPhotos()
     }
 
     LaunchedEffect(state.message) {
@@ -1050,7 +1055,10 @@ private fun PhotosSearchBar(
 
         Spacer(Modifier.width(8.dp))
 
-        Box(Modifier.weight(1f)) {
+        Box(
+            Modifier.weight(1f),
+            contentAlignment = Alignment.CenterStart
+        ) {
             if (value.isEmpty()) {
                 Text(
                     "Search your photos",
@@ -1065,10 +1073,13 @@ private fun PhotosSearchBar(
                 singleLine = true,
                 textStyle = TextStyle(
                     color = text,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 ),
                 cursorBrush = SolidColor(PhotosTheme.Accent),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
             )
         }
 

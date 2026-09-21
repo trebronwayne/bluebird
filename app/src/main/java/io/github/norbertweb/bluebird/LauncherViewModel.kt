@@ -1599,21 +1599,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 )
             }
         }
-        // If a window for this screen already exists, restore + focus it (handles minimized case).
-        // Packaged apps match on bpkAppId so the same application reopens/focuses consistently
-        // whether launched from Desktop, File Explorer, Start, Taskbar, or Program Manager.
-        val existing = _uiState.value.openWindows.find {
-            if (screen == LauncherScreen.WEB_APP_VIEWER && it.screen == LauncherScreen.WEB_APP_VIEWER) {
-                it.extras["bpkAppId"] == effectiveExtras["bpkAppId"]
-            } else {
-                it.screen == screen && it.extras == effectiveExtras
-            }
-        }
-        if (existing != null) {
-            restoreWindow(existing.id)
-            return
-        }
-
         val title = when (screen) {
 
             LauncherScreen.PremiumTextEditorScreen      -> "Text Editor"
@@ -1622,8 +1607,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             LauncherScreen.BROWSER       -> "Bluebird Surfer Browser"
             LauncherScreen.CALCULATOR    -> "Calculator"
             LauncherScreen.CALENDAR      -> "Calendar"
-            LauncherScreen.MEDIA_PLAYER  -> "Media Player"
-            LauncherScreen.IMAGE_VIEWER  -> extras["fileName"] ?: "Image Viewer"
+            LauncherScreen.MEDIA_PLAYER  -> extras["fileName"] ?: extras["filePath"]?.let { File(it).name } ?: "Media Player"
+            LauncherScreen.IMAGE_VIEWER  -> extras["fileName"] ?: extras["filePath"]?.let { File(it).name } ?: "Image Viewer"
             LauncherScreen.WORD_IMPRESS         -> "Word Impress"
             LauncherScreen.BLUEBIRD_STORE      -> "Bluebird Store"
             LauncherScreen.RECYCLE_BIN   -> "Recycle Bin"
@@ -1636,6 +1621,45 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val resolvedTitle = effectiveTitle ?: when (screen) {
             LauncherScreen.PROGRAM_MANAGER -> "Program Manager"
             else -> title
+        }
+
+        // Screens that should never have more than one window open at once,
+        // no matter which file was used to open them. Clicking a second photo
+        // (from the Photos widget, Desktop, or a taskbar shortcut) or a second
+        // song should swap the content of the existing Image Viewer / Media
+        // Player window instead of stacking a new window on top of it — unlike
+        // File Explorer, where opening a second folder path is meant to open a
+        // second window.
+        val isSingleInstanceFileScreen = screen == LauncherScreen.IMAGE_VIEWER ||
+            screen == LauncherScreen.MEDIA_PLAYER
+
+        // If a window for this screen already exists, restore + focus it (handles minimized case).
+        // Packaged apps match on bpkAppId so the same application reopens/focuses consistently
+        // whether launched from Desktop, File Explorer, Start, Taskbar, or Program Manager.
+        val existing = _uiState.value.openWindows.find {
+            when {
+                screen == LauncherScreen.WEB_APP_VIEWER && it.screen == LauncherScreen.WEB_APP_VIEWER ->
+                    it.extras["bpkAppId"] == effectiveExtras["bpkAppId"]
+                isSingleInstanceFileScreen ->
+                    it.screen == screen
+                else -> it.screen == screen && it.extras == effectiveExtras
+            }
+        }
+        if (existing != null) {
+            // Swap content only when a specific file was actually requested.
+            // Opening the app generically — e.g. its Desktop or taskbar icon,
+            // with no filePath — should just bring the existing window to
+            // front as-is, not clear out whatever photo/song is loaded.
+            if (effectiveExtras.isNotEmpty() && existing.extras != effectiveExtras) {
+                val updated = _uiState.value.openWindows.map { w ->
+                    if (w.id == existing.id) {
+                        w.copy(extras = effectiveExtras, title = resolvedTitle)
+                    } else w
+                }
+                _uiState.value = _uiState.value.copy(openWindows = updated)
+            }
+            restoreWindow(existing.id)
+            return
         }
 
         val iconKey = when (screen) {

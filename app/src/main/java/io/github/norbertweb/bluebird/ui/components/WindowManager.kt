@@ -999,11 +999,16 @@ fun WindowContent(
                 LauncherScreen.CALCULATOR    -> CalculatorScreen(isDark)
                 LauncherScreen.CALENDAR      -> CalendarScreen(isDark)
                 LauncherScreen.MEDIA_PLAYER  -> {
-                    val filePath = remember(windowState.id) { extras["filePath"] ?: "" }
+                    // Was remember(windowState.id) — froze filePath forever
+                    // once this window's first file loaded. Now that the same
+                    // window can be reused for a second file (single-instance
+                    // guard in openWindow), the key has to include the path
+                    // itself so a swap is actually picked up.
+                    val filePath = remember(windowState.id, extras["filePath"]) { extras["filePath"] ?: "" }
                     MediaPlayerScreen(isDark, filePath)
                 }
                 LauncherScreen.IMAGE_VIEWER  -> {
-                    val filePath = remember(windowState.id) { extras["filePath"] ?: "" }
+                    val filePath = remember(windowState.id, extras["filePath"]) { extras["filePath"] ?: "" }
                     ImageViewerScreen(isDark, filePath, viewModel)
                 }
                 LauncherScreen.WORD_IMPRESS      -> PhoneScreen(isDark, initialPath = extras["filePath"] ?: "")

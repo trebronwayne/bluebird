@@ -639,7 +639,12 @@ private class PlayerState {
     var isLoading   by mutableStateOf(false)
     var isLibraryReady by mutableStateOf(false)
     var hasRestoredQueue by mutableStateOf(false)
-    var hasHandledInitialPath by mutableStateOf(false)
+    // Was a one-shot Boolean: once true, it permanently blocked handling any
+    // later initialPath. Now that a window can be reused for a second file
+    // (single-instance guard in openWindow), this needs to remember *which*
+    // path it already handled, so a genuinely new path still gets through
+    // while a no-op recomposition for the same path still doesn't replay it.
+    var lastHandledInitialPath by mutableStateOf<String?>(null)
 
     // Playlist — mirrors the controller's timeline; controller is the
     // source of truth, this is a display-friendly projection of it.
@@ -1037,14 +1042,14 @@ fun MediaPlayerScreen(
     LaunchedEffect(state.controller, state.isLibraryReady, initialPath) {
         val ctrl = state.controller ?: return@LaunchedEffect
         if (!state.isLibraryReady || initialPath.isBlank()) return@LaunchedEffect
-        if (state.hasHandledInitialPath) return@LaunchedEffect
+        if (initialPath == state.lastHandledInitialPath) return@LaunchedEffect
 
         val target = state.allTracks.firstOrNull {
             it.file?.absolutePath == initialPath ||
                 it.contentUri.toString() == initialPath
         }
         if (target != null) {
-            state.hasHandledInitialPath = true
+            state.lastHandledInitialPath = initialPath
             val index = state.allTracks.indexOf(target)
             state.activeTab = if (target.isVideo) MediaTab.VIDEOS else MediaTab.MUSIC
             state.playQueue(state.allTracks, index)
@@ -1067,7 +1072,7 @@ fun MediaPlayerScreen(
                         title = file.nameWithoutExtension,
                         isVideo = ext in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "wmv", "m4v")
                     )
-                    state.hasHandledInitialPath = true
+                    state.lastHandledInitialPath = initialPath
                     state.activeTab = if (direct.isVideo) MediaTab.VIDEOS else MediaTab.MUSIC
                     state.playQueue(listOf(direct), 0)
                 }
