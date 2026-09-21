@@ -1,6 +1,5 @@
 package io.github.norbertweb.bluebird.ui.screens
 
-import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,89 +40,28 @@ import androidx.compose.foundation.verticalScroll
 // `import ...FluentIcons` is not enough. Package root and per-icon import path below
 // per confirmed working example from another file in this project.
 import fluent.ui.system.icons.FluentIcons
-import fluent.ui.system.icons.regular.Accessibility
 import fluent.ui.system.icons.regular.Add
-import fluent.ui.system.icons.regular.Airplane
-import fluent.ui.system.icons.regular.Alert
-import fluent.ui.system.icons.regular.ArrowSync
-import fluent.ui.system.icons.regular.BatterySaver
-import fluent.ui.system.icons.regular.Bluetooth
 import fluent.ui.system.icons.regular.Bug
-import fluent.ui.system.icons.regular.CalendarLtr
-import fluent.ui.system.icons.regular.Call
 import fluent.ui.system.icons.regular.Camera
 import fluent.ui.system.icons.regular.CameraAdd
-import fluent.ui.system.icons.regular.Cast
 import fluent.ui.system.icons.regular.Checkmark
-import fluent.ui.system.icons.regular.CheckmarkCircle
 import fluent.ui.system.icons.regular.ChevronDown
 import fluent.ui.system.icons.regular.ChevronRight
-import fluent.ui.system.icons.regular.CircleHalfFill
-import fluent.ui.system.icons.regular.ClipboardPaste
-import fluent.ui.system.icons.regular.Clock
-import fluent.ui.system.icons.regular.ClosedCaption
-import fluent.ui.system.icons.regular.Cursor
-import fluent.ui.system.icons.regular.DarkTheme
-import fluent.ui.system.icons.regular.DataBarHorizontal
 import fluent.ui.system.icons.regular.DataTrending
-import fluent.ui.system.icons.regular.DataUsage
-import fluent.ui.system.icons.regular.Delete
-import fluent.ui.system.icons.regular.Desktop
 import fluent.ui.system.icons.regular.Dismiss
-import fluent.ui.system.icons.regular.DocumentText
 import fluent.ui.system.icons.regular.Edit
 import fluent.ui.system.icons.regular.Fingerprint
-import fluent.ui.system.icons.regular.Games
-import fluent.ui.system.icons.regular.Globe
-import fluent.ui.system.icons.regular.Grid
-import fluent.ui.system.icons.regular.History
-import fluent.ui.system.icons.regular.Image
-import fluent.ui.system.icons.regular.ImageMultiple
 import fluent.ui.system.icons.regular.Info
-import fluent.ui.system.icons.regular.Key
-import fluent.ui.system.icons.regular.Keyboard
-import fluent.ui.system.icons.regular.LocalLanguage
 import fluent.ui.system.icons.regular.Location
 import fluent.ui.system.icons.regular.LockClosedKey
-import fluent.ui.system.icons.regular.Mail
-import fluent.ui.system.icons.regular.Map
 import fluent.ui.system.icons.regular.Mic
-import fluent.ui.system.icons.regular.MusicNote1
 import fluent.ui.system.icons.regular.PaintBrush
-import fluent.ui.system.icons.regular.People
 import fluent.ui.system.icons.regular.Person
 import fluent.ui.system.icons.regular.PersonCircle
-import fluent.ui.system.icons.regular.PersonSettings
 import fluent.ui.system.icons.regular.Phone
-import fluent.ui.system.icons.regular.PhoneVibrate
-import fluent.ui.system.icons.regular.PlayCircle
-import fluent.ui.system.icons.regular.Power
-import fluent.ui.system.icons.regular.Print
-import fluent.ui.system.icons.regular.Prohibited
-import fluent.ui.system.icons.regular.RadioButton
-import fluent.ui.system.icons.regular.RibbonStar
-import fluent.ui.system.icons.regular.Router
-import fluent.ui.system.icons.regular.Scan
-import fluent.ui.system.icons.regular.Screenshot
 import fluent.ui.system.icons.regular.Search
-import fluent.ui.system.icons.regular.Server
 import fluent.ui.system.icons.regular.Shield
-import fluent.ui.system.icons.regular.Sparkle
-import fluent.ui.system.icons.regular.Speaker1
-import fluent.ui.system.icons.regular.Speaker2
-import fluent.ui.system.icons.regular.Star
-import fluent.ui.system.icons.regular.TapDouble
-import fluent.ui.system.icons.regular.Target
-import fluent.ui.system.icons.regular.TextBold
-import fluent.ui.system.icons.regular.TextFont
-import fluent.ui.system.icons.regular.Timer
-import fluent.ui.system.icons.regular.TopSpeed
-import fluent.ui.system.icons.regular.Translate
-import fluent.ui.system.icons.regular.UsbStick
-import fluent.ui.system.icons.regular.WeatherMoon
-import fluent.ui.system.icons.regular.WeatherSunny
 
-import fluent.ui.system.icons.regular.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -202,10 +140,6 @@ import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import com.google.accompanist.drawablepainter.DrawablePainter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CATEGORY ENUM — replaces raw strings to prevent silent routing bugs
@@ -214,6 +148,7 @@ import java.util.TimeZone
 private enum class SettingsCategory(val label: String, val icon: ImageVector) {
     APPEARANCE      ("Appearance",          FluentIcons.Regular.PaintBrush),
     ACCOUNTS        ("Accounts",            FluentIcons.Regular.PersonCircle),
+    PRIVACY_SECURITY("Privacy & security",  FluentIcons.Regular.Shield),
     ABOUT           ("About",               FluentIcons.Regular.Info)
 }
 
@@ -427,9 +362,10 @@ fun SettingsScreen(
                 scale = uiState?.textScale ?: 1f)
 
             when (selectedCategoryState.value) {
-                SettingsCategory.APPEARANCE   -> AppearanceSettings(args)
-                SettingsCategory.ACCOUNTS     -> AccountsSettings(args)
-                SettingsCategory.ABOUT        -> AboutSettings(args)
+                SettingsCategory.APPEARANCE       -> AppearanceSettings(args)
+                SettingsCategory.ACCOUNTS         -> AccountsSettings(args)
+                SettingsCategory.PRIVACY_SECURITY -> PrivacySecuritySettings(args)
+                SettingsCategory.ABOUT            -> AboutSettings(args)
             }
         }
     }
@@ -630,233 +566,6 @@ internal fun SDropdown(
 }
 
 internal fun divColor(a: ScreenArgs) = a.textColor.copy(alpha = 0.06f)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SYSTEM
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun SystemSettings(a: ScreenArgs) {
-    StorageInfo(a)
-    RamInfo(a)
-    Spacer(Modifier.height(4.dp))
-
-    SettingsGroup("Startup & Boot", a) {
-        SToggle(FluentIcons.Regular.PlayCircle, "Launch on boot",
-            "Start launcher automatically when device starts",
-            a, a.uiState?.launchOnBoot ?: false) { a.vm?.setLaunchOnBoot(!(a.uiState?.launchOnBoot ?: false)) }
-    }
-
-    SettingsGroup("Multitasking", a) {
-        SToggle(FluentIcons.Regular.Grid, "Snap layouts",
-            "Snap windows to screen zones",
-            a, a.uiState?.snapLayouts ?: true) { a.vm?.setSnapLayouts(!(a.uiState?.snapLayouts ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.ClipboardPaste, "Clipboard history",
-            "Keep a history of copied items",
-            a, a.uiState?.clipboardHistory ?: true) { a.vm?.setClipboardHistory(!(a.uiState?.clipboardHistory ?: true)) }
-    }
-
-    SettingsGroup("Recent apps", a) {
-        SDropdown(FluentIcons.Regular.History, "Recent app limit",
-            "How many apps appear in the recents tray",
-            listOf("5", "10", "15", "20", "Unlimited"),
-            a.uiState?.recentAppsLimit ?: "10", a) { a.vm?.setRecentAppsLimit(it) }
-    }
-
-    SettingsGroup("Notifications", a) {
-        SToggle(FluentIcons.Regular.Alert, "Notification banners",
-            "Show pop-up banners for new notifications",
-            a, a.uiState?.notificationBanners ?: true) { a.vm?.setNotificationBanners(!(a.uiState?.notificationBanners ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.RibbonStar, "Notification badges",
-            "Show red dot on app icons",
-            a, a.uiState?.showNotificationBadges ?: true) { a.vm?.setShowNotificationBadges(!(a.uiState?.showNotificationBadges ?: true)) }
-    }
-
-    SettingsGroup("Do Not Disturb", a) {
-        SToggle(FluentIcons.Regular.Prohibited, "Do Not Disturb",
-            "Silence all notifications",
-            a, a.uiState?.dndEnabled ?: false) { a.vm?.setDndEnabled(!(a.uiState?.dndEnabled ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Clock, "Scheduled DND",
-            "Auto-enable between set hours",
-            a, a.uiState?.dndScheduled ?: false) { a.vm?.setDndScheduled(!(a.uiState?.dndScheduled ?: false)) }
-        if (a.uiState?.dndScheduled == true) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(FluentIcons.Regular.WeatherMoon, null, tint = a.accent, modifier = Modifier.size(16.dp))
-                Text("From ${a.uiState.dndStartHour}:00 to ${a.uiState.dndEndHour}:00",
-                    color    = a.textColor.copy(alpha = 0.7f),
-                    fontSize = (12 * a.uiState.textScale).sp)
-            }
-        }
-    }
-
-    SettingsGroup("Focus Assist", a) {
-        SToggle(FluentIcons.Regular.Target, "Focus assist",
-            "Allow only priority notifications",
-            a, a.uiState?.focusAssist ?: false) { a.vm?.setFocusAssist(!(a.uiState?.focusAssist ?: false)) }
-    }
-
-    SettingsGroup("Battery & Power", a) {
-        SToggle(FluentIcons.Regular.BatterySaver, "Battery saver",
-            "Limit background activity to extend battery life",
-            a, a.uiState?.batterySaver ?: false) { a.vm?.setBatterySaver(!(a.uiState?.batterySaver ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.Power, "Screen timeout",
-            "Turn off screen after inactivity",
-            listOf("30 seconds", "1 minute", "2 minutes", "5 minutes", "10 minutes", "Never"),
-            when (a.uiState?.screenTimeoutMinutes) {
-                0 -> "30 seconds"; 1 -> "1 minute"; 2 -> "2 minutes"
-                5 -> "5 minutes";  10 -> "10 minutes"; else -> "Never"
-            }, a
-        ) { v -> a.vm?.setScreenTimeout(when (v) {
-            "30 seconds" -> 0; "1 minute" -> 1; "2 minutes" -> 2
-            "5 minutes"  -> 5; "10 minutes" -> 10; else -> -1
-        }) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SOUND
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun SoundSettings(a: ScreenArgs) {
-    SettingsGroup("Volume", a) {
-        SSlider(FluentIcons.Regular.MusicNote1, "Media volume", "Music, videos, games",
-            a.uiState?.mediaVolume ?: 0.7f, 0f..1f,
-            "${((a.uiState?.mediaVolume ?: 0.7f) * 100).toInt()}%", a) { a.vm?.setMediaVolume(it, a.ctx) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SSlider(FluentIcons.Regular.Alert, "Notification volume", "",
-            a.uiState?.notifVolume ?: 0.6f, 0f..1f,
-            "${((a.uiState?.notifVolume ?: 0.6f) * 100).toInt()}%", a) { a.vm?.setNotifVolume(it, a.ctx) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SSlider(FluentIcons.Regular.Call, "Ring volume", "",
-            a.uiState?.ringtoneVolume ?: 0.5f, 0f..1f,
-            "${((a.uiState?.ringtoneVolume ?: 0.5f) * 100).toInt()}%", a) { a.vm?.setRingtoneVolume(it, a.ctx) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SSlider(FluentIcons.Regular.Clock, "Alarm volume", "",
-            a.uiState?.alarmVolume ?: 0.8f, 0f..1f,
-            "${((a.uiState?.alarmVolume ?: 0.8f) * 100).toInt()}%", a) { a.vm?.setAlarmVolume(it, a.ctx) }
-    }
-
-    SettingsGroup("Sound preferences", a) {
-        SToggle(FluentIcons.Regular.Speaker2, "System sounds", "UI click and action sounds",
-            a, a.uiState?.systemSounds ?: true) { a.vm?.setSystemSounds(!(a.uiState?.systemSounds ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.PhoneVibrate, "Haptic feedback", "Vibrate on touch",
-            a, a.uiState?.hapticFeedback ?: true) { a.vm?.setHapticFeedback(!(a.uiState?.hapticFeedback ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Speaker1, "Media volume keys",
-            "Volume keys control media by default",
-            a, a.uiState?.volumeKeysMedia ?: true) { a.vm?.setVolumeKeysMedia(!(a.uiState?.volumeKeysMedia ?: true)) }
-    }
-
-    SettingsGroup("Notification sound", a) {
-        SDropdown(FluentIcons.Regular.Alert, "Default notification sound", "",
-            listOf("Default", "Chime", "Ping", "Ripple", "Skyline", "None"),
-            a.uiState?.notifSound ?: "Default", a) { a.vm?.setNotifSound(it) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BLUETOOTH & DEVICES
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun BluetoothSettings(a: ScreenArgs) {
-    SettingsGroup("Bluetooth", a) {
-        SToggle(FluentIcons.Regular.Bluetooth, "Bluetooth", "Enable Bluetooth radio",
-            a, a.uiState?.isBluetoothOn ?: false) { a.vm?.toggleBluetooth() }
-    }
-
-    SettingsGroup("Connected devices", a) {
-        Box(modifier = Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-            Text(
-                if (a.uiState?.isBluetoothOn == true) "No devices paired yet"
-                else "Enable Bluetooth to see devices",
-                color    = a.textColor.copy(alpha = 0.4f),
-                fontSize = (12 * (a.scale)).sp
-            )
-        }
-    }
-
-    // "Other devices" group removed — every row in it (Mouse & touchpad,
-    // Printers & scanners, USB, Wireless displays) only opened the Android
-    // system settings app rather than anything Bluebird itself controls, and
-    // three of the four even pointed at the generic Settings home screen
-    // rather than a specific pane. Settings now only shows things the app
-    // actually has state/control over.
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NETWORK & INTERNET
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun NetworkSettings(a: ScreenArgs) {
-    SettingsGroup("Wi-Fi", a) {
-        SToggle(FluentIcons.Regular.Bluetooth, "Wi-Fi",
-            if (a.uiState?.isWifiOn == true) "Connected" else "Off",
-            a, a.uiState?.isWifiOn ?: false) { a.vm?.toggleWifi() }
-        // "Manage networks" row removed — it only opened the Android system
-        // Wi-Fi settings rather than anything Bluebird tracks (saved networks,
-        // signal strength, etc. aren't app state here).
-    }
-
-    SettingsGroup("Mobile & data", a) {
-        SToggle(FluentIcons.Regular.DataUsage, "Data saver",
-            "Restrict background mobile data",
-            a, a.uiState?.dataSaver ?: false) { a.vm?.setDataSaver(!(a.uiState?.dataSaver ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Router, "Mobile hotspot",
-            "Share internet with other devices",
-            a, a.uiState?.hotspotEnabled ?: false) { a.vm?.setHotspot(!(a.uiState?.hotspotEnabled ?: false)) }
-        if (a.uiState?.hotspotEnabled == true) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(FluentIcons.Regular.Phone, null, tint = a.accent, modifier = Modifier.size(14.dp))
-                Text("0 devices connected", color = a.textColor.copy(alpha = 0.6f),
-                    fontSize = (11 * (a.uiState.textScale)).sp)
-            }
-        }
-    }
-
-    SettingsGroup("Airplane mode", a) {
-        SToggle(FluentIcons.Regular.Airplane, "Airplane mode",
-            "Disable all wireless communications",
-            a, a.uiState?.isAirplaneMode ?: false) { a.vm?.toggleAirplaneMode() }
-    }
-
-    SettingsGroup("VPN", a) {
-        SToggle(FluentIcons.Regular.Key, "VPN",
-            if (a.uiState?.vpnEnabled == true) "Connected" else "Not connected",
-            a, a.uiState?.vpnEnabled ?: false) { a.vm?.setVpn(!(a.uiState?.vpnEnabled ?: false)) }
-        // "Add a VPN" row removed — it only opened the Android system VPN
-        // settings rather than anything Bluebird itself configures.
-    }
-
-    SettingsGroup("DNS", a) {
-        SToggle(FluentIcons.Regular.Server, "Custom DNS", "Use a custom DNS server address",
-            a, a.uiState?.customDns ?: false) { a.vm?.setCustomDns(!(a.uiState?.customDns ?: false)) }
-        if (a.uiState?.customDns == true) {
-            Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-            SDropdown(FluentIcons.Regular.LocalLanguage, "DNS server", "Choose a preset or enter custom",
-                listOf("8.8.8.8 (Google)", "1.1.1.1 (Cloudflare)", "9.9.9.9 (Quad9)", "8.8.4.4 (Google alt)", "3.1.1.1 (EAT)"),
-                a.uiState.dnsAddress, a) { a.vm?.setDnsAddress(it) }
-        }
-    }
-
-    // "Proxy" group removed — its row had no onClick and no backing state;
-    // tapping it did nothing.
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// APPEARANCE
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Personalization — ported from Desktop.kt's WallpaperPersonalisePanel
@@ -1526,173 +1235,6 @@ private fun AccountsSettings(a: ScreenArgs) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TIME & LANGUAGE
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun TimeLanguageSettings(a: ScreenArgs) {
-    val scale       = a.scale
-    val use24h      = a.uiState?.use24HourClock ?: false
-    val timeFmt     = if (use24h) "HH:mm" else "hh:mm a"
-    val currentTime = remember(use24h) { SimpleDateFormat(timeFmt, Locale.getDefault()).format(Date()) }
-    val currentDate = remember { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date()) }
-
-    SettingsGroup("Date & time", a) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(currentTime, color = a.textColor, fontSize = (22 * scale).sp, fontWeight = FontWeight.Light)
-                Text(currentDate, color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * scale).sp)
-            }
-            Icon(FluentIcons.Regular.Clock, null, tint = a.accent, modifier = Modifier.size(32.dp))
-        }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.ArrowSync,     "Set time automatically",  "Sync with internet time servers",       a, a.uiState?.autoSetTime ?: true)    { a.vm?.setAutoSetTime(!(a.uiState?.autoSetTime ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Clock, "24-hour clock",           "Use 24-hour instead of 12-hour format", a, use24h)                             { a.vm?.setUse24HourClock(!use24h) }
-    }
-
-    SettingsGroup("Timezone", a) {
-        val timezones = remember {
-            TimeZone.getAvailableIDs()
-                .map { id -> val tz = TimeZone.getTimeZone(id); "$id (${tz.displayName})" }
-                .take(80) // Reasonable limit for the dropdown
-        }
-        SDropdown(FluentIcons.Regular.Globe, "Timezone", "Set your local timezone",
-            timezones, a.uiState?.timeZone ?: "Africa/Kampala", a) { a.vm?.setTimeZone(it) }
-    }
-
-    SettingsGroup("Date format", a) {
-        SDropdown(FluentIcons.Regular.CalendarLtr, "Date format", "How dates are displayed",
-            listOf("MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD", "D MMM YYYY"),
-            a.uiState?.dateFormat ?: "DD/MM/YYYY", a) { a.vm?.setDateFormat(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.CalendarLtr, "First day of week", "",
-            listOf("Sunday", "Monday", "Saturday"),
-            a.uiState?.firstDayOfWeek ?: "Sunday", a) { a.vm?.setFirstDayOfWeek(it) }
-    }
-
-    SettingsGroup("Language & region", a) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("System language", color = a.textColor, fontSize = (13 * scale).sp)
-            Text(Locale.getDefault().displayLanguage, color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * scale).sp)
-        }
-        // "Add a language" row removed — it only opened Android's own locale
-        // settings rather than anything Bluebird manages.
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GAMING
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun GamingSettings(a: ScreenArgs) {
-    SettingsGroup("Game Mode", a) {
-        SToggle(FluentIcons.Regular.Games, "Game Mode",
-            "Prioritize CPU/GPU for games, reduce background activity",
-            a, a.uiState?.gameModeEnabled ?: false) { a.vm?.setGameMode(!(a.uiState?.gameModeEnabled ?: false)) }
-        if (a.uiState?.gameModeEnabled == true) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(FluentIcons.Regular.CheckmarkCircle, null, tint = bluebirdColors.Success, modifier = Modifier.size(14.dp))
-                Text("Game Mode is active — background processes reduced",
-                    color = a.textColor.copy(alpha = 0.6f), fontSize = (11 * (a.uiState.textScale)).sp)
-            }
-        }
-    }
-
-    SettingsGroup("Performance", a) {
-        SDropdown(FluentIcons.Regular.TopSpeed, "Frame rate cap",
-            "Maximum frames rendered per second",
-            listOf("30 fps", "60 fps", "90 fps", "120 fps", "Unlimited"),
-            a.uiState?.frameRateCap ?: "Unlimited", a) { a.vm?.setFrameRateCap(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.DataBarHorizontal, "Performance overlay",
-            "Show FPS, CPU, and RAM while in a game",
-            a, a.uiState?.performanceOverlay ?: false) { a.vm?.setPerformanceOverlay(!(a.uiState?.performanceOverlay ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.TopSpeed, "Thermal throttle protection",
-            "Reduce performance to prevent overheating",
-            a, a.uiState?.thermalProtection ?: true) { a.vm?.setThermalProtection(!(a.uiState?.thermalProtection ?: true)) }
-    }
-
-    SettingsGroup("During gameplay", a) {
-        SToggle(FluentIcons.Regular.Prohibited, "Do Not Disturb",
-            "Mute notifications while a game is fullscreen",
-            a, a.uiState?.dndWhileGaming ?: true) { a.vm?.setDndWhileGaming(!(a.uiState?.dndWhileGaming ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.PhoneVibrate, "Haptic feedback",
-            "Vibration effects in supported games",
-            a, a.uiState?.hapticInGames ?: true) { a.vm?.setHapticInGames(!(a.uiState?.hapticInGames ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Screenshot, "Block screenshots",
-            "Prevent other apps from capturing your screen during a game",
-            a, a.uiState?.blockGameScreenshots ?: false) { a.vm?.setBlockGameScreenshots(!(a.uiState?.blockGameScreenshots ?: false)) }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ACCESSIBILITY
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun AccessibilitySettings(a: ScreenArgs) {
-    SettingsGroup("Vision", a) {
-        SToggle(FluentIcons.Regular.CircleHalfFill, "High contrast",
-            "Increase contrast for better readability",
-            a, a.uiState?.highContrast ?: false) { a.vm?.setHighContrast(!(a.uiState?.highContrast ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.TextFont, "Larger text",
-            "Increase base text size across the launcher",
-            a, a.uiState?.largerText ?: false) { a.vm?.setLargerText(!(a.uiState?.largerText ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.TextBold, "Bold text",
-            "Make all text bold for easier reading",
-            a, a.uiState?.boldText ?: false) { a.vm?.setBoldText(!(a.uiState?.boldText ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SDropdown(FluentIcons.Regular.PaintBrush, "Color correction",
-            "Adjust colors for color vision deficiencies",
-            listOf("None", "Deuteranopia (red-green)", "Protanopia (red-green alt)", "Tritanopia (blue-yellow)", "Grayscale"),
-            a.uiState?.colorCorrectionMode ?: "None", a) { a.vm?.setColorCorrectionMode(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.ZoomIn, "Magnification",
-            "Triple-tap to zoom anywhere on screen",
-            a, a.uiState?.magnificationEnabled ?: false) { a.vm?.setMagnification(!(a.uiState?.magnificationEnabled ?: false)) }
-    }
-
-    SettingsGroup("Motion & interaction", a) {
-        SToggle(FluentIcons.Regular.Sparkle, "Reduce motion",
-            "Minimize animations and transitions",
-            a, a.uiState?.reduceMotion ?: false) { a.vm?.setReduceMotion(!(a.uiState?.reduceMotion ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SSlider(FluentIcons.Regular.TapDouble, "Touch & hold delay",
-            "How long before a long-press registers",
-            a.uiState?.touchHoldDelay ?: 0.5f, 0f..1f,
-            when { (a.uiState?.touchHoldDelay ?: 0.5f) < 0.33f -> "Short"; (a.uiState?.touchHoldDelay ?: 0.5f) < 0.66f -> "Medium"; else -> "Long" },
-            a) { a.vm?.setTouchHoldDelay(it) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.RadioButton, "Button shapes",
-            "Show outlines around tappable buttons",
-            a, a.uiState?.buttonShapes ?: false) { a.vm?.setButtonShapes(!(a.uiState?.buttonShapes ?: false)) }
-    }
-
-    SettingsGroup("Audio", a) {
-        SToggle(FluentIcons.Regular.Speaker1, "Mono audio",
-            "Combine stereo channels into mono",
-            a, a.uiState?.monoAudio ?: false) { a.vm?.setMonoAudio(!(a.uiState?.monoAudio ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.ClosedCaption, "Captions",
-            "Show captions for media when available",
-            a, a.uiState?.captionsEnabled ?: false) { a.vm?.setCaptionsEnabled(!(a.uiState?.captionsEnabled ?: false)) }
-    }
-
-    // "System" group removed — its one row explicitly opened Android's own
-    // full accessibility settings rather than anything Bluebird controls.
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // PRIVACY & SECURITY
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1731,90 +1273,12 @@ private fun PrivacySecuritySettings(a: ScreenArgs) {
     SettingsGroup("Data & diagnostics", a) {
         SToggle(FluentIcons.Regular.DataTrending, "Usage & diagnostics",
             "Send anonymous crash reports and usage data",
-            a, a.uiState?.usageDiagnostics ?: false) { a.vm?.setUsageDiagnostics(!(a.uiState?.usageDiagnostics ?: false)) }
+            a, a.uiState?.usageDiagnostics ?: true) { a.vm?.setUsageDiagnostics(!(a.uiState?.usageDiagnostics ?: true)) }
     }
 
     // "Privacy dashboard" group removed — both rows (View permission usage,
     // Clear app data) only opened Android's own settings screens rather than
     // anything Bluebird itself manages.
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STORAGE HELPER  (improved — no deprecated API)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun StorageInfo(a: ScreenArgs) {
-    val scale = a.scale
-
-    val (total, used) = remember {
-        try {
-            val dir  = a.ctx.filesDir
-            val tot  = dir.totalSpace
-            val free = dir.usableSpace
-            Pair(tot, tot - free)
-        } catch (_: Exception) { Pair(0L, 0L) }
-    }
-
-    SettingsGroup("Storage", a) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row {
-                Text("Internal Storage", color = a.textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), fontSize = (13 * scale).sp)
-                Text("${fmtBytes(used)} / ${fmtBytes(total)}", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
-            }
-            LinearProgressIndicator(
-                progress    = { if (total > 0) (used.toFloat() / total) else 0f },
-                modifier    = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                color       = when {
-                    total > 0 && (used.toFloat() / total) > 0.9f -> DS.badgeRed
-                    total > 0 && (used.toFloat() / total) > 0.75f-> bluebirdColors.Warning
-                    else -> a.accent
-                },
-                trackColor  = a.textColor.copy(alpha = 0.1f)
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                StorageLegend("Used", a.accent, fmtBytes(used))
-                StorageLegend("Free", a.textColor.copy(alpha = 0.3f), fmtBytes(total - used))
-            }
-        }
-    }
-}
-
-@Composable
-private fun RamInfo(a: ScreenArgs) {
-    val scale = a.scale
-    val (total, avail) = remember {
-        val am  = a.ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val mi  = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-        Pair(mi.totalMem, mi.availMem)
-    }
-
-    SettingsGroup("Memory (RAM)", a) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row {
-                Text("RAM usage", color = a.textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), fontSize = (13 * scale).sp)
-                Text("${fmtBytes(total - avail)} / ${fmtBytes(total)}", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
-            }
-            LinearProgressIndicator(
-                progress   = { if (total > 0) ((total - avail).toFloat() / total) else 0f },
-                modifier   = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                color      = Color(0xFF9C6BF7),
-                trackColor = a.textColor.copy(alpha = 0.1f)
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                StorageLegend("In use", Color(0xFF9C6BF7), fmtBytes(total - avail))
-                StorageLegend("Free",   a.textColor.copy(alpha = 0.3f), fmtBytes(avail))
-            }
-        }
-    }
-}
-
-@Composable
-private fun StorageLegend(label: String, color: Color, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(modifier = Modifier.size(10.dp).background(color, RoundedCornerShape(2.dp)))
-        Text("$label: $value", fontSize = 11.sp)
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1878,16 +1342,4 @@ private fun AboutSettings(a: ScreenArgs) {
         // "Open source licenses" row removed — it had no content or onClick
         // behind it.
     }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILITY
-// ─────────────────────────────────────────────────────────────────────────────
-
-private fun fmtBytes(bytes: Long): String = when {
-    bytes <= 0L              -> "0 B"
-    bytes >= 1_073_741_824L  -> "%.1f GB".format(bytes / 1_073_741_824.0)
-    bytes >= 1_048_576L      -> "%.1f MB".format(bytes / 1_048_576.0)
-    bytes >= 1_024L          -> "%.1f KB".format(bytes / 1_024.0)
-    else                     -> "$bytes B"
 }

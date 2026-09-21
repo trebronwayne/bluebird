@@ -18,6 +18,8 @@ import android.provider.Settings
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
@@ -324,7 +326,7 @@ data class LauncherUiState(
     val locationAccess: Boolean = true,
     val cameraAccess: Boolean = true,
     val micAccess: Boolean = true,
-    val usageDiagnostics: Boolean = false,
+    val usageDiagnostics: Boolean = true, // on by default; user can opt out in Settings
     val unknownSources: Boolean = false,
     val biometricUnlock: Boolean = false,
 
@@ -414,6 +416,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             runCatching { File(application.cacheDir, "shortcut_targets").deleteRecursively() }
         }
         loadPersistedData()
+        applyDiagnosticsCollectionSetting(_uiState.value.usageDiagnostics)
         // Installed apps are loaded lazily after the first desktop frame.
         // This keeps PackageManager/icon decoding out of the critical launch path.
         loadInstalledBpkApps()
@@ -547,7 +550,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val locationAccess     = prefs.getBoolean("location_access", true)
         val cameraAccess       = prefs.getBoolean("camera_access", true)
         val micAccess          = prefs.getBoolean("mic_access", true)
-        val usageDiagnostics   = prefs.getBoolean("usage_diagnostics", false)
+        val usageDiagnostics   = prefs.getBoolean("usage_diagnostics", true)
         val unknownSources     = prefs.getBoolean("unknown_sources", false)
         val biometricUnlock    = prefs.getBoolean("biometric_unlock", false)
         val use24Hour          = prefs.getBoolean("use_24_hour", false)
@@ -2680,6 +2683,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setUsageDiagnostics(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(usageDiagnostics = enabled); saveAll()
+        applyDiagnosticsCollectionSetting(enabled)
+    }
+
+    // Single source of truth for turning Firebase Analytics + Crashlytics
+    // collection on/off, called both from setUsageDiagnostics (user toggles
+    // it in Settings) and from init (applying the persisted choice at
+    // startup, before anything else runs).
+    private fun applyDiagnosticsCollectionSetting(enabled: Boolean) {
+        val context = getApplication<Application>()
+        FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(enabled)
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(enabled)
     }
 
     // ─── Time & Language ──────────────────────────────────────────────────────

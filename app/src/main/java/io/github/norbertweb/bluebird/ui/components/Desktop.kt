@@ -852,6 +852,21 @@ private suspend fun loadDesktopVideoThumbnail(context: android.content.Context, 
     }
 }
 
+// ─────────────────────────────────────────────────────────────────
+// FIX: single shared file-access check.
+//
+// Previously this exact check was duplicated inline (and could drift), and
+// several write paths (notably "Add Installed App Shortcut") didn't check
+// it at all before touching the filesystem — that omission is what let a
+// missing-permission shortcut attempt crash the app outright instead of
+// showing the same "File access not granted" toast every other path uses.
+// ─────────────────────────────────────────────────────────────────
+fun hasDesktopFileAccess(context: android.content.Context): Boolean =
+    ContextCompat.checkSelfPermission(
+        context, Manifest.permission.READ_EXTERNAL_STORAGE
+    ) == PackageManager.PERMISSION_GRANTED ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager())
+
 fun loadDesktopFileInfo(file: File, context: android.content.Context): DesktopFileInfo? = try {
     val ext = file.extension.lowercase()
     when {
@@ -1794,6 +1809,20 @@ fun Desktop(
         val maxYBound = (workspaceHeightPx - cellHPx - padTopPx).coerceAtLeast(padTopPx)
         val desktopCapacity = (workspaceRows * workspaceCols).coerceAtLeast(1)
 
+        // FIX (restart repositioning bug): a real desktop viewport is always
+        // comfortably larger than a single icon cell. On some devices/launches,
+        // BoxWithConstraints' very first measurement pass can briefly report a
+        // degenerate size (e.g. before window insets/system bars settle), and the
+        // position-persisting effects below used to run unconditionally on every
+        // geometry change — including that bad first frame — permanently
+        // overwriting every saved logical position with a corrupted one (often
+        // collapsing every icon into the same 1x1 fallback cell, which looks
+        // exactly like an unwanted "auto rearrange" the next time the app opens).
+        // Treat anything smaller than one cell as "not yet measured" and simply
+        // skip persisting for that frame; the effects re-run automatically once
+        // real geometry arrives.
+        val desktopGeometryReady = workspaceWidthPx >= cellWPx && workspaceHeightPx >= cellHPx
+
         // Manual positions are logical user data. The current pixel offset is only a
         // projection of that logical position into the present viewport. This is the
         // key distinction that makes rotation screen-aware without changing Auto Arrange.
@@ -1866,11 +1895,7 @@ fun Desktop(
         // ── First-launch default shortcuts + permission check, then hand off to the
         //    ViewModel's shared file-state layer for everything after ──
         LaunchedEffect(desktopDir.absolutePath) {
-            val hasPermission = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED ||
-                    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R &&
-                    android.os.Environment.isExternalStorageManager()
+            val hasPermission = hasDesktopFileAccess(context)
 
             if (!hasPermission) {
                 showFileAccessToast = true
@@ -1883,11 +1908,55 @@ fun Desktop(
             viewModel.refreshDesktopFiles()
         }
 
+        // FIX: re-check storage access whenever the app comes back to the foreground
+        // (e.g. after the user taps "Grant" on the file-access toast, changes the
+        // permission in Settings, then returns) instead of only ever checking once
+        // on the very first composition above. Without this, a user who legitimately
+        // granted access mid-session kept seeing "File access not granted" — and
+        // shortcut creation kept failing — until they force-restarted the app.
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    if (hasDesktopFileAccess(context)) {
+                        if (showFileAccessToast) showFileAccessToast = false
+                        if (!prefs.defaultShortcutsCreated) {
+                            scope.launch(Dispatchers.IO) {
+                                createDefaultShortcuts(desktopDir, context.packageManager, context.getSharedPreferences("launcher_prefs_v3", Context.MODE_PRIVATE))
+                                prefs.defaultShortcutsCreated = true
+                                withContext(Dispatchers.Main) { viewModel.refreshDesktopFiles() }
+                            }
+                        } else {
+                            viewModel.refreshDesktopFiles()
+                        }
+                    }
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+
         // Keep transient desktop state aligned with the latest filesystem snapshot.
         // Only persist when something actually changed: the old unconditional save ran
         // on every refresh, including silent FileObserver refreshes, causing unnecessary
         // disk I/O and making rapid create/delete/rename sequences more expensive.
         LaunchedEffect(items) {
+            // FIX (the actual restart-repositioning bug): `items` is
+            // `vmUiState.desktopFiles`, sourced from a StateFlow whose initial value
+            // is an empty list until the first `refreshDesktopFiles()` load resolves.
+            // That means THIS effect used to fire immediately on cold start with
+            // items == emptyList(), so `liveIds` was empty and every single saved
+            // position (plus the saved desktop order) below looked "stale" and got
+            // deleted — from memory AND from disk — before the real file list had
+            // even loaded. Every restart wiped positions this way, and the icons
+            // that arrived a moment later had nothing left to restore, so they fell
+            // back to auto-placed grid slots — looking exactly like an unwanted
+            // "auto rearrange" happened, even with Auto arrange off. An empty
+            // `items` here is never trustworthy evidence that files were deleted, so
+            // skip reconciliation/pruning entirely until a real (non-empty) snapshot
+            // arrives; a genuinely empty desktop simply has nothing to prune anyway.
+            if (items.isEmpty()) return@LaunchedEffect
+
             val liveIds = items.asSequence().map { it.id }.toSet()
             val incomingIds = items.map { it.id }
             val reconciledOrder = buildList {
@@ -2003,7 +2072,7 @@ fun Desktop(
             sortedItems.map { it.id }.hashCode(),
             workspaceWidthPx, workspaceHeightPx, iconSize, alignToGrid
         ) {
-            if (autoArrange) return@LaunchedEffect
+            if (autoArrange || !desktopGeometryReady) return@LaunchedEffect
             var changed = false
             sortedItems.forEachIndexed { index, item ->
                 persistLogicalFallback(item.id, index)
@@ -2841,7 +2910,7 @@ fun Desktop(
 
         // Assign every newly discovered item one persistent logical position exactly once.
         LaunchedEffect(items, autoArrange, workspaceRows, workspaceCols, workspaceWidthPx, workspaceHeightPx, iconSize, alignToGrid) {
-            if (autoArrange) return@LaunchedEffect
+            if (autoArrange || !desktopGeometryReady) return@LaunchedEffect
             var changed = false
             sortedItems.forEachIndexed { index, item ->
                 val hadLogical = logicalPositions.containsKey(item.id)
@@ -2883,20 +2952,49 @@ fun Desktop(
                     sortMode            = sortMode,
                     sortAscending       = sortAscending,
                     onSortChange        = { m, a ->
-                        sortMode = m; sortAscending = a
-                        prefs.sortMode = m; prefs.sortAscending = a
-                        // Marks that the user has explicitly chosen a sort mode now — from
-                        // here on, launches read the real saved mode instead of defaulting
-                        // to NONE. (Explicitly picking "None" itself also sets this flag,
-                        // so it correctly stays None on the next launch too, rather than
-                        // being indistinguishable from "never touched".)
-                        layoutPrefsStore.edit().putBoolean("user_set_sort", true).apply()
+                        // Defense in depth: the menu already disables/dims "Sort by" unless
+                        // Auto arrange is on (see bluebirdDesktopContextMenu), but guard the
+                        // actual state change too so sort can never silently take effect
+                        // while manual free-form placement (Auto arrange off) owns icon
+                        // positions — sort order only has an effect once Auto arrange is
+                        // the one deciding where icons go.
+                        if (autoArrange) {
+                            sortMode = m; sortAscending = a
+                            prefs.sortMode = m; prefs.sortAscending = a
+                            // Marks that the user has explicitly chosen a sort mode now — from
+                            // here on, launches read the real saved mode instead of defaulting
+                            // to NONE. (Explicitly picking "None" itself also sets this flag,
+                            // so it correctly stays None on the next launch too, rather than
+                            // being indistinguishable from "never touched".)
+                            layoutPrefsStore.edit().putBoolean("user_set_sort", true).apply()
+                        }
                         showDesktopCtx = false
                     },
                     autoArrange         = autoArrange,
-                    onAutoArrangeToggle = {
-                        autoArrange = it; prefs.autoArrange = it
-                        // Keep manual placements intact while Auto Arrange is enabled.
+                    onAutoArrangeToggle = { turningOn ->
+                        // FIX: turning Auto arrange ON used to just flip the flag — the grid
+                        // layout it then displays was never written back into the saved
+                        // positions. So turning Auto arrange back OFF later reverted to
+                        // whatever free-form layout existed *before* it was turned on,
+                        // instead of resuming from the grid the user had just been looking
+                        // at. Snapshot the exact grid Auto arrange is about to apply as the
+                        // new persisted manual layout, so it "sticks" once Auto arrange is
+                        // turned off again — matching the requested behavior.
+                        if (turningOn && !autoArrange && desktopGeometryReady) {
+                            val taken = mutableSetOf<Pair<Int, Int>>()
+                            sortedItems.forEachIndexed { idx, item ->
+                                val p = autoGridPos(
+                                    idx, workspaceRows, workspaceCols,
+                                    cellWPx, cellHPx, padLeftPx, padTopPx, taken
+                                )
+                                if (p != null) {
+                                    taken.add(posToCell(p, cellWPx, cellHPx, padLeftPx, padTopPx, workspaceCols, workspaceRows))
+                                    persistManualPosition(item.id, p)
+                                }
+                            }
+                            prefs.saveCustomPositions(customPositions)
+                        }
+                        autoArrange = turningOn; prefs.autoArrange = turningOn
                         showDesktopCtx = false
                     },
                     alignToGrid         = alignToGrid,
@@ -3185,37 +3283,21 @@ fun Desktop(
                     onConfirm = { target, label, isFolder ->
                         val trimmed = target.trim()
                         if (trimmed.isNotEmpty() && label.isNotBlank()) {
-                            val resolvedPath = if (trimmed.startsWith("content://") || trimmed.startsWith("file://")) {
+                            val isSafSource = trimmed.startsWith("content://") || trimmed.startsWith("file://")
+                            val resolvedPath = if (isSafSource) {
                                 viewModel.resolveSafUriToFilePath(context, Uri.parse(trimmed))
                             } else trimmed
-                            val targetFile = resolvedPath?.let(::File)
-                            val finalIsFolder = isFolder || targetFile?.isDirectory == true
+                            val resolvedFile = resolvedPath?.let(::File)
+                            val finalIsFolder = isFolder || resolvedFile?.isDirectory == true
                             val f = File(desktopDir, uniqueName(desktopDir, label.trim(), "desktop"))
-                            // Local storage targets are saved as real filesystem paths. This
-                            // is crucial for media: opening a shortcut then uses the exact same
-                            // path as the original file instead of copying a large video into cache.
-                            // Shortcuts are real-path references only. A SAF URI that cannot
-                            // be resolved to a filesystem path is not copied into cache and is
-                            // not saved as a URI shortcut.
-                            val isSafSource = trimmed.startsWith("content://") || trimmed.startsWith("file://")
-                            val pathIsValid = !isSafSource || resolvedPath != null
-                            val finalPath = resolvedPath ?: trimmed
-                            val finalTarget = File(finalPath)
-                            // For files picked through the SAF file picker, resolveSafUriToFilePath()
-                            // has already done the real access check (it only returns non-null when
-                            // the path is genuinely readable, e.g. via MediaStore/DocumentsContract
-                            // resolution). Many such paths — especially individual files rather than
-                            // whole folders — are virtual/synthetic and don't back a real inode, so
-                            // File.exists() on them returns false even though access is fully granted.
-                            // That mismatch was exactly why folder shortcuts worked (their resolved
-                            // paths tend to be real filesystem trees) while file shortcuts always
-                            // reported "access not granted". Only fall back to File.exists() for
-                            // paths the user typed in directly, which were never SAF-resolved.
-                            val targetAccessible = if (isSafSource) pathIsValid else finalTarget.exists()
-                            if (!pathIsValid || !targetAccessible) {
-                                showFileAccessToast = true
-                            } else {
-                                val content = "type=${if (finalIsFolder || finalTarget.isDirectory) "folder" else "file"}\npath=$finalPath\nlabel=${label.trim()}\n"
+
+                            // A real, resolved filesystem path that actually exists is always
+                            // preferred: shortcuts are real-path references only, which is what
+                            // lets a media shortcut open the exact same file instead of copying
+                            // it into cache first.
+                            val hasRealPath = resolvedPath != null && resolvedFile?.exists() == true
+
+                            fun writeShortcut(content: String, onDone: () -> Unit) {
                                 try {
                                     f.writeText(content)
                                     // The shortcut file is already written at this point, so the
@@ -3230,9 +3312,51 @@ fun Desktop(
                                     shortcutPickedIsFolder = false
                                     showShortcutDialog = false
                                     scheduleRefresh()
+                                    onDone()
                                 } catch (_: Exception) {
                                     showFileAccessToast = true
                                 }
+                            }
+
+                            when {
+                                hasRealPath -> {
+                                    val content = "type=${if (finalIsFolder) "folder" else "file"}\npath=$resolvedPath\nlabel=${label.trim()}\n"
+                                    writeShortcut(content) {}
+                                }
+                                // FIX: "File access not granted" even though access WAS granted.
+                                //
+                                // resolveSafUriToFilePath() often can't map a SAF content:// URI
+                                // back to a real filesystem path — many documents (especially
+                                // individual files, as opposed to whole folder trees) are virtual/
+                                // synthetic and don't back a real inode. That's a resolution
+                                // limitation, not a permission problem: the system file/folder
+                                // picker (onBrowseFile/onBrowseFolder above) already called
+                                // takePersistableUriPermission() on this exact URI the moment it
+                                // was picked, so the app genuinely does have durable access to it.
+                                //
+                                // Rather than treating "couldn't resolve to a path" as "access
+                                // denied", verify access directly against the URI itself, and if
+                                // that succeeds, save the shortcut as a uri=/uriType= reference —
+                                // the same format loadDesktopFileInfo()/openDesktopItem() already
+                                // understand for shortcuts whose target has no backing file path.
+                                isSafSource -> {
+                                    val uri = Uri.parse(trimmed)
+                                    val reallyAccessible = try {
+                                        if (isFolder) {
+                                            androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)?.exists() == true
+                                        } else {
+                                            context.contentResolver.openInputStream(uri)?.use { true } ?: false
+                                        }
+                                    } catch (_: Exception) { false }
+
+                                    if (reallyAccessible) {
+                                        val content = "type=uri\nuri=$trimmed\nuriType=${if (finalIsFolder) "folder" else "file"}\nlabel=${label.trim()}\n"
+                                        writeShortcut(content) {}
+                                    } else {
+                                        showFileAccessToast = true
+                                    }
+                                }
+                                else -> showFileAccessToast = true
                             }
                         }
                     },
@@ -3248,16 +3372,30 @@ fun Desktop(
                 AppPickerDialog(
                     isDark       = isDark,
                     onAppSelected = { pkg, label ->
-                        val f = File(desktopDir, uniqueName(desktopDir, label, "desktop"))
-                        val content = if (pkg.startsWith("bluebird:")) {
-                            "type=app\nlabel=$label\nbluebirdScreen=${pkg.removePrefix("bluebird:")}\n"
-                        } else {
-                            "type=app\npackage=$pkg\nlabel=$label\n"
-                        }
-                        f.writeText(content)
-                        placeNewItemAtClickPosition(f.absolutePath)
+                        // FIX: this used to write straight to disk with no permission check
+                        // and no try/catch — on a device where file access hadn't been
+                        // granted, desktopDir wasn't writable and the write threw, crashing
+                        // the app outright instead of showing "File access not granted"
+                        // like every other write path here does.
                         showAppPickerDialog = false
-                        scheduleRefresh()
+                        if (!hasDesktopFileAccess(context)) {
+                            showFileAccessToast = true
+                        } else {
+                            try {
+                                if (!desktopDir.exists()) desktopDir.mkdirs()
+                                val f = File(desktopDir, uniqueName(desktopDir, label, "desktop"))
+                                val content = if (pkg.startsWith("bluebird:")) {
+                                    "type=app\nlabel=$label\nbluebirdScreen=${pkg.removePrefix("bluebird:")}\n"
+                                } else {
+                                    "type=app\npackage=$pkg\nlabel=$label\n"
+                                }
+                                f.writeText(content)
+                                placeNewItemAtClickPosition(f.absolutePath)
+                                scheduleRefresh()
+                            } catch (_: Exception) {
+                                showFileAccessToast = true
+                            }
+                        }
                     },
                     onDismiss = { showAppPickerDialog = false }
                 )
@@ -3699,6 +3837,34 @@ private fun LayoutCoordinates.trueScreenPosition(view: android.view.View): Offse
     return Offset(loc[0] + local.x, loc[1] + local.y)
 }
 
+// FIX (theme): desktop context menus, the "Add app shortcut" picker, and the
+// "Create shortcut" dialog previously used a different fill/border/corner
+// treatment (desktopSurfaceFill/desktopSurfaceBorder, 8dp corners) than the
+// Start Menu's own floating panel — now they share the same 12dp corner and
+// border treatment Start uses.
+//
+// The fill is intentionally MORE transparent than the literal 0xE6.../0xE6...
+// value read off StartMenu()'s own panel. That value looks light and airy
+// there because it's painted on top of a real Acrylic blur
+// (`.hazeMaterial(hazeState, windowsAcrylic(...), panelShape)`) — the same
+// 90%-opaque tint over a *blurred* backdrop reads as soft, but painted at
+// that same opacity directly over the sharp, unblurred desktop wallpaper/icons
+// (no `HazeState` is threaded into Desktop()) it reads as a flat, heavy slab
+// instead — which is exactly the "opacity is too high" issue. Dropping the
+// alpha further compensates for the missing blur so it reads closer to real
+// Windows 11's Acrylic without one. Getting the literal same blurred-Acrylic
+// look as Start would require Desktop() to receive the same shared
+// `HazeState` Start Menu is given by whatever composable hosts both of them —
+// that composable wasn't part of what was shared here, so this is the closest
+// achievable match without it.
+private fun bluebirdMenuSurfaceColor(isDark: Boolean): Color =
+    if (isDark) Color(0xB01F1F1F) else Color(0xB0F8F8F8)
+
+private fun bluebirdMenuBorderColor(isDark: Boolean): Color =
+    if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
+
+private val bluebirdMenuCorner = RoundedCornerShape(12.dp)
+
 @Composable
 private fun bluebirdMenuPopup(
     clickWindowPos: Offset,
@@ -3724,6 +3890,13 @@ private fun bluebirdFlyoutRow(
     tc: Color,
     tcDim: Color,
     isOpen: Boolean,
+    // FIX (sort-by gating): a flyout row can now be disabled entirely — used by
+    // "Sort by" so it only works while Auto arrange is on (it controls the order
+    // Auto arrange lays icons out in, so it's meaningless with Auto arrange off
+    // and icons sitting at free-form manual positions).
+    // Disabled rows are dimmed, don't toggle their flyout, and any already-open
+    // flyout is force-closed by the caller (see bluebirdDesktopContextMenu).
+    enabled: Boolean = true,
     onToggle: () -> Unit,
     onCloseFlyout: () -> Unit,
     submenuContent: @Composable () -> Unit
@@ -3731,17 +3904,19 @@ private fun bluebirdFlyoutRow(
     val view = LocalView.current
     var rowWindowBounds by remember { mutableStateOf(IntRect.Zero) }
     Box(
-        Modifier.onGloballyPositioned { coords ->
-            val p = coords.trueScreenPosition(view)
-            rowWindowBounds = IntRect(
-                p.x.roundToInt(), p.y.roundToInt(),
-                p.x.roundToInt() + coords.size.width, p.y.roundToInt() + coords.size.height
-            )
-        }
+        Modifier
+            .alpha(if (enabled) 1f else 0.4f)
+            .onGloballyPositioned { coords ->
+                val p = coords.trueScreenPosition(view)
+                rowWindowBounds = IntRect(
+                    p.x.roundToInt(), p.y.roundToInt(),
+                    p.x.roundToInt() + coords.size.width, p.y.roundToInt() + coords.size.height
+                )
+            }
     ) {
-        W11CtxRow(icon, label, tc, tcDim, hasArrow = true) { onToggle() }
+        W11CtxRow(icon, label, tc, tcDim, hasArrow = true, enabled = enabled) { if (enabled) onToggle() }
     }
-    if (isOpen) {
+    if (isOpen && enabled) {
         Popup(
             popupPositionProvider = remember(rowWindowBounds) { FlyoutMenuPosition(rowWindowBounds, marginPx = 12) },
             onDismissRequest = onCloseFlyout,
@@ -3781,7 +3956,12 @@ fun bluebirdDesktopContextMenu(
     onDismiss: () -> Unit
 ) {
     val menuW    = 210
-    val bg       = desktopSurfaceFill(isDark)
+    // FIX (theme): was desktopSurfaceFill/desktopSurfaceBorder + 8dp corners — now the
+    // exact same fill/border tokens and 12dp corner radius as StartMenu()'s own panel,
+    // so the desktop context menu reads as the same surface as Start.
+    val bg       = bluebirdMenuSurfaceColor(isDark)
+    val borderClr = bluebirdMenuBorderColor(isDark)
+    val corner   = bluebirdMenuCorner
     val tc       = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val tcDim    = tc.copy(alpha = 0.55f)
     val divColor = desktopSurfaceBorder(isDark)
@@ -3789,13 +3969,23 @@ fun bluebirdDesktopContextMenu(
 
     var openSub by remember { mutableStateOf<String?>(null) }
 
+    // FIX (sort-by gating): if Auto arrange gets turned off while the Sort by
+    // flyout happens to be open, force it closed instead of leaving a now-inert
+    // flyout open. (Sort by only works while Auto arrange is ON in this app —
+    // it controls the order Auto arrange lays icons out in; with Auto arrange
+    // off, icons sit at their free-form manual positions and a sort order has
+    // nothing to apply to.)
+    LaunchedEffect(autoArrange) {
+        if (!autoArrange && openSub == "sort") openSub = null
+    }
+
     bluebirdMenuPopup(clickWindowPos = offset, onDismiss = onDismiss) {
         Surface(
             modifier        = Modifier.width(menuW.dp),
-            shape           = RoundedCornerShape(8.dp),
+            shape           = corner,
             color           = bg,
             shadowElevation = 16.dp,
-            border          = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+            border          = BorderStroke(1.dp, borderClr)
         ) {
             Column(Modifier.padding(vertical = 5.dp)) {
                 bluebirdFlyoutRow(
@@ -3805,8 +3995,8 @@ fun bluebirdDesktopContextMenu(
                     onCloseFlyout = { openSub = null }
                 ) {
                     Surface(
-                        modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+                        modifier = Modifier.width(190.dp), shape = corner, color = bg,
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRow("Large icons",  viewMode == DesktopIconSize.LARGE,  tc, accent) { onViewChange(DesktopIconSize.LARGE) }
@@ -3821,15 +4011,24 @@ fun bluebirdDesktopContextMenu(
                     }
                 }
 
+                // FIX: "Sort by" only makes sense — and only takes effect — while Auto
+                // arrange is ON: sort order controls what order Auto arrange lays icons
+                // out in. With Auto arrange off, icons sit exactly where the user put
+                // them (or where a new item was created), so a sort selection has
+                // nothing to apply to. Disabled (dimmed, non-interactive) rather than
+                // hidden, so the option's existence stays discoverable, matching how
+                // Windows dims unavailable context-menu entries instead of removing
+                // them outright.
                 bluebirdFlyoutRow(
                     icon = FluentIcon.ArrowSort, label = "Sort by", tc = tc, tcDim = tcDim,
                     isOpen = openSub == "sort",
+                    enabled = autoArrange,
                     onToggle = { openSub = if (openSub == "sort") null else "sort" },
                     onCloseFlyout = { openSub = null }
                 ) {
                     Surface(
-                        modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+                        modifier = Modifier.width(190.dp), shape = corner, color = bg,
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             // "None" — the default, matching real Windows (sort isn't on until you
@@ -3860,8 +4059,8 @@ fun bluebirdDesktopContextMenu(
                     onCloseFlyout = { openSub = null }
                 ) {
                     Surface(
-                        modifier = Modifier.width(220.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+                        modifier = Modifier.width(220.dp), shape = corner, color = bg,
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRowIcon(FluentIcon.Folder,      "Folder",                     Color(0xFFFFC107), tc) { onNewFolder();       onDismiss() }
@@ -3907,7 +4106,11 @@ fun bluebirdIconContextMenu(
     onProperties: () -> Unit
 ) {
     val menuW    = 220
-    val bg       = desktopSurfaceFill(isDark)
+    // FIX (theme): matches StartMenu()'s own panel fill/border/corner exactly — see
+    // bluebirdMenuSurfaceColor/bluebirdMenuBorderColor/bluebirdMenuCorner above.
+    val bg       = bluebirdMenuSurfaceColor(isDark)
+    val borderClr = bluebirdMenuBorderColor(isDark)
+    val corner   = bluebirdMenuCorner
     val tc       = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val tcDim    = tc.copy(alpha = 0.55f)
     val divColor = desktopSurfaceBorder(isDark)
@@ -3918,10 +4121,10 @@ fun bluebirdIconContextMenu(
     bluebirdMenuPopup(clickWindowPos = offset, onDismiss = onDismiss) {
         Surface(
             modifier        = Modifier.width(menuW.dp),
-            shape           = RoundedCornerShape(8.dp),
+            shape           = corner,
             color           = bg,
             shadowElevation = 16.dp,
-            border          = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+            border          = BorderStroke(1.dp, borderClr)
         ) {
             Column(Modifier.padding(vertical = 5.dp)) {
                 // Quick action row
@@ -3951,8 +4154,8 @@ fun bluebirdIconContextMenu(
                     onCloseFlyout = { openSub = null }
                 ) {
                     Surface(
-                        modifier = Modifier.width(190.dp), shape = RoundedCornerShape(8.dp), color = bg,
-                        shadowElevation = 16.dp, border = BorderStroke(1.dp, desktopSurfaceBorder(isDark))
+                        modifier = Modifier.width(190.dp), shape = corner, color = bg,
+                        shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
                             W11SubRowIcon(FluentIcon.Open, "Choose app", tc.copy(0.8f), tc) { onOpenWith(); onDismiss() }
@@ -4166,14 +4369,15 @@ private fun Windows11ShortcutDialog(
     var label by remember(initialLabel) { mutableStateOf(initialLabel) }
     var isFolder by remember(initialTarget, initialIsFolder) { mutableStateOf(initialIsFolder) }
 
-    val bg = desktopSurfaceFill(isDark)
+    // FIX (theme): same fill token StartMenu()'s own panel uses, 12dp corners to match.
+    val bg = bluebirdMenuSurfaceColor(isDark)
     val tc = desktopTextPrimary(isDark)
     val dim = desktopTextSecondary(isDark)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = bg,
-        shape = RoundedCornerShape(8.dp),
+        shape = bluebirdMenuCorner,
         title = {
             Text("Create Shortcut", color = tc, fontSize = 18.sp, fontWeight = FontWeight.Medium)
         },
@@ -4252,7 +4456,10 @@ fun AppPickerDialog(
     var searchQuery by remember { mutableStateOf("") }
     var isLoading   by remember { mutableStateOf(true) }
 
-    val bg = desktopSurfaceFill(isDark)
+    // FIX (theme): same fill/corner tokens as StartMenu()'s own panel (see
+    // bluebirdMenuSurfaceColor/bluebirdMenuCorner above) instead of the old
+    // desktopSurfaceFill + 10dp corner treatment.
+    val bg = bluebirdMenuSurfaceColor(isDark)
     val tc = desktopTextPrimary(isDark)
 
     LaunchedEffect(Unit) {
@@ -4273,7 +4480,7 @@ fun AppPickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = bg,
-        shape            = RoundedCornerShape(10.dp),
+        shape            = bluebirdMenuCorner,
         title = {
             Text("Add App Shortcut", color = tc, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         },
