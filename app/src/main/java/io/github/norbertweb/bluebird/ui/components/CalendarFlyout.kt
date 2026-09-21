@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,9 +43,9 @@ import java.util.Locale
 
 // Standalone calendar flyout. Opened by tapping the clock/date in the
 // system tray — separate from Action Center, which only owns wifi/volume/
-// brightness quick settings. Three visually distinct bands: a header with
-// today's full date, a body with a month you can page through (any month,
-// any year), and a footer with a live, seconds-accurate clock.
+// brightness quick settings. One consistent panel: a header with today's
+// full date, a body with a month you can page through (any month, any
+// year), and a footer with a live, seconds-accurate clock.
 @Composable
 fun CalendarFlyout(
     hazeState: dev.chrisbanes.haze.HazeState,
@@ -69,9 +71,17 @@ fun CalendarFlyout(
     // in either direction) never disturbs the live clock above.
     var displayed by remember { mutableStateOf(Calendar.getInstance()) }
 
-    val headerBg = if (isDark) accent.copy(alpha = 0.05f) else accent.copy(alpha = 0.04f)
-    val bodyBg = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
-    val footerBg = if (isDark) Color.Black.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.02f)
+    // One consistent, mostly-opaque panel - the same Acrylic tint Start
+    // Menu, Action Center and the Power Menu all use - instead of three
+    // separately tinted bands. The header/footer used to sit at 2-5%
+    // opacity, so almost all of the live blur showed through there while
+    // the body (at ~90% opaque) read as solid; that mismatch is what made
+    // it look glassy and cheap next to the others. Now the whole card is
+    // one solid surface, and hairline dividers do the section separation
+    // instead of swinging opacity up and down.
+    val panelBg = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
+    val dividerColor = if (isDark) DS.borderDark else DS.borderLight
+    val headerTint = accent.copy(alpha = if (isDark) 0.10f else 0.06f)
 
     AcrylicSurface(
         modifier = modifier
@@ -87,13 +97,16 @@ fun CalendarFlyout(
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .clip(RoundedCornerShape(12.dp))
+                .background(panelBg)
         ) {
             CalendarHeader(
                 now = now,
                 textColor = textColor,
                 textScale = textScale,
-                background = headerBg
+                background = headerTint
             )
+
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
             val isViewingCurrentMonth = displayed.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
                 displayed.get(Calendar.MONTH) == now.get(Calendar.MONTH)
@@ -101,8 +114,7 @@ fun CalendarFlyout(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(bodyBg)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 MonthNavRow(
                     displayed = displayed,
@@ -112,14 +124,21 @@ fun CalendarFlyout(
                     onNext = { displayed = (displayed.clone() as Calendar).apply { add(Calendar.MONTH, 1) } }
                 )
                 if (!isViewingCurrentMonth) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Jump to today",
-                        color = bluebirdColors.AccentBlue,
-                        fontSize = (8.5f * textScale).sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { displayed = Calendar.getInstance() }
-                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(accent.copy(alpha = if (isDark) 0.16f else 0.10f))
+                            .clickable { displayed = Calendar.getInstance() }
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            "Jump to today",
+                            color = bluebirdColors.AccentBlue,
+                            fontSize = (8.5f * textScale).sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
                 MiniCalendarGrid(
@@ -131,11 +150,12 @@ fun CalendarFlyout(
                 )
             }
 
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
             CalendarFooter(
                 now = now,
                 textColor = textColor,
-                textScale = textScale,
-                background = footerBg
+                textScale = textScale
             )
         }
     }
@@ -153,13 +173,17 @@ private fun CalendarHeader(
         modifier = Modifier
             .fillMaxWidth()
             .background(background)
-            .padding(horizontal = 13.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 11.dp)
     ) {
+        // A touch lighter than the rest of the flyout's bold-everywhere
+        // type, plus a hair of tracking, so the date reads as a header
+        // instead of blending into the nav row and grid below it.
         Text(
             dateFormat.format(now.time),
             color = textColor,
-            fontSize = (11.5f * textScale).sp,
-            fontWeight = FontWeight.Bold
+            fontSize = (12.5f * textScale).sp,
+            fontWeight = FontWeight.SemiBold,
+            style = TextStyle(letterSpacing = 0.2.sp)
         )
     }
 }
@@ -168,22 +192,31 @@ private fun CalendarHeader(
 private fun CalendarFooter(
     now: Calendar,
     textColor: Color,
-    textScale: Float,
-    background: Color
+    textScale: Float
 ) {
-    val timeFormat = remember { SimpleDateFormat("h:mm:ss a", Locale.getDefault()) }
-    Box(
+    // h:mm carries the eye; seconds + AM/PM are real but secondary, so they
+    // sit a step dimmer instead of matching weight with the main time.
+    val mainFormat = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
+    val suffixFormat = remember { SimpleDateFormat(":ss a", Locale.getDefault()) }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(background)
-            .padding(horizontal = 13.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.Bottom
     ) {
         Text(
-            timeFormat.format(now.time),
+            mainFormat.format(now.time),
             color = textColor,
-            fontSize = (11f * textScale).sp,
+            fontSize = (11.5f * textScale).sp,
             fontWeight = FontWeight.Bold
+        )
+        Text(
+            suffixFormat.format(now.time),
+            color = textColor.copy(alpha = 0.55f),
+            fontSize = (9.5f * textScale).sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 0.5.dp)
         )
     }
 }
@@ -259,22 +292,29 @@ private fun MiniCalendarGrid(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            weekDays.forEach { day ->
+            weekDays.forEachIndexed { index, day ->
+                val isWeekend = index == 5 || index == 6
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(day, color = textColor.copy(alpha = 0.55f), fontSize = (8f * textScale).sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        day,
+                        color = if (isWeekend) accent.copy(alpha = 0.75f) else textColor.copy(alpha = 0.55f),
+                        fontSize = (8f * textScale).sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(4.dp))
 
         val totalCells = ((firstDayOffset + daysInMonth + 6) / 7) * 7
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             repeat(totalCells / 7) { rowIndex ->
                 Row(modifier = Modifier.fillMaxWidth()) {
                     repeat(7) { colIndex ->
                         val cell = rowIndex * 7 + colIndex
                         val day = cell - firstDayOffset + 1
                         val isCurrent = isCurrentMonth && day == todayDayOfMonth && day in 1..daysInMonth
+                        val isWeekend = colIndex == 5 || colIndex == 6
                         Box(
                             modifier = Modifier.weight(1f).height(19.dp),
                             contentAlignment = Alignment.Center
@@ -294,7 +334,11 @@ private fun MiniCalendarGrid(
                                 ) {
                                     Text(
                                         day.toString(),
-                                        color = if (isCurrent) Color.White else textColor.copy(alpha = 0.82f),
+                                        color = when {
+                                            isCurrent -> Color.White
+                                            isWeekend -> accent.copy(alpha = 0.80f)
+                                            else -> textColor.copy(alpha = 0.82f)
+                                        },
                                         fontSize = (8.5f * textScale).sp,
                                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold
                                     )

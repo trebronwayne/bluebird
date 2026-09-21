@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -104,12 +108,15 @@ fun ActionCenter(
             // Static reference tiles: no fake On/Off/Connected labels. Taps
             // only navigate to a real Android/Bluebird destination where one
             // exists; the tile itself never pretends to own system state.
+            // Wi-Fi and Data open Android's real quick-toggle panels (no
+            // navigating away); Airplane and Focus have no panel API, so
+            // they open their full Android settings screens instead.
             val quickRefs = listOf(
-                "Wi-Fi" to { viewModel.openWifiSettings(context) },
+                "Wi-Fi" to { openWifiQuickPanel(context) },
                 "Bluetooth" to { viewModel.openBluetoothSettings(context) },
-                "Airplane" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
-                "Focus" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
-                "Data" to { viewModel.openWindow(LauncherScreen.SETTINGS) },
+                "Airplane" to { openAndroidSettings(context, Settings.ACTION_AIRPLANE_MODE_SETTINGS) },
+                "Focus" to { openAndroidSettings(context, Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS) },
+                "Data" to { openDataQuickPanel(context) },
                 "Settings" to { viewModel.openWindow(LauncherScreen.SETTINGS) }
             )
             val quickIcons = listOf(
@@ -171,6 +178,57 @@ fun ActionCenter(
                 onValueChange = { viewModel.setBrightness(it, context) }
             )
         }
+    }
+}
+
+/**
+ * Shows Android's Internet Connectivity quick panel - there is no
+ * standalone "mobile data" panel in the public API, but this one covers
+ * Wi-Fi and mobile data together in the same floating dialog, which is the
+ * closest real equivalent. Falls back to the full Data usage settings
+ * screen on older devices or if nothing can resolve the panel intent.
+ */
+private fun openDataQuickPanel(context: Context) {
+    val panelIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    } else {
+        null
+    }
+
+    val opened = panelIntent != null && runCatching { context.startActivity(panelIntent) }.isSuccess
+    if (!opened) {
+        openAndroidSettings(context, Settings.ACTION_DATA_USAGE_SETTINGS)
+    }
+}
+
+/**
+ * Shows Android's real Wi-Fi quick-toggle panel (a floating bottom sheet the
+ * OS draws over Bluebird, letting the user flip Wi-Fi on/off without ever
+ * leaving the launcher) instead of jumping to the full Settings app. This is
+ * the public android.provider.Settings.Panel API, added in Android 10 (API
+ * 29) - there is no equivalent public panel for Bluetooth or airplane mode,
+ * so those still go to their full Settings screens.
+ */
+private fun openWifiQuickPanel(context: Context) {
+    val panelIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        Intent(Settings.Panel.ACTION_WIFI).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    } else {
+        null
+    }
+
+    val opened = panelIntent != null && runCatching { context.startActivity(panelIntent) }.isSuccess
+    if (!opened) {
+        // Older devices, or no app on the device can resolve the panel:
+        // fall back to the real Wi-Fi settings screen rather than doing
+        // nothing.
+        openAndroidSettings(context, Settings.ACTION_WIFI_SETTINGS)
+    }
+}
+
+/** Opens a real Android system Settings screen (Airplane mode, Zen mode, Data usage, ...). */
+private fun openAndroidSettings(context: Context, action: String) {
+    runCatching {
+        context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 

@@ -48,11 +48,20 @@ import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 @Composable
 fun PowerMenuButton(
     isDark: Boolean,
-    textPrimary: androidx.compose.ui.graphics.Color,
-    onBluebirdLock: (() -> Unit)? = null
+    textPrimary: androidx.compose.ui.graphics.Color
 ) {
     val context = LocalContext.current
     var showPowerMenu by remember { mutableStateOf(false) }
+
+    // Same panel chrome as the Start Menu shell: identical Acrylic tint,
+    // border color/alpha and corner radius, plus the same soft shadow -
+    // so this reads as the same surface as Start rather than a generic
+    // Material dropdown.
+    val panelBackground = if (isDark) androidx.compose.ui.graphics.Color(0xE61F1F1F)
+        else androidx.compose.ui.graphics.Color(0xE6F8F8F8)
+    val panelBorder = if (isDark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.09f)
+        else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f)
+    val panelShape = RoundedCornerShape(12.dp)
 
     Box {
         Box(
@@ -74,22 +83,15 @@ fun PowerMenuButton(
             expanded = showPowerMenu,
             onDismissRequest = { showPowerMenu = false },
             modifier = Modifier
-                .background(DS.controlFill(isDark, strength = 1.15f), RoundedCornerShape(10.dp))
-                .border(0.5.dp, if (isDark) DS.borderDark.copy(alpha = 0.72f) else DS.borderLight.copy(alpha = 0.72f), RoundedCornerShape(10.dp))
+                .softShadow(
+                    cornerRadius = 12.dp,
+                    blurRadius = 34.dp,
+                    alpha = 0.30f,
+                    offsetY = 10.dp
+                )
+                .background(panelBackground, panelShape)
+                .border(1.dp, panelBorder, panelShape)
         ) {
-            PowerMenuItem(label = "Lock screen", icon = FluentIcon.Accessibility, isDark = isDark) {
-                showPowerMenu = false
-                // Lock only the Bluebird desktop overlay; never touch Android system state.
-                onBluebirdLock?.invoke()
-            }
-            PowerMenuItem(label = "Turn off screen", icon = FluentIcon.Power, isDark = isDark) {
-                showPowerMenu = false
-                // Android exposes device screen locking as the public
-                // accessibility global action. Keep this separate in the
-                // Bluebird UI so the requested power-menu semantics remain clear.
-                // Lock only the Bluebird desktop overlay; never touch Android system state.
-                onBluebirdLock?.invoke()
-            }
             PowerMenuItem(label = "Restart", icon = FluentIcon.ArrowSync, isDark = isDark) {
                 showPowerMenu = false
                 restartBluebird(context)
