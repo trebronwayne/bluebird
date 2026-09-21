@@ -2,6 +2,7 @@ package io.github.norbertweb.bluebird.wordprocessor
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -90,8 +91,19 @@ fun PhoneScreen(isDark: Boolean, initialPath: String = "") {
                 if (c.moveToFirst()) c.getString(0) else null
             }
         }.getOrNull()
-        return name?.endsWith(".pdf", ignoreCase = true) == true
+        if (name?.endsWith(".pdf", ignoreCase = true) == true) return true
+        return uri.path?.endsWith(".pdf", ignoreCase = true) == true
     }
+
+    // Callers (file explorer, desktop icons, "open with") don't always hand us a proper
+    // content:// / file:// URI — a bare device path like "/storage/.../Desktop/notes.txt"
+    // is common. Uri.parse() on that never throws, but it produces a schemeless Uri that
+    // ContentResolver silently refuses to open (caught below, previously = blank screen).
+    // Wrap bare paths as file:// so the same ContentResolver code path works either way.
+    fun resolveOpenUri(path: String): Uri? = runCatching {
+        if (path.startsWith("content://") || path.startsWith("file://")) Uri.parse(path)
+        else Uri.fromFile(File(path))
+    }.getOrNull()
 
     fun createDocument() {
         documents.add(WordDocument("Document${documents.size + 1}", settings.defaultPageSettings))
@@ -212,16 +224,25 @@ fun PhoneScreen(isDark: Boolean, initialPath: String = "") {
 
     LaunchedEffect(initialPath) {
         if (initialPath.isNotBlank()) {
-            val uri = runCatching { Uri.parse(initialPath) }.getOrNull() ?: return@LaunchedEffect
+            val uri = resolveOpenUri(initialPath)
+            if (uri == null) {
+                notify("Couldn't open the file")
+                return@LaunchedEffect
+            }
             if (isPdfUri(uri)) {
                 pdfUri = uri
-            } else {
+                return@LaunchedEffect
+            }
+            val loaded = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.use { openAnyDocument(it.readBytes(), "Document") }
-                }.getOrNull()?.let {
-                    it.savedUri = uri
-                    documents.clear(); documents.add(it); currentIndex = 0
-                }
+                }.getOrNull()
+            }
+            if (loaded != null) {
+                loaded.savedUri = uri
+                documents.clear(); documents.add(loaded); currentIndex = 0
+            } else {
+                notify("Couldn't open the file")
             }
         }
     }

@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontFamily
 import java.io.File
 import androidx.compose.ui.unit.dp
@@ -60,6 +62,31 @@ fun PremiumTextEditorScreen(
     val systemDark = isSystemInDarkTheme()
     val state = remember(filePath) { PremiumEditorState(filePath, initialContent, savedSettings, systemDark) }
     LaunchedEffect(systemDark) { state.setSystemTheme(systemDark) }
+
+    // This screen used to just display whatever `initialContent` it was handed and never
+    // actually read `filePath` itself. If the caller (file explorer / desktop "open") only
+    // passes a path — no content — the editor opens with the right title but an empty body.
+    // Load the file ourselves whenever we have a path but no content to show for it.
+    LaunchedEffect(filePath) {
+        if (filePath.isNotBlank() && initialContent.isBlank()) {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (filePath.startsWith("content://") || filePath.startsWith("file://")) {
+                        context.contentResolver.openInputStream(android.net.Uri.parse(filePath))
+                            ?.bufferedReader()?.use { it.readText() }
+                    } else {
+                        File(filePath).readText()
+                    }
+                }.getOrNull()
+            }
+            if (text != null) {
+                state.updateContent(TextFieldValue(text, TextRange(0)), recordUndo = false)
+                state.markSaved(filePath, filePath.substringAfterLast('/').substringAfterLast('\\'))
+            } else {
+                state.toastMsg = "Couldn't open the file"
+            }
+        }
+    }
     val c = EdThemes.system(state.isDark)
     val scroll = rememberScrollState()
 
