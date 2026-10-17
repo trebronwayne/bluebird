@@ -6,13 +6,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +47,6 @@ import androidx.compose.foundation.verticalScroll
 import fluent.ui.system.icons.FluentIcons
 import fluent.ui.system.icons.regular.Add
 import fluent.ui.system.icons.regular.Bug
-import fluent.ui.system.icons.regular.Camera
 import fluent.ui.system.icons.regular.CameraAdd
 import fluent.ui.system.icons.regular.Checkmark
 import fluent.ui.system.icons.regular.ChevronDown
@@ -50,15 +54,10 @@ import fluent.ui.system.icons.regular.ChevronRight
 import fluent.ui.system.icons.regular.DataTrending
 import fluent.ui.system.icons.regular.Dismiss
 import fluent.ui.system.icons.regular.Edit
-import fluent.ui.system.icons.regular.Fingerprint
 import fluent.ui.system.icons.regular.Info
-import fluent.ui.system.icons.regular.Location
-import fluent.ui.system.icons.regular.LockClosedKey
-import fluent.ui.system.icons.regular.Mic
 import fluent.ui.system.icons.regular.PaintBrush
 import fluent.ui.system.icons.regular.Person
 import fluent.ui.system.icons.regular.PersonCircle
-import fluent.ui.system.icons.regular.Phone
 import fluent.ui.system.icons.regular.Search
 import fluent.ui.system.icons.regular.Shield
 
@@ -221,22 +220,51 @@ fun SettingsScreen(
         else SettingsCategory.entries.filter { it.label.contains(navSearch, ignoreCase = true) }
     }
 
+    // ── Auto-collapsing nav rail ────────────────────────────────────────────
+    // The nav pane shrinks to an icon-only rail 3s after the user stops
+    // touching it, freeing width for the content pane. It expands instantly
+    // on any interaction (tap, search typing, or scrolling the category
+    // list) and the collapse timer doesn't run at all while mid-scroll.
+    val navListState = rememberLazyListState()
+    var navInteractionTick by remember { mutableStateOf(0) }
+    var isNavExpanded by remember { mutableStateOf(true) }
+    // Bump this from any tap/typing in the nav pane to keep it open and
+    // restart the 3s countdown.
+    val pokeNav: () -> Unit = { navInteractionTick++ }
+
+    LaunchedEffect(navInteractionTick, navListState.isScrollInProgress) {
+        isNavExpanded = true
+        if (!navListState.isScrollInProgress) {
+            delay(3000)
+            isNavExpanded = false
+        }
+    }
+    val navWidth by animateDpAsState(
+        targetValue = if (isNavExpanded) 256.dp else 64.dp,
+        animationSpec = tween(260),
+        label = "navWidth"
+    )
+
     Row(modifier = Modifier.fillMaxSize().background(resolvedBg)) {
 
         // ── Left nav pane ─────────────────────────────────────────────────────
         Column(
             modifier = Modifier
-                .width(256.dp)
+                .width(navWidth)
                 .fillMaxHeight()
                 .background(resolvedNav)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { pokeNav() }
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            if (uiState != null) {
+            if (uiState != null && isNavExpanded) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable { selectedCategoryState.value = SettingsCategory.ACCOUNTS }
+                        .clickable { pokeNav(); selectedCategoryState.value = SettingsCategory.ACCOUNTS }
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -288,7 +316,7 @@ fun SettingsScreen(
                     Icon(FluentIcons.Regular.Search, null, tint = resolvedText.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
                     BasicTextField(
                         value = navSearch,
-                        onValueChange = { navSearch = it },
+                        onValueChange = { navSearch = it; pokeNav() },
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(color = resolvedText, fontSize = (13 * (uiState?.textScale ?: 1f)).sp),
                         modifier = Modifier.weight(1f),
@@ -309,7 +337,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(state = navListState, modifier = Modifier.weight(1f)) {
                 items(visibleCategories, key = { it.name }) { cat ->
                 val isSelected = selectedCategoryState.value == cat
                 Row(
@@ -318,27 +346,33 @@ fun SettingsScreen(
                         .padding(vertical = 1.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(if (isSelected) specialAccent.copy(alpha = 0.15f) else Color.Transparent)
-                        .clickable { selectedCategoryState.value = cat }
-                        .padding(horizontal = 10.dp, vertical = 11.dp),
+                        .clickable { pokeNav(); selectedCategoryState.value = cat }
+                        .padding(horizontal = if (isNavExpanded) 10.dp else 0.dp, vertical = 11.dp),
                     verticalAlignment  = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = if (isNavExpanded) Arrangement.spacedBy(12.dp) else Arrangement.Center
                 ) {
                     // Selected-item accent bar, matching the real Settings app's nav rail
-                    Box(
-                        modifier = Modifier
-                            .width(3.dp)
-                            .height(if (isSelected) 16.dp else 0.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(if (isSelected) specialAccent else Color.Transparent)
-                    )
+                    // — only shown in the expanded state; the collapsed icon-only rail
+                    // uses the icon's own tint to indicate selection instead.
+                    if (isNavExpanded) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height(if (isSelected) 16.dp else 0.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) specialAccent else Color.Transparent)
+                        )
+                    }
                     Icon(cat.icon, null,
                         tint     = if (isSelected) specialAccent else resolvedText.copy(alpha = 0.7f),
                         modifier = Modifier.size(18.dp))
-                    Text(cat.label,
-                        color      = if (isSelected) specialAccent else resolvedText,
-                        fontSize   = (13 * (uiState?.textScale ?: 1f)).sp,
-                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                        maxLines   = 1, overflow = TextOverflow.Ellipsis)
+                    if (isNavExpanded) {
+                        Text(cat.label,
+                            color      = if (isSelected) specialAccent else resolvedText,
+                            fontSize   = (13 * (uiState?.textScale ?: 1f)).sp,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                            maxLines   = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 }
             }
@@ -1247,36 +1281,10 @@ private fun AccountsSettings(a: ScreenArgs) {
 
 @Composable
 private fun PrivacySecuritySettings(a: ScreenArgs) {
-    SettingsGroup("Device security", a) {
-        SToggle(FluentIcons.Regular.LockClosedKey, "Screen lock",
-            "Require PIN, pattern, or password on wake",
-            a, a.uiState?.screenLock ?: false) { a.vm?.setScreenLock(!(a.uiState?.screenLock ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Fingerprint, "Biometric unlock",
-            "Use fingerprint or face to unlock",
-            a, a.uiState?.biometricUnlock ?: false) { a.vm?.setBiometricUnlock(!(a.uiState?.biometricUnlock ?: false)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Phone, "Install unknown apps",
-            "Allow apps from outside the Play Store",
-            a, a.uiState?.unknownSources ?: false) { a.vm?.setUnknownSources(!(a.uiState?.unknownSources ?: false)) }
-    }
-
-    SettingsGroup("App permissions", a) {
-        SToggle(FluentIcons.Regular.Location, "Location access",
-            "Allow apps to request location",
-            a, a.uiState?.locationAccess ?: true) { a.vm?.setLocationAccess(!(a.uiState?.locationAccess ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Camera, "Camera access",
-            "Allow apps to use the camera",
-            a, a.uiState?.cameraAccess ?: true) { a.vm?.setCameraAccess(!(a.uiState?.cameraAccess ?: true)) }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        SToggle(FluentIcons.Regular.Mic, "Microphone access",
-            "Allow apps to use the microphone",
-            a, a.uiState?.micAccess ?: true) { a.vm?.setMicAccess(!(a.uiState?.micAccess ?: true)) }
-        // "Manage per-app permissions" row removed — it only opened Android's
-        // own application settings rather than anything Bluebird tracks.
-    }
-
+    // "Device security" (Screen lock, Biometric unlock, Install unknown apps)
+    // and "App permissions" (Location, Camera, Microphone access) groups
+    // removed — none of these toggles were backed by real enforcement; they
+    // just flipped a stored boolean that nothing else in the app read.
     SettingsGroup("Data & diagnostics", a) {
         SToggle(FluentIcons.Regular.DataTrending, "Usage & diagnostics",
             "Send anonymous crash reports and usage data",
@@ -1292,6 +1300,33 @@ private fun PrivacySecuritySettings(a: ScreenArgs) {
 // FEEDBACK & UPDATES
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Small pill-shaped status indicator used by the feedback card — replaces
+// the old plain red/green text with a subtle icon + colored chip.
+@Composable
+private fun AnimatedStatusChip(result: Boolean?, scale: Float) {
+    AnimatedVisibility(visible = result != null) {
+        val isSuccess = result == true
+        val tint = if (isSuccess) Color(0xFF4CAF50) else Color(0xFFE57373)
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(tint.copy(alpha = 0.12f))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                if (isSuccess) FluentIcons.Regular.Checkmark else FluentIcons.Regular.Dismiss,
+                null, tint = tint, modifier = Modifier.size(13.dp)
+            )
+            Text(
+                if (isSuccess) "Sent" else "Failed — retry",
+                color = tint, fontSize = (11.5f * scale).sp, fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 @Composable
 private fun FeedbackUpdatesSettings(a: ScreenArgs) {
     val scale = a.scale
@@ -1302,30 +1337,89 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
     var isSubmitting by remember { mutableStateOf(false) }
     var submitResult by remember { mutableStateOf<Boolean?>(null) } // null=idle, true=ok, false=error
 
-    SettingsGroup("Send feedback", a) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Found a bug or have a suggestion? Tell us below.",
-                color = a.textColor.copy(alpha = 0.6f),
-                fontSize = (12 * scale).sp
-            )
+    val feedbackFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor   = a.textColor.copy(alpha = 0.04f),
+        unfocusedContainerColor = a.textColor.copy(alpha = 0.03f),
+        focusedBorderColor      = a.accent,
+        unfocusedBorderColor    = Color.Transparent,
+        focusedTextColor        = a.textColor,
+        unfocusedTextColor      = a.textColor,
+        cursorColor             = a.accent,
+        focusedPlaceholderColor   = a.textColor.copy(alpha = 0.35f),
+        unfocusedPlaceholderColor = a.textColor.copy(alpha = 0.35f)
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = a.surfaceBg),
+        shape  = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.07f))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header: accent-tinted icon badge + title/subtitle
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(a.accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(FluentIcons.Regular.Bug, null, tint = a.accent, modifier = Modifier.size(19.dp))
+                }
+                Column {
+                    Text("Send feedback",
+                        color = a.textColor,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = (15 * scale).sp)
+                    Text("Report a bug or share an idea — it goes straight to the team",
+                        color = a.textColor.copy(alpha = 0.55f),
+                        fontSize = (12 * scale).sp)
+                }
+            }
+
             OutlinedTextField(
                 value = message,
-                onValueChange = { message = it; submitResult = null },
+                onValueChange = { if (it.length <= 1000) { message = it; submitResult = null } },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Describe the issue or idea…") },
-                minLines = 3
+                placeholder = { Text("What's on your mind?") },
+                minLines = 4,
+                shape = RoundedCornerShape(12.dp),
+                colors = feedbackFieldColors
             )
+            Text(
+                "${message.length}/1000",
+                color = a.textColor.copy(alpha = 0.35f),
+                fontSize = (10.5f * scale).sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.End
+            )
+
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it; submitResult = null },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Email (optional, for follow-up)") },
-                singleLine = true
+                placeholder = { Text("Email (optional — only if you'd like a reply)") },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = feedbackFieldColors
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Inline status chip — replaces the old plain red/green text
+                AnimatedStatusChip(submitResult, scale)
+
                 Button(
                     enabled = message.isNotBlank() && !isSubmitting,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = a.accent),
                     onClick = {
                         isSubmitting = true
                         submitResult = null
@@ -1349,15 +1443,14 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                     }
                 ) {
                     if (isSubmitting) {
-                        LinearProgressIndicator(modifier = Modifier.width(60.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier.width(52.dp).height(3.dp),
+                            color = Color.White,
+                            trackColor = Color.White.copy(alpha = 0.3f)
+                        )
                     } else {
-                        Text("Submit")
+                        Text("Send feedback", fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
                     }
-                }
-                when (submitResult) {
-                    true -> Text("Thanks — sent!", color = Color(0xFF4CAF50), fontSize = (12 * scale).sp)
-                    false -> Text("Couldn't send — try again.", color = Color(0xFFE57373), fontSize = (12 * scale).sp)
-                    null -> {}
                 }
             }
         }
