@@ -149,6 +149,7 @@ private enum class SettingsCategory(val label: String, val icon: ImageVector) {
     APPEARANCE      ("Appearance",          FluentIcons.Regular.PaintBrush),
     ACCOUNTS        ("Accounts",            FluentIcons.Regular.PersonCircle),
     PRIVACY_SECURITY("Privacy",             FluentIcons.Regular.Shield),
+    FEEDBACK_UPDATES("Feedback & Updates",  FluentIcons.Regular.Bug),
     ABOUT           ("About",               FluentIcons.Regular.Info)
 }
 
@@ -365,6 +366,7 @@ fun SettingsScreen(
                 SettingsCategory.APPEARANCE       -> AppearanceSettings(args)
                 SettingsCategory.ACCOUNTS         -> AccountsSettings(args)
                 SettingsCategory.PRIVACY_SECURITY -> PrivacySecuritySettings(args)
+                SettingsCategory.FEEDBACK_UPDATES -> FeedbackUpdatesSettings(args)
                 SettingsCategory.ABOUT            -> AboutSettings(args)
             }
         }
