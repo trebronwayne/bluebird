@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,6 +63,7 @@ import fluent.ui.system.icons.regular.Dismiss
 import fluent.ui.system.icons.regular.Edit
 import fluent.ui.system.icons.regular.Shield
 
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -73,6 +75,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -130,6 +133,7 @@ import io.github.norbertweb.bluebird.BackgroundEffectsState
 // Personalization (Background + Effects) now lives in this file instead of its
 // own dialog in Desktop.kt — these are the same symbols that file already used,
 // exposed here so PersonalizationSection can render identical UI/behavior.
+import io.github.norbertweb.bluebird.ui.components.DS
 import io.github.norbertweb.bluebird.ui.components.DesktopPreferences
 import io.github.norbertweb.bluebird.ui.components.DesktopWallpaperMode
 import io.github.norbertweb.bluebird.ui.components.DEFAULT_WALLPAPERS
@@ -139,6 +143,7 @@ import io.github.norbertweb.bluebird.ui.components.bgAnimationLabel
 import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
+import com.google.accompanist.drawablepainter.DrawablePainter
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.ktx.Firebase
@@ -1708,73 +1713,254 @@ private data class UpdateInfo(
 private fun BpkAppsSettings(a: ScreenArgs) {
     val scale = a.scale
     val clipboardManager = LocalClipboardManager.current
-    var justCopied by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
+    var showFullGuide by remember { mutableStateOf(false) }
 
-    // Revert the button's "Copied!" confirmation back to normal after a beat.
-    LaunchedEffect(justCopied) {
-        if (justCopied) {
-            delay(2000)
-            justCopied = false
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2200)
+            copied = false
         }
     }
 
-    SettingsGroup("What is a BPK app?", a) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "A BPK (.bpk) is a packaged web app that installs into Bluebird as a " +
-                "first-class application — with its own icon, Start/Taskbar/Desktop " +
-                "entries, and installer — instead of just being a bookmarked web page.",
-                color = a.textColor.copy(alpha = 0.75f),
-                fontSize = (13 * scale).sp
-            )
-            Text(
-                "You don't need to know the format by heart — copy the full developer " +
-                "guide below and paste it into any AI assistant (this one included) " +
-                "along with what you want to build. It has everything needed to " +
-                "generate a working BPK: the manifest, folder layout, installer " +
-                "bridge, and a full packaging checklist.",
-                color = a.textColor.copy(alpha = 0.6f),
-                fontSize = (12.5f * scale).sp
-            )
-        }
-    }
-
-    Spacer(Modifier.height(4.dp))
-
-    SettingsGroup("Developer guide", a) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Hero panel: make it clear that BPK is Bluebird's installable web-app format.
+        Card(
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = a.accent.copy(alpha = if (a.isDark) 0.20f else 0.10f)),
+            border = BorderStroke(1.dp, a.accent.copy(alpha = 0.24f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-            SIconBadge(FluentIcons.Regular.Code, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("BPK Developer Guide", color = a.textColor, fontSize = (14 * scale).sp, fontWeight = FontWeight.Medium)
-                Text("Manifest format, packaging, installer bridge, test checklist",
-                    color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * scale).sp)
-            }
-            Button(
-                shape = RoundedCornerShape(18.dp),
-                colors = if (justCopied)
-                    ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                else
-                    ButtonDefaults.buttonColors(containerColor = a.accent),
-                onClick = {
-                    clipboardManager.setText(AnnotatedString(BPK_DEVELOPER_GUIDE))
-                    justCopied = true
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        Modifier.size(52.dp).clip(RoundedCornerShape(15.dp)).background(a.accent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(FluentIcons.Regular.Code, null, tint = a.accent, modifier = Modifier.size(27.dp)) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Bluebird Package Kit", color = a.textColor, fontSize = (19 * scale).sp, fontWeight = FontWeight.Bold)
+                        Text("Installable web apps · .bpk", color = a.textColor.copy(alpha = 0.68f), fontSize = (12.5f * scale).sp)
+                    }
                 }
-            ) {
-                if (justCopied) {
-                    Icon(FluentIcons.Regular.Checkmark, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Copied", fontSize = (12.5f * scale).sp, fontWeight = FontWeight.Medium)
-                } else {
-                    Text("Copy guide", fontSize = (12.5f * scale).sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "BPK turns a web project into an application that Bluebird can install, identify, launch, manage, and remove. Build the interface with HTML, CSS, and JavaScript, then package the project as a .bpk file.",
+                    color = a.textColor.copy(alpha = 0.86f), fontSize = (13.2f * scale).sp, lineHeight = (19 * scale).sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BpkTag("HTML / CSS / JS", a)
+                    BpkTag("Version 1", a)
+                    BpkTag("ZIP-based", a)
                 }
             }
+        }
+
+        SettingsGroup("What you can do", a) {
+            BpkFeatureRow(FluentIcons.Regular.Add, "Install and launch", "Install a .bpk package and launch it as a Bluebird app with its own name and icon.", a)
+            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
+            BpkFeatureRow(FluentIcons.Regular.Shield, "App permissions", "Review each app's capabilities in Program Manager. Grant only what the app needs, and revoke grants you no longer want.", a)
+            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
+            BpkFeatureRow(FluentIcons.Regular.DataTrending, "Private app data", "Apps can keep small key/value settings in their own private data directory when App Storage is granted. Use Program Manager or File Explorer to inspect supported data files.", a)
+            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
+            BpkFeatureRow(FluentIcons.Regular.Bug, "Logs and troubleshooting", "Apps can write diagnostic messages, and runtime errors may be recorded for review in Program Manager. Logs can be cleared there.", a)
+            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
+            BpkFeatureRow(FluentIcons.Regular.ArrowClockwise, "Updates and reinstall", "The BPK update client can check an HTTPS feed, download a package, verify its SHA-256 hash, and stage an update. The host should ask the user before installing it.", a)
+        }
+
+        SettingsGroup("Package structure", a) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("A .bpk is a ZIP archive renamed with the .bpk extension. Keep the paths and names exact:", color = a.textColor.copy(alpha = 0.78f), fontSize = (12.8f * scale).sp)
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(a.textColor.copy(alpha = 0.045f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    BpkTreeLine("my-app.bpk/", true, a)
+                    BpkTreeLine("manifest.json", false, a)
+                    BpkTreeLine("icon/icon.png", false, a)
+                    BpkTreeLine("app/index.html", false, a)
+                    BpkTreeLine("app/styles.css", false, a)
+                    BpkTreeLine("app/main.js", false, a)
+                    BpkTreeLine("installer/  (optional custom installer assets)", false, a)
+                }
+                Text("The manifest entry must point to a real file inside app/. The icon path must point to the included PNG. Keep application files inside the package and avoid absolute paths or ../ path traversal.", color = a.textColor.copy(alpha = 0.64f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
+            }
+        }
+
+        SettingsGroup("Capabilities", a) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                BpkCapabilityLine("App Storage", "Read/write the app's own key/value data through the Bluebird bridge.", a)
+                BpkCapabilityLine("Internet", "Network access. Only grant this to apps that genuinely need remote content or services.", a)
+                BpkCapabilityLine("File Picker", "Request the system file picker; the user still chooses the file.", a)
+                BpkCapabilityLine("Media Picker", "Request the system media picker; the user chooses what to share.", a)
+                BpkCapabilityLine("Logs", "Allow the app to send diagnostic messages to its app log.", a)
+                BpkCapabilityLine("Audio / Video Playback", "Capability flags for media playback. Actual enforcement depends on the host runtime integration.", a)
+                BpkCapabilityLine("Brightness Control", "Request a brightness change; Android may require separate system permission and host support.", a)
+                Text("Important: a permission toggle is not a guarantee that every related browser feature is sandboxed. Only expose the JavaScript bridge to trusted local BPK content, and test network and media behavior in the actual runtime.", color = a.textColor.copy(alpha = 0.72f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
+            }
+        }
+
+        SettingsGroup("Build a BPK with an AI assistant", a) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("You can ask an AI to create a complete small app, then package its files using the structure above. Include the guide below in your prompt so the assistant knows Bluebird's manifest and bridge API.", color = a.textColor.copy(alpha = 0.76f), fontSize = (12.8f * scale).sp, lineHeight = (18 * scale).sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = a.accent),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(if (copied) FluentIcons.Regular.Checkmark else FluentIcons.Regular.Code, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Spacer(Modifier.width(7.dp))
+                        Text(if (copied) "Guide copied" else "Copy developer guide", fontSize = (12.5f * scale).sp)
+                    }
+                    OutlinedButton(onClick = { showFullGuide = true }, shape = RoundedCornerShape(14.dp)) {
+                        Text("Preview", fontSize = (12.5f * scale).sp)
+                    }
+                }
+            }
+        }
+
+        SettingsGroup("Recommended workflow", a) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                BpkStep("1", "Create", "Build the app in HTML, CSS, and JavaScript. Keep it responsive for phone-sized windows.", a)
+                BpkStep("2", "Describe", "Fill in manifest.json with a unique id, app name, version, publisher, entry file, icon, and description.", a)
+                BpkStep("3", "Package", "Zip the package contents so manifest.json is at the archive root, then rename the ZIP to .bpk.", a)
+                BpkStep("4", "Install and test", "Install it in Bluebird, test launch and close, then test every capability with permission both granted and denied.", a)
+                BpkStep("5", "Release carefully", "Use HTTPS for update feeds and verify the downloaded package hash. A hash detects file mismatch; it does not prove who published the app.", a)
+            }
+        }
+    }
+
+    if (showFullGuide) {
+        AlertDialog(
+            onDismissRequest = { showFullGuide = false },
+            title = { Text("BPK developer guide") },
+            text = {
+                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(BPK_SETTINGS_DEVELOPER_GUIDE, color = a.textColor, fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true; showFullGuide = false }) { Text("Copy guide") }
+            },
+            dismissButton = { TextButton(onClick = { showFullGuide = false }) { Text("Close") } }
+        )
+    }
+}
+
+@Composable
+private fun BpkTag(label: String, a: ScreenArgs) {
+    Box(Modifier.clip(RoundedCornerShape(50)).background(a.surfaceBg.copy(alpha = 0.82f)).padding(horizontal = 9.dp, vertical = 5.dp)) {
+        Text(label, color = a.textColor.copy(alpha = 0.78f), fontSize = (10.5f * a.scale).sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun BpkFeatureRow(icon: ImageVector, title: String, description: String, a: ScreenArgs) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        SIconBadge(icon, tint = a.accent, bg = a.accent.copy(alpha = 0.10f))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, color = a.textColor, fontSize = (13.5f * a.scale).sp, fontWeight = FontWeight.SemiBold)
+            Text(description, color = a.textColor.copy(alpha = 0.66f), fontSize = (12 * a.scale).sp, lineHeight = (17 * a.scale).sp)
         }
     }
 }
+
+@Composable
+private fun BpkCapabilityLine(title: String, description: String, a: ScreenArgs) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(title, color = a.textColor, fontSize = (12.8f * a.scale).sp, fontWeight = FontWeight.SemiBold)
+        Text(description, color = a.textColor.copy(alpha = 0.65f), fontSize = (11.8f * a.scale).sp, lineHeight = (16.5f * a.scale).sp)
+    }
+}
+
+@Composable
+private fun BpkTreeLine(value: String, isRoot: Boolean, a: ScreenArgs) {
+    Text(value, color = if (isRoot) a.accent else a.textColor.copy(alpha = 0.78f), fontSize = (12 * a.scale).sp, fontWeight = if (isRoot) FontWeight.SemiBold else FontWeight.Normal)
+}
+
+@Composable
+private fun BpkStep(number: String, title: String, detail: String, a: ScreenArgs) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(25.dp).clip(CircleShape).background(a.accent.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+            Text(number, color = a.accent, fontSize = (11 * a.scale).sp, fontWeight = FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = a.textColor, fontSize = (12.8f * a.scale).sp, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = a.textColor.copy(alpha = 0.66f), fontSize = (11.8f * a.scale).sp, lineHeight = (16.5f * a.scale).sp)
+        }
+    }
+}
+
+private const val BPK_SETTINGS_DEVELOPER_GUIDE = """
+BLUEBIRD BPK DEVELOPER GUIDE — FORMAT V1
+
+PURPOSE
+A .bpk is a ZIP archive containing a web app for Bluebird. Build the app with HTML, CSS and JavaScript. Keep it self-contained where practical and design for small screens and resizable app windows.
+
+REQUIRED ARCHIVE LAYOUT
+manifest.json
+icon/icon.png
+app/index.html (or the entry path declared in manifest.json)
+app/other files...
+installer/ (optional custom installer assets)
+
+MANIFEST FIELDS
+{
+  "id": "org.example.myapp",
+  "name": "My App",
+  "version": "1.0.0",
+  "publisher": "Example Publisher",
+  "entry": "app/index.html",
+  "icon": "icon/icon.png",
+  "description": "A short description",
+  "homepage": "https://example.org/",
+  "runtime": "web"
+}
+
+The required identity fields are id, name, version, publisher, entry and icon. Use a stable, unique id made from letters, numbers, dots, underscores or hyphens. Entry and icon paths must exist inside the package. The homepage and description are optional. Keep manifest.json at the archive root.
+
+PACKAGING
+1. Put manifest.json, icon/, app/ and optional installer/ at the top level of the ZIP. Do not zip an extra parent folder around them.
+2. Ensure the icon is a valid PNG and the entry HTML exists.
+3. Zip the contents and rename the resulting .zip to .bpk.
+4. Install in Bluebird and test on the target device. A file extension alone does not make an invalid archive installable.
+
+JAVASCRIPT BRIDGE
+When Bluebird exposes the bridge to trusted local app content, the global object is named Bluebird. Calls return JSON strings unless otherwise noted:
+- Bluebird.getAppInfo() — returns the current app id and bridge API version.
+- Bluebird.capabilityGranted(name) — returns whether the named capability is granted.
+- Bluebird.storageGet(key) — reads this app's private key/value data.
+- Bluebird.storageSet(key, value) — writes this app's private key/value data.
+- Bluebird.log(level, message) — writes a diagnostic message when Logs capability is granted.
+- Bluebird.requestFilePicker() — asks the host to open the file picker if File Picker capability is granted.
+- Bluebird.requestMediaPicker() — asks the host to open the media picker if Media Picker capability is granted.
+- Bluebird.setBrightness(value) — requests brightness from 1 to 255 if granted and supported by the host and Android settings.
+
+Example:
+const info = JSON.parse(Bluebird.getAppInfo());
+if (Bluebird.capabilityGranted('app_storage')) {
+  const saved = JSON.parse(Bluebird.storageGet('display-name'));
+  if (saved.ok && saved.value) console.log(saved.value);
+  Bluebird.storageSet('display-name', 'Guest');
+}
+Bluebird.log('info', 'App started');
+
+Storage keys may contain letters, numbers, dots, underscores, spaces and hyphens; they cannot contain slashes or backslashes. Each value is limited to approximately 256 KiB. The bridge returns objects with ok/value/error fields encoded as JSON for storage and picker/brightness methods. File and media picker selection events must be handled according to the host runtime's documented event integration; do not assume a picker result is synchronously returned by requestFilePicker().
+
+CAPABILITIES
+logs, app_storage, internet, file_picker, media_picker, audio_playback, video_playback, brightness_control. Request only the capabilities needed. Bluebird permission grants are not a substitute for safe coding or validation; actual enforcement can vary by host integration. Never expose the native JavaScript bridge to arbitrary remote websites. Restrict navigation and use safe local-content loading. Treat downloaded app content as untrusted until reviewed.
+
+UPDATES
+The update client expects an HTTPS JSON feed containing id, version, packageUrl and sha256. The app id must match the installed app, the package URL must use HTTPS, and sha256 must be a 64-character hexadecimal SHA-256 digest of the exact downloaded .bpk bytes. The package is staged and validated before install. Ask the user before applying an update. SHA-256 verifies file integrity against the supplied digest; it does not authenticate the publisher. For stronger publisher identity, add a signed manifest/package and verify it against a trusted public key.
+
+TEST CHECKLIST
+- Install a valid package and reject malformed packages.
+- Confirm name, version, icon and entry file are correct.
+- Test launch, window resizing, navigation and closing.
+- Test every capability both granted and denied.
+- Test missing files, invalid paths, oversized values and network failures.
+- Verify logs are useful and do not include passwords, tokens or private user data.
+- Test updates with correct and incorrect hashes and mismatched app ids.
+- Test uninstall and confirm the expected behavior for retained app data.
+- Never claim a capability is secure unless it is enforced in the actual runtime.
+"""
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ABOUT
