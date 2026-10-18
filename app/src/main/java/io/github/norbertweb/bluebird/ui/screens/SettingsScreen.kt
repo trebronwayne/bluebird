@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,28 +49,30 @@ import androidx.compose.foundation.verticalScroll
 // per confirmed working example from another file in this project.
 import fluent.ui.system.icons.FluentIcons
 import fluent.ui.system.icons.regular.Add
+import fluent.ui.system.icons.regular.ArrowClockwise
+import fluent.ui.system.icons.regular.ArrowDownload
 import fluent.ui.system.icons.regular.Bug
 import fluent.ui.system.icons.regular.CameraAdd
 import fluent.ui.system.icons.regular.Checkmark
 import fluent.ui.system.icons.regular.ChevronDown
 import fluent.ui.system.icons.regular.ChevronRight
+import fluent.ui.system.icons.regular.Code
 import fluent.ui.system.icons.regular.DataTrending
 import fluent.ui.system.icons.regular.Dismiss
 import fluent.ui.system.icons.regular.Edit
 import fluent.ui.system.icons.regular.Shield
 
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -110,7 +111,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -127,7 +130,6 @@ import io.github.norbertweb.bluebird.BackgroundEffectsState
 // Personalization (Background + Effects) now lives in this file instead of its
 // own dialog in Desktop.kt — these are the same symbols that file already used,
 // exposed here so PersonalizationSection can render identical UI/behavior.
-import io.github.norbertweb.bluebird.ui.components.DS
 import io.github.norbertweb.bluebird.ui.components.DesktopPreferences
 import io.github.norbertweb.bluebird.ui.components.DesktopWallpaperMode
 import io.github.norbertweb.bluebird.ui.components.DEFAULT_WALLPAPERS
@@ -137,7 +139,6 @@ import io.github.norbertweb.bluebird.ui.components.bgAnimationLabel
 import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
-import com.google.accompanist.drawablepainter.DrawablePainter
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.ktx.Firebase
@@ -148,18 +149,30 @@ import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 // CATEGORY ENUM — replaces raw strings to prevent silent routing bugs
 // ─────────────────────────────────────────────────────────────────────────────
 
-// All five current categories now use Icons8 PNGs (res/drawable/ic_*.png)
-// instead of Fluent vector icons, so the enum carries a @DrawableRes Int.
-// If a future category is added before a matching PNG exists for it, give
-// it a Fluent vector via the FluentIcons.Regular.* set used elsewhere in
-// this file and swap this column back to ImageVector, or add an icon-type
-// wrapper — for now all rows share one PNG-backed icon.
-private enum class SettingsCategory(val label: String, @DrawableRes val icon: Int) {
-    APPEARANCE      ("Appearance",          R.drawable.ic_appearance),
-    ACCOUNTS        ("Accounts",            R.drawable.ic_user),
-    PRIVACY_SECURITY("Privacy & security",  R.drawable.ic_privacy),
-    FEEDBACK_UPDATES("Feedback & updates",  R.drawable.ic_feedback),
-    ABOUT           ("About",               R.drawable.ic_about)
+// Most categories use Icons8 PNGs (res/drawable/ic_*.png); BPK Apps doesn't
+// have a matching PNG yet, so it falls back to a Fluent vector icon via this
+// small wrapper. Swap BPK_APPS to CategoryIcon.Png(R.drawable.ic_bpk) once a
+// matching Icons8 icon is added, same as the rest.
+private sealed class CategoryIcon {
+    data class Png(@DrawableRes val res: Int) : CategoryIcon()
+    data class Vector(val icon: ImageVector) : CategoryIcon()
+}
+
+@Composable
+private fun CategoryIconView(icon: CategoryIcon, modifier: Modifier = Modifier, tint: Color = Color.Unspecified) {
+    when (icon) {
+        is CategoryIcon.Png    -> Image(painter = painterResource(icon.res), contentDescription = null, modifier = modifier)
+        is CategoryIcon.Vector -> Icon(icon.icon, null, tint = tint, modifier = modifier)
+    }
+}
+
+private enum class SettingsCategory(val label: String, val icon: CategoryIcon) {
+    APPEARANCE      ("Appearance",          CategoryIcon.Png(R.drawable.ic_appearance)),
+    ACCOUNTS        ("Accounts",            CategoryIcon.Png(R.drawable.ic_user)),
+    PRIVACY_SECURITY("Privacy & security",  CategoryIcon.Png(R.drawable.ic_privacy)),
+    FEEDBACK_UPDATES("Feedback & updates",  CategoryIcon.Png(R.drawable.ic_feedback)),
+    BPK_APPS        ("BPK apps",            CategoryIcon.Png(R.drawable.ic_bpk)),
+    ABOUT           ("About",               CategoryIcon.Png(R.drawable.ic_about))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -391,8 +404,8 @@ fun SettingsScreen(
                             .clip(RoundedCornerShape(2.dp))
                             .background(if (isSelected) specialAccent else Color.Transparent)
                     )
-                    Image(painter = painterResource(cat.icon), contentDescription = null,
-                        modifier = Modifier.size(18.dp))
+                    CategoryIconView(cat.icon, modifier = Modifier.size(18.dp),
+                        tint = if (isSelected) specialAccent else resolvedText.copy(alpha = 0.75f))
                     if (expandProgress > 0.001f) {
                         Text(cat.label,
                             color      = if (isSelected) specialAccent else resolvedText,
@@ -434,7 +447,7 @@ fun SettingsScreen(
                         .background(specialAccent.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(painter = painterResource(selectedCategoryState.value.icon), contentDescription = null, modifier = Modifier.size(22.dp))
+                    CategoryIconView(selectedCategoryState.value.icon, modifier = Modifier.size(22.dp), tint = specialAccent)
                 }
                 Text(selectedCategoryState.value.label,
                     style      = MaterialTheme.typography.headlineSmall,
@@ -451,6 +464,7 @@ fun SettingsScreen(
                 SettingsCategory.ACCOUNTS         -> AccountsSettings(args)
                 SettingsCategory.PRIVACY_SECURITY -> PrivacySecuritySettings(args)
                 SettingsCategory.FEEDBACK_UPDATES -> FeedbackUpdatesSettings(args)
+                SettingsCategory.BPK_APPS         -> BpkAppsSettings(args)
                 SettingsCategory.ABOUT            -> AboutSettings(args)
             }
         }
@@ -1389,15 +1403,51 @@ private fun AnimatedStatusChip(result: Boolean?, scale: Float) {
     }
 }
 
+// Small colored pill used for update status ("Checking…", "Up to date",
+// "Update available", "Couldn't check") — same visual language as
+// AnimatedStatusChip above, reused here so both cards feel consistent.
+@Composable
+private fun StatusPill(icon: ImageVector?, text: String, tint: Color, scale: Float, spinning: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(tint.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        if (spinning) {
+            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = tint)
+        } else if (icon != null) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(13.dp))
+        }
+        Text(text, color = tint, fontSize = (11.5f * scale).sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 @Composable
 private fun FeedbackUpdatesSettings(a: ScreenArgs) {
     val scale = a.scale
 
     // ── Send feedback ──────────────────────────────────────────────────────
+    // Collapsed by default — only the compact header row shows until the
+    // user taps it. The full form (and the always-open look it had before)
+    // isn't shown unless they actually want to write something.
+    var feedbackExpanded by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var submitResult by remember { mutableStateOf<Boolean?>(null) } // null=idle, true=ok, false=error
+
+    // After a successful send, collapse back to the compact row on its own
+    // shortly after — the person can still see the "Sent" chip for a beat
+    // first, so it doesn't feel like the form just vanished.
+    LaunchedEffect(submitResult) {
+        if (submitResult == true) {
+            delay(1400)
+            feedbackExpanded = false
+        }
+    }
 
     val feedbackFieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor   = a.textColor.copy(alpha = 0.04f),
@@ -1417,12 +1467,15 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
         shape  = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.07f))
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Header: accent-tinted icon badge + title/subtitle
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            // Header — always visible, tap to expand/collapse the form.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { feedbackExpanded = !feedbackExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(38.dp)
@@ -1432,7 +1485,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                 ) {
                     Image(painter = painterResource(R.drawable.ic_feedback), contentDescription = null, modifier = Modifier.size(19.dp))
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text("Send feedback",
                         color = a.textColor,
                         fontWeight = FontWeight.SemiBold,
@@ -1441,77 +1494,85 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                         color = a.textColor.copy(alpha = 0.55f),
                         fontSize = (12 * scale).sp)
                 }
+                Icon(
+                    if (feedbackExpanded) FluentIcons.Regular.ChevronDown else FluentIcons.Regular.ChevronRight,
+                    null, tint = a.textColor.copy(alpha = 0.4f), modifier = Modifier.size(16.dp)
+                )
             }
 
-            OutlinedTextField(
-                value = message,
-                onValueChange = { if (it.length <= 1000) { message = it; submitResult = null } },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("What's on your mind?") },
-                minLines = 4,
-                shape = RoundedCornerShape(12.dp),
-                colors = feedbackFieldColors
-            )
-            Text(
-                "${message.length}/1000",
-                color = a.textColor.copy(alpha = 0.35f),
-                fontSize = (10.5f * scale).sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.End
-            )
+            AnimatedVisibility(visible = feedbackExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { if (it.length <= 1000) { message = it; submitResult = null } },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("What's on your mind?") },
+                        minLines = 4,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = feedbackFieldColors
+                    )
+                    Text(
+                        "${message.length}/1000",
+                        color = a.textColor.copy(alpha = 0.35f),
+                        fontSize = (10.5f * scale).sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
 
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it; submitResult = null },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Email (optional — only if you'd like a reply)") },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = feedbackFieldColors
-            )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; submitResult = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Email (optional — only if you'd like a reply)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = feedbackFieldColors
+                    )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Inline status chip — replaces the old plain red/green text
-                AnimatedStatusChip(submitResult, scale)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        AnimatedStatusChip(submitResult, scale)
 
-                Button(
-                    enabled = message.isNotBlank() && !isSubmitting,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = a.accent),
-                    onClick = {
-                        isSubmitting = true
-                        submitResult = null
-                        val feedback = hashMapOf(
-                            "message" to message.trim(),
-                            "email" to email.trim().ifBlank { null },
-                            "appVersion" to (a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0).versionName ?: "unknown"),
-                            "deviceModel" to Build.MODEL,
-                            "deviceManufacturer" to Build.MANUFACTURER,
-                            "androidSdk" to Build.VERSION.SDK_INT,
-                            "timestamp" to FieldValue.serverTimestamp()
-                        )
-                        FirebaseFirestore.getInstance().collection("feedback").add(feedback)
-                            .addOnSuccessListener {
-                                isSubmitting = false; submitResult = true
-                                message = ""; email = ""
+                        Button(
+                            enabled = message.isNotBlank() && !isSubmitting,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = a.accent),
+                            onClick = {
+                                isSubmitting = true
+                                submitResult = null
+                                val feedback = hashMapOf(
+                                    "message" to message.trim(),
+                                    "email" to email.trim().ifBlank { null },
+                                    "appVersion" to (a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0).versionName ?: "unknown"),
+                                    "deviceModel" to Build.MODEL,
+                                    "deviceManufacturer" to Build.MANUFACTURER,
+                                    "androidSdk" to Build.VERSION.SDK_INT,
+                                    "timestamp" to FieldValue.serverTimestamp()
+                                )
+                                FirebaseFirestore.getInstance().collection("feedback").add(feedback)
+                                    .addOnSuccessListener {
+                                        isSubmitting = false; submitResult = true
+                                        message = ""; email = ""
+                                    }
+                                    .addOnFailureListener {
+                                        isSubmitting = false; submitResult = false
+                                    }
                             }
-                            .addOnFailureListener {
-                                isSubmitting = false; submitResult = false
+                        ) {
+                            if (isSubmitting) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.width(52.dp).height(3.dp),
+                                    color = Color.White,
+                                    trackColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            } else {
+                                Text("Send feedback", fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
                             }
-                    }
-                ) {
-                    if (isSubmitting) {
-                        LinearProgressIndicator(
-                            modifier = Modifier.width(52.dp).height(3.dp),
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.3f)
-                        )
-                    } else {
-                        Text("Send feedback", fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }
@@ -1519,84 +1580,112 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
     }
 
     // ── Check for updates ──────────────────────────────────────────────────
+    // Fully inline now — no dialog. Checks once automatically when this
+    // screen opens (so an outdated version is indicated without the person
+    // needing to tap anything), with a persistent status pill and a
+    // "Check again" row for a manual re-check; update details expand in
+    // place below instead of interrupting with a popup.
     var isChecking by remember { mutableStateOf(false) }
     var checkError by remember { mutableStateOf(false) }
     var upToDate by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
-    SettingsGroup("Check for updates", a) {
-        val pkgInfo = remember(a.ctx) {
-            try { a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0) } catch (_: Exception) { null }
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text("Current version", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
-            Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (12 * scale).sp)
-        }
-        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Button(
-                enabled = !isChecking,
-                onClick = {
-                    isChecking = true; checkError = false; upToDate = false; updateInfo = null
-                    val currentCode = try {
-                        a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0).let {
-                            if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()
-                        }
-                    } catch (_: Exception) { 0L }
-
-                    val remoteConfig = Firebase.remoteConfig
-                    remoteConfig.setConfigSettingsAsync(remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 })
-                    remoteConfig.fetchAndActivate().addOnCompleteListener { task ->
-                        isChecking = false
-                        if (!task.isSuccessful) { checkError = true; return@addOnCompleteListener }
-                        val latestCode = remoteConfig.getLong("latest_version_code")
-                        if (latestCode > currentCode) {
-                            updateInfo = UpdateInfo(
-                                versionName = remoteConfig.getString("latest_version_name"),
-                                releaseNotes = remoteConfig.getString("release_notes"),
-                                downloadUrl = remoteConfig.getString("download_url")
-                            )
-                        } else {
-                            upToDate = true
-                        }
-                    }
-                }
-            ) {
-                if (isChecking) LinearProgressIndicator(modifier = Modifier.width(60.dp)) else Text("Check now")
+    fun runUpdateCheck() {
+        isChecking = true; checkError = false; upToDate = false; updateInfo = null
+        val currentCode = try {
+            a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0).let {
+                if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()
             }
-            when {
-                checkError -> Text("Couldn't check — try again later.", color = Color(0xFFE57373), fontSize = (12 * scale).sp)
-                upToDate -> Text("You're up to date", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
+        } catch (_: Exception) { 0L }
+
+        val remoteConfig = Firebase.remoteConfig
+        remoteConfig.setConfigSettingsAsync(remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 })
+        remoteConfig.fetchAndActivate().addOnCompleteListener { task ->
+            isChecking = false
+            if (!task.isSuccessful) { checkError = true; return@addOnCompleteListener }
+            val latestCode = remoteConfig.getLong("latest_version_code")
+            if (latestCode > currentCode) {
+                updateInfo = UpdateInfo(
+                    versionName = remoteConfig.getString("latest_version_name"),
+                    releaseNotes = remoteConfig.getString("release_notes"),
+                    downloadUrl = remoteConfig.getString("download_url")
+                )
+            } else {
+                upToDate = true
             }
         }
     }
 
-    updateInfo?.let { info ->
-        AlertDialog(
-            onDismissRequest = { updateInfo = null },
-            title = { Text("Update available: v${info.versionName}") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("A new version of Bluebird is ready to download.")
+    LaunchedEffect(Unit) { runUpdateCheck() }
+
+    SettingsGroup("Check for updates", a) {
+        val pkgInfo = remember(a.ctx) {
+            try { a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0) } catch (_: Exception) { null }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Current version", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
+                Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
+            }
+            when {
+                isChecking  -> StatusPill(null, "Checking…", a.textColor.copy(alpha = 0.55f), scale, spinning = true)
+                checkError  -> StatusPill(FluentIcons.Regular.Dismiss, "Couldn't check", Color(0xFFE57373), scale)
+                updateInfo != null -> StatusPill(FluentIcons.Regular.ArrowDownload, "Update available", a.accent, scale)
+                upToDate    -> StatusPill(FluentIcons.Regular.Checkmark, "Up to date", Color(0xFF4CAF50), scale)
+            }
+        }
+
+        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(enabled = !isChecking) { runUpdateCheck() }
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(FluentIcons.Regular.ArrowClockwise, null, tint = a.accent, modifier = Modifier.size(16.dp))
+            Text("Check again", color = a.accent, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
+        }
+
+        // Update details — expand in place, no popup.
+        AnimatedVisibility(visible = updateInfo != null) {
+            updateInfo?.let { info ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Divider(color = divColor(a))
+                    Spacer(Modifier.height(2.dp))
+                    Text("Version ${info.versionName} is available",
+                        color = a.textColor, fontWeight = FontWeight.Medium, fontSize = (13 * scale).sp)
                     if (info.releaseNotes.isNotBlank()) {
-                        Text(info.releaseNotes, fontSize = 13.sp, color = a.textColor.copy(alpha = 0.7f))
+                        Text(info.releaseNotes, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = a.accent),
+                            onClick = {
+                                a.ctx.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                        ) { Text("Download", fontSize = (12.5f * scale).sp) }
+                        TextButton(onClick = { updateInfo = null }) {
+                            Text("Dismiss", fontSize = (12.5f * scale).sp)
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    a.ctx.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                    updateInfo = null
-                }) { Text("Download") }
-            },
-            dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Later") } }
-        )
+            }
+        }
     }
 }
 
@@ -1610,6 +1699,82 @@ private data class UpdateInfo(
     val releaseNotes: String,
     val downloadUrl: String
 )
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BPK APPS
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun BpkAppsSettings(a: ScreenArgs) {
+    val scale = a.scale
+    val clipboardManager = LocalClipboardManager.current
+    var justCopied by remember { mutableStateOf(false) }
+
+    // Revert the button's "Copied!" confirmation back to normal after a beat.
+    LaunchedEffect(justCopied) {
+        if (justCopied) {
+            delay(2000)
+            justCopied = false
+        }
+    }
+
+    SettingsGroup("What is a BPK app?", a) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "A BPK (.bpk) is a packaged web app that installs into Bluebird as a " +
+                "first-class application — with its own icon, Start/Taskbar/Desktop " +
+                "entries, and installer — instead of just being a bookmarked web page.",
+                color = a.textColor.copy(alpha = 0.75f),
+                fontSize = (13 * scale).sp
+            )
+            Text(
+                "You don't need to know the format by heart — copy the full developer " +
+                "guide below and paste it into any AI assistant (this one included) " +
+                "along with what you want to build. It has everything needed to " +
+                "generate a working BPK: the manifest, folder layout, installer " +
+                "bridge, and a full packaging checklist.",
+                color = a.textColor.copy(alpha = 0.6f),
+                fontSize = (12.5f * scale).sp
+            )
+        }
+    }
+
+    Spacer(Modifier.height(4.dp))
+
+    SettingsGroup("Developer guide", a) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            SIconBadge(FluentIcons.Regular.Code, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("BPK Developer Guide", color = a.textColor, fontSize = (14 * scale).sp, fontWeight = FontWeight.Medium)
+                Text("Manifest format, packaging, installer bridge, test checklist",
+                    color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * scale).sp)
+            }
+            Button(
+                shape = RoundedCornerShape(18.dp),
+                colors = if (justCopied)
+                    ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                else
+                    ButtonDefaults.buttonColors(containerColor = a.accent),
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(BPK_DEVELOPER_GUIDE))
+                    justCopied = true
+                }
+            ) {
+                if (justCopied) {
+                    Icon(FluentIcons.Regular.Checkmark, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Copied", fontSize = (12.5f * scale).sp, fontWeight = FontWeight.Medium)
+                } else {
+                    Text("Copy guide", fontSize = (12.5f * scale).sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ABOUT

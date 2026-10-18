@@ -12,6 +12,9 @@ import android.os.StatFs
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -29,6 +32,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -123,6 +127,7 @@ import fluent.ui.system.icons.regular.List
 import fluent.ui.system.icons.regular.Open
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -561,6 +566,35 @@ private fun FileExplorerContent(
     val surfaceBg = if (isDark) ExplorerDarkSurface else ExplorerLightSurface
     val navBg = if (isDark) ExplorerDarkNav else ExplorerLightNav
     val contentBorder = textColor.copy(alpha = if (isDark) 0.10f else 0.08f)
+
+    // ── Auto-collapsing nav pane ────────────────────────────────────────────
+    // Same pattern as the Settings screen's nav rail: one progress value
+    // drives both the width and the label fade, so they're always in sync —
+    // two independently-timed animations (an instant show/hide plus a
+    // separately-tweened width) is what causes a collapse to visibly
+    // "snap" partway through. This stays fully open while the pane itself
+    // is being scrolled, and re-opens instantly on any tap inside it.
+    val navScrollState = rememberScrollState()
+    var navInteractionTick by remember { mutableStateOf(0) }
+    var isNavExpanded by remember { mutableStateOf(true) }
+    val pokeNav: () -> Unit = { navInteractionTick++ }
+    LaunchedEffect(navInteractionTick, navScrollState.isScrollInProgress) {
+        isNavExpanded = true
+        if (!navScrollState.isScrollInProgress) {
+            delay(3000)
+            isNavExpanded = false
+        }
+    }
+    val navExpandProgress by animateFloatAsState(
+        targetValue = if (isNavExpanded) 1f else 0f,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "explorerNavExpandProgress"
+    )
+    val navWidth = lerp(64.dp, 214.dp, navExpandProgress)
+    // Labels fade out before the pane is visibly cramped, and only fade back
+    // in once it's mostly re-opened, so text is never shown squeezed.
+    val navLabelAlpha = ((navExpandProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
+
     val explorerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var ctrlMouseSelection by remember { mutableStateOf(false) }
@@ -906,7 +940,12 @@ private fun FileExplorerContent(
                 textColor = textColor,
                 navBg = navBg,
                 surfaceBg = surfaceBg,
-                isDark = isDark
+                isDark = isDark,
+                navWidth = navWidth,
+                expandProgress = navExpandProgress,
+                labelAlpha = navLabelAlpha,
+                scrollState = navScrollState,
+                onInteract = pokeNav
             )
 
             if (state.isHomeDashboard) {
@@ -2396,7 +2435,12 @@ private fun NavigationPane(
     textColor: Color,
     navBg: Color,
     surfaceBg: Color,
-    isDark: Boolean
+    isDark: Boolean,
+    navWidth: Dp,
+    expandProgress: Float,
+    labelAlpha: Float,
+    scrollState: ScrollState,
+    onInteract: () -> Unit
 ) {
     val homeDir = Environment.getExternalStorageDirectory()
     val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
@@ -2425,19 +2469,17 @@ private fun NavigationPane(
 
     Column(
         modifier = Modifier
-            .width(214.dp)
+            .width(navWidth)
             .fillMaxHeight()
             .background(navBg)
-            .verticalScroll(rememberScrollState())
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onInteract() }
+            .verticalScroll(scrollState)
             .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        Text(
-            "Home",
-            color = textColor.copy(alpha = 0.45f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-        )
+        NavSectionHeader("Home", textColor, expandProgress, labelAlpha)
         primary.forEach { item ->
             NavItem(
                 label = item.label,
@@ -2450,7 +2492,10 @@ private fun NavigationPane(
                 textColor = textColor,
                 selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
                 accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+                expandProgress = expandProgress,
+                labelAlpha = labelAlpha,
                 onClick = {
+                    onInteract()
                     if (item.label == "Home") onHome() else onNavigate(item.directory)
                 }
             )
@@ -2460,13 +2505,7 @@ private fun NavigationPane(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 6.dp), color = textColor.copy(alpha = 0.07f))
         Spacer(Modifier.height(8.dp))
 
-        Text(
-            "Folders",
-            color = textColor.copy(alpha = 0.45f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-        )
+        NavSectionHeader("Folders", textColor, expandProgress, labelAlpha)
         folders.forEach { item ->
             NavItem(
                 label = item.label,
@@ -2475,7 +2514,9 @@ private fun NavigationPane(
                 textColor = textColor,
                 selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
                 accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
-                onClick = { onNavigate(item.directory) }
+                expandProgress = expandProgress,
+                labelAlpha = labelAlpha,
+                onClick = { onInteract(); onNavigate(item.directory) }
             )
         }
 
@@ -2483,13 +2524,7 @@ private fun NavigationPane(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 6.dp), color = textColor.copy(alpha = 0.07f))
         Spacer(Modifier.height(8.dp))
 
-        Text(
-            "Storage",
-            color = textColor.copy(alpha = 0.45f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-        )
+        NavSectionHeader("Storage", textColor, expandProgress, labelAlpha)
 
         NavItem(
             label = "This Device",
@@ -2498,7 +2533,28 @@ private fun NavigationPane(
             textColor = textColor,
             selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
             accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
-            onClick = onDevice
+            expandProgress = expandProgress,
+            labelAlpha = labelAlpha,
+            onClick = { onInteract(); onDevice() }
+        )
+    }
+}
+
+// Section headers ("Home" / "Folders" / "Storage") have no icon counterpart
+// in the collapsed icon-only rail, so they fade out early and drop out of
+// composition once fully invisible — same threshold/curve as the item
+// labels, so nothing in the pane fades out of step with anything else.
+@Composable
+private fun NavSectionHeader(label: String, textColor: Color, expandProgress: Float, labelAlpha: Float) {
+    if (expandProgress > 0.001f) {
+        Text(
+            label,
+            color = textColor.copy(alpha = 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .alpha(labelAlpha)
+                .padding(horizontal = 10.dp, vertical = 5.dp)
         )
     }
 }
@@ -2511,9 +2567,16 @@ private fun NavItem(
     textColor: Color,
     selectionBackground: Color,
     accentColor: Color,
+    expandProgress: Float = 1f,
+    labelAlpha: Float = 1f,
     onClick: () -> Unit
 ) {
     Row(
+        // Padding/arrangement are fixed regardless of collapse state — only the
+        // label's own composition + alpha change — so the icon never jumps
+        // position mid-transition the way it would if these were swapped on
+        // the isNavExpanded boolean instead of following the same progress
+        // curve as the width.
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
@@ -2532,14 +2595,17 @@ private fun NavItem(
             tint = Color.Unspecified,
             modifier = Modifier.size(18.dp)
         )
-        Text(
-            label,
-            color = if (isSelected) accentColor else textColor.copy(alpha = 0.88f),
-            fontSize = 12.5.sp,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (expandProgress > 0.001f) {
+            Text(
+                label,
+                color = if (isSelected) accentColor else textColor.copy(alpha = 0.88f),
+                fontSize = 12.5.sp,
+                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alpha(labelAlpha)
+            )
+        }
     }
 }
 
