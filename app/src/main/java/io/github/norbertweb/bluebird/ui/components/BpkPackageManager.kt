@@ -93,10 +93,23 @@ class BpkPackageManager(private val context: Context) {
                 iconFile = iconFile
             )
 
-            // The descriptor points at finalDir, so replace the old directory only
-            // after the complete staged copy is ready.
-            if (finalDir.exists()) finalDir.deleteRecursively()
-            check(tempFinal.renameTo(finalDir)) { "Could not finalize application install" }
+            // Preserve the previous installation until the new tree is ready.
+            // If the final rename fails, restore the old directory.
+            val backup = File(parentDir, ".${finalDir.name}.${UUID.randomUUID()}.backup")
+            var movedOld = false
+            try {
+                if (finalDir.exists()) {
+                    check(finalDir.renameTo(backup)) { "Could not preserve previous installation" }
+                    movedOld = true
+                }
+                check(tempFinal.renameTo(finalDir)) { "Could not finalize application install" }
+                if (movedOld) backup.deleteRecursively()
+            } catch (t: Throwable) {
+                if (!finalDir.exists() && movedOld && backup.exists()) backup.renameTo(finalDir)
+                throw t
+            } finally {
+                if (tempFinal.exists()) tempFinal.deleteRecursively()
+            }
             onProgress?.invoke(BpkInstallStage.CREATING_LAUNCHER, 1f)
 
             onProgress?.invoke(BpkInstallStage.CACHING_PACKAGE, 0f)

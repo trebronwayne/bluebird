@@ -73,6 +73,7 @@ import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
 import io.github.norbertweb.bluebird.ui.components.BpkPackageIcon
+import io.github.norbertweb.bluebird.ui.components.BluebirdStorage
 import io.github.norbertweb.bluebird.ui.components.PngIcon
 import io.github.norbertweb.bluebird.ui.components.fileIconRes
 import io.github.norbertweb.bluebird.LauncherScreen
@@ -556,6 +557,7 @@ private fun FileExplorerContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val appDataRoot = remember(context) { BluebirdStorage.appDataRoot(context) }
     val state = rememberFileExplorerState(startDir)
     // Shared clipboard state (same one Desktop reads/writes) — collected here so the
     // Ribbon's paste button reacts live to a cut/copy made on Desktop or in another window.
@@ -861,16 +863,28 @@ private fun FileExplorerContent(
             pathParts = when {
                 state.isHomeDashboard -> listOf("Home" to Environment.getExternalStorageDirectory())
                 state.isDeviceDashboard -> listOf("This Device" to Environment.getExternalStorageDirectory())
-                else -> remember(state.currentDir) {
-                val externalRoot = Environment.getExternalStorageDirectory().absolutePath
-                val trimmed = state.currentDir.absolutePath.removePrefix(externalRoot)
-                val parts = mutableListOf("Home" to Environment.getExternalStorageDirectory())
-                var curr = Environment.getExternalStorageDirectory()
-                trimmed.split("/").filter { it.isNotEmpty() }.forEach { part ->
-                    curr = File(curr, part)
-                    parts.add(part to curr)
-                }
-                parts
+                else -> remember(state.currentDir, appDataRoot.absolutePath) {
+                    val currentPath = state.currentDir.absolutePath
+                    val appDataPath = appDataRoot.absolutePath
+                    val externalRoot = Environment.getExternalStorageDirectory()
+                    val parts = mutableListOf<Pair<String, File>>()
+                    val breadcrumbRoot: File
+                    val breadcrumbLabel: String
+                    if (currentPath == appDataPath || currentPath.startsWith(appDataPath + File.separator)) {
+                        breadcrumbRoot = appDataRoot
+                        breadcrumbLabel = "App Data"
+                    } else {
+                        breadcrumbRoot = externalRoot
+                        breadcrumbLabel = "Home"
+                    }
+                    parts.add(breadcrumbLabel to breadcrumbRoot)
+                    val relative = currentPath.removePrefix(breadcrumbRoot.absolutePath).trimStart(File.separatorChar)
+                    var curr = breadcrumbRoot
+                    relative.split(File.separatorChar).filter { it.isNotEmpty() }.forEach { part ->
+                        curr = File(curr, part)
+                        parts.add(part to curr)
+                    }
+                    parts
                 }
             },
             onNavigate = { dir ->
@@ -934,6 +948,7 @@ private fun FileExplorerContent(
                 currentDir = state.currentDir,
                 isHomeDashboard = state.isHomeDashboard,
                 isDeviceDashboard = state.isDeviceDashboard,
+                appDataRoot = appDataRoot,
                 onNavigate = { state.navigateTo(it) },
                 onHome = { state.navigateHome() },
                 onDevice = { state.navigateDevice() },
@@ -2429,6 +2444,7 @@ private fun NavigationPane(
     currentDir: File,
     isHomeDashboard: Boolean,
     isDeviceDashboard: Boolean,
+    appDataRoot: File,
     onNavigate: (File) -> Unit,
     onHome: () -> Unit,
     onDevice: () -> Unit,
@@ -2536,6 +2552,20 @@ private fun NavigationPane(
             expandProgress = expandProgress,
             labelAlpha = labelAlpha,
             onClick = { onInteract(); onDevice() }
+        )
+
+        NavItem(
+            label = "App Data",
+            iconRes = R.drawable.ic_explorer_storage,
+            isSelected = !isHomeDashboard && !isDeviceDashboard &&
+                (currentDir.absolutePath == appDataRoot.absolutePath ||
+                 currentDir.absolutePath.startsWith(appDataRoot.absolutePath + File.separator)),
+            textColor = textColor,
+            selectionBackground = if (isDark) ExplorerDarkSelection else ExplorerSelectionBlue,
+            accentColor = if (isDark) ExplorerDarkAccent else ExplorerAccentBlue,
+            expandProgress = expandProgress,
+            labelAlpha = labelAlpha,
+            onClick = { onInteract(); onNavigate(appDataRoot) }
         )
     }
 }

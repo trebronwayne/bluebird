@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,7 +63,13 @@ fun ProgramManagerScreen(
     var busyId by remember { mutableStateOf<String?>(null) }
     var uninstallTarget by remember { mutableStateOf<InstalledBpkApp?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var logsTarget by remember { mutableStateOf<InstalledBpkApp?>(null) }
+    var logsText by remember { mutableStateOf("") }
+    var permissionsTarget by remember { mutableStateOf<InstalledBpkApp?>(null) }
+    var dataTarget by remember { mutableStateOf<InstalledBpkApp?>(null) }
+    var permissionRefresh by remember { mutableStateOf(0) }
 
+    @Suppress("UNUSED_EXPRESSION") val permissionRevision = permissionRefresh
     val bg = if (isDark) Color(0xFF111111) else Color(0xFFF7F7F7)
     val surface = if (isDark) Color(0xFF1C1C1C) else Color.White
     val text = if (isDark) Color(0xFFF2F2F2) else Color(0xFF202020)
@@ -138,17 +146,70 @@ fun ProgramManagerScreen(
                                 IconButton(onClick = { uninstallTarget = app }) { Icon(FluentIcon.Delete, null, tint = text) }
                             }
                         }
+                        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { permissionsTarget = app }) { Text("Permissions") }
+                            TextButton(onClick = { logsTarget = app; logsText = BpkAppLogger(context).read(app.id) }) { Text("View logs") }
+                            TextButton(onClick = { dataTarget = app }) { Text("Private data") }
+                        }
                     }
                 }
             }
         }
     }
 
+    dataTarget?.let { app ->
+        Dialog(
+            onDismissRequest = { dataTarget = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxSize().background(bg)
+            ) {
+                BpkPrivateDataBrowserScreen(isDark = isDark, appId = app.id, onBack = { dataTarget = null })
+            }
+        }
+    }
+
+    permissionsTarget?.let { app ->
+        val manager = remember(app.id) { BpkPermissionManager(context) }
+        val granted = manager.granted(app.id)
+        AlertDialog(
+            onDismissRequest = { permissionsTarget = null },
+            title = { Text("${app.name} permissions") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Only capabilities granted here are available through Bluebird's BPK API.", fontSize = 12.sp)
+                    BpkCapability.all.forEach { capability ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(
+                                checked = capability in granted,
+                                onCheckedChange = { enabled -> manager.setGranted(app.id, capability, enabled); permissionRefresh++ }
+                            )
+                            Text(capability.replace('_', ' '), fontSize = 13.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { permissionsTarget = null }) { Text("Done") } },
+            dismissButton = { TextButton(onClick = { manager.reset(app.id); permissionRefresh++; permissionsTarget = null }) { Text("Reset") } }
+        )
+    }
+
+    logsTarget?.let { app ->
+        AlertDialog(
+            onDismissRequest = { logsTarget = null },
+            title = { Text("${app.name} logs") },
+            text = { Text(logsText, fontSize = 11.sp, maxLines = 24) },
+            confirmButton = { TextButton(onClick = { logsText = BpkAppLogger(context).read(app.id) }) { Text("Refresh") } },
+            dismissButton = { TextButton(onClick = { BpkAppLogger(context).clear(app.id); logsText = "Logs cleared." }) { Text("Clear logs") } }
+        )
+    }
+
     uninstallTarget?.let { app ->
         AlertDialog(
             onDismissRequest = { uninstallTarget = null },
             title = { Text("Uninstall ${app.name}?") },
-            text = { Text("This removes the installed application files from Bluebird Storage.") },
+            text = { Text("This removes the installed application files. Private app data and logs are retained so you can recover them; delete them separately from Program Manager or File Explorer.") },
             confirmButton = {
                 Button(onClick = {
                     uninstallTarget = null
