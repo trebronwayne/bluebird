@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import androidx.annotation.DrawableRes
+import io.github.norbertweb.bluebird.R
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -7,8 +9,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.lerp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -54,11 +58,6 @@ import fluent.ui.system.icons.regular.ChevronRight
 import fluent.ui.system.icons.regular.DataTrending
 import fluent.ui.system.icons.regular.Dismiss
 import fluent.ui.system.icons.regular.Edit
-import fluent.ui.system.icons.regular.Info
-import fluent.ui.system.icons.regular.PaintBrush
-import fluent.ui.system.icons.regular.Person
-import fluent.ui.system.icons.regular.PersonCircle
-import fluent.ui.system.icons.regular.Search
 import fluent.ui.system.icons.regular.Shield
 
 import androidx.compose.material3.AlertDialog
@@ -149,12 +148,18 @@ import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 // CATEGORY ENUM — replaces raw strings to prevent silent routing bugs
 // ─────────────────────────────────────────────────────────────────────────────
 
-private enum class SettingsCategory(val label: String, val icon: ImageVector) {
-    APPEARANCE      ("Appearance",          FluentIcons.Regular.PaintBrush),
-    ACCOUNTS        ("Accounts",            FluentIcons.Regular.PersonCircle),
-    PRIVACY_SECURITY("Privacy & security",  FluentIcons.Regular.Shield),
-    FEEDBACK_UPDATES("Feedback & updates",  FluentIcons.Regular.Bug),
-    ABOUT           ("About",               FluentIcons.Regular.Info)
+// All five current categories now use Icons8 PNGs (res/drawable/ic_*.png)
+// instead of Fluent vector icons, so the enum carries a @DrawableRes Int.
+// If a future category is added before a matching PNG exists for it, give
+// it a Fluent vector via the FluentIcons.Regular.* set used elsewhere in
+// this file and swap this column back to ImageVector, or add an icon-type
+// wrapper — for now all rows share one PNG-backed icon.
+private enum class SettingsCategory(val label: String, @DrawableRes val icon: Int) {
+    APPEARANCE      ("Appearance",          R.drawable.ic_appearance),
+    ACCOUNTS        ("Accounts",            R.drawable.ic_user),
+    PRIVACY_SECURITY("Privacy & security",  R.drawable.ic_privacy),
+    FEEDBACK_UPDATES("Feedback & updates",  R.drawable.ic_feedback),
+    ABOUT           ("About",               R.drawable.ic_about)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -239,11 +244,23 @@ fun SettingsScreen(
             isNavExpanded = false
         }
     }
-    val navWidth by animateDpAsState(
-        targetValue = if (isNavExpanded) 256.dp else 64.dp,
-        animationSpec = tween(260),
-        label = "navWidth"
+
+    // Single source of truth for the whole transition: width and label
+    // opacity used to be two independently-animated values (a tween'd width
+    // plus an instant if/else that showed or hid the labels), which is what
+    // made the collapse look like it "broke" — the labels were popping in
+    // or out at a different moment than the width was still moving. Now
+    // both are derived from one progress value, so they're always in step.
+    val expandProgress by animateFloatAsState(
+        targetValue = if (isNavExpanded) 1f else 0f,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "navExpandProgress"
     )
+    val navWidth = lerp(64.dp, 256.dp, expandProgress)
+    // Labels fade out well before the pane finishes narrowing (and fade in
+    // only once it's mostly open), so text is never visibly squeezed while
+    // still opaque — by the time the row gets cramped it's already invisible.
+    val labelAlpha = ((expandProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
 
     Row(modifier = Modifier.fillMaxSize().background(resolvedBg)) {
 
@@ -259,10 +276,15 @@ fun SettingsScreen(
                 ) { pokeNav() }
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            if (uiState != null && isNavExpanded) {
+            // Gated by `expandProgress > 0.001f` rather than the raw boolean so this
+            // block stays composed (and fading via labelAlpha) for the full width
+            // animation, then drops out of layout only once it's already fully
+            // invisible — that's what stops the old "pop then catch up" look.
+            if (uiState != null && expandProgress > 0.001f) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .alpha(labelAlpha)
                         .clip(RoundedCornerShape(4.dp))
                         .clickable { pokeNav(); selectedCategoryState.value = SettingsCategory.ACCOUNTS }
                         .padding(horizontal = 12.dp, vertical = 12.dp),
@@ -284,7 +306,7 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxSize().background(specialAccent, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(FluentIcons.Regular.Person, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Image(painter = painterResource(R.drawable.ic_user), contentDescription = null, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -308,12 +330,13 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .alpha(labelAlpha)
                         .clip(RoundedCornerShape(18.dp))
                         .background(resolvedBg)
                         .border(1.dp, resolvedText.copy(alpha = 0.1f), RoundedCornerShape(18.dp))
                         .padding(horizontal = 12.dp, vertical = 9.dp)
                 ) {
-                    Icon(FluentIcons.Regular.Search, null, tint = resolvedText.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
+                    Image(painter = painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.size(16.dp))
                     BasicTextField(
                         value = navSearch,
                         onValueChange = { navSearch = it; pokeNav() },
@@ -341,42 +364,57 @@ fun SettingsScreen(
                 items(visibleCategories, key = { it.name }) { cat ->
                 val isSelected = selectedCategoryState.value == cat
                 Row(
+                    // Padding and arrangement are now fixed regardless of expand
+                    // state (only the label's own alpha + composition change) —
+                    // that's what removes the old layout "snap": previously the
+                    // padding/arrangement flipped instantly on the isNavExpanded
+                    // boolean while the width was still mid-animation, which is
+                    // what made the icon visibly jump mid-transition.
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 1.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (isSelected) specialAccent.copy(alpha = 0.15f) else Color.Transparent)
                         .clickable { pokeNav(); selectedCategoryState.value = cat }
-                        .padding(horizontal = if (isNavExpanded) 10.dp else 0.dp, vertical = 11.dp),
+                        .padding(horizontal = 10.dp, vertical = 12.dp),
                     verticalAlignment  = Alignment.CenterVertically,
-                    horizontalArrangement = if (isNavExpanded) Arrangement.spacedBy(12.dp) else Arrangement.Center
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Selected-item accent bar, matching the real Settings app's nav rail
-                    // — only shown in the expanded state; the collapsed icon-only rail
-                    // uses the icon's own tint to indicate selection instead.
-                    if (isNavExpanded) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.dp)
-                                .height(if (isSelected) 16.dp else 0.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (isSelected) specialAccent else Color.Transparent)
-                        )
-                    }
-                    Icon(cat.icon, null,
-                        tint     = if (isSelected) specialAccent else resolvedText.copy(alpha = 0.7f),
+                    // Selection indicator — always present (not gated on expand
+                    // state) since Icons8 PNGs are full-color and can't be tinted
+                    // to show selection the way the old Fluent vectors could; this
+                    // bar now does that job at every width, collapsed or open.
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(if (isSelected) 16.dp else 0.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (isSelected) specialAccent else Color.Transparent)
+                    )
+                    Image(painter = painterResource(cat.icon), contentDescription = null,
                         modifier = Modifier.size(18.dp))
-                    if (isNavExpanded) {
+                    if (expandProgress > 0.001f) {
                         Text(cat.label,
                             color      = if (isSelected) specialAccent else resolvedText,
                             fontSize   = (13 * (uiState?.textScale ?: 1f)).sp,
                             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                            maxLines   = 1, overflow = TextOverflow.Ellipsis)
+                            maxLines   = 1, overflow = TextOverflow.Ellipsis,
+                            modifier   = Modifier.alpha(labelAlpha))
                     }
                 }
                 }
             }
         }
+
+        // Crisp pane separation, matching Windows 11's thin divider between
+        // its nav rail and content area (previously the two panes only
+        // differed by background color, with no hard edge between them).
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(1.dp)
+                .background(resolvedText.copy(alpha = 0.08f))
+        )
 
         // ── Right content area ────────────────────────────────────────────────
         Column(
@@ -385,18 +423,25 @@ fun SettingsScreen(
                 .fillMaxHeight()
                 .background(resolvedBg)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 32.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 36.dp, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(selectedCategoryState.value.icon, null, tint = resolvedText, modifier = Modifier.size(24.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(specialAccent.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(painter = painterResource(selectedCategoryState.value.icon), contentDescription = null, modifier = Modifier.size(22.dp))
+                }
                 Text(selectedCategoryState.value.label,
                     style      = MaterialTheme.typography.headlineSmall,
                     color      = resolvedText,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize   = (24 * (uiState?.textScale ?: 1f)).sp)
+                    fontSize   = (26 * (uiState?.textScale ?: 1f)).sp)
             }
-            Spacer(Modifier.height(2.dp))
 
             val args = ScreenArgs(effectiveDark, resolvedText, resolvedSurface, specialAccent, uiState, viewModel, context,
                 scale = uiState?.textScale ?: 1f)
@@ -449,17 +494,35 @@ internal data class ScreenArgs(
 
 @Composable
 internal fun SettingsGroup(title: String, a: ScreenArgs, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title,
-            color      = a.textColor.copy(alpha = 0.65f),
-            fontSize   = (12 * (a.scale)).sp,
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title.uppercase(),
+            color      = a.textColor.copy(alpha = 0.5f),
+            fontSize   = (11.5f * (a.scale)).sp,
             fontWeight = FontWeight.SemiBold,
-            modifier   = Modifier.padding(start = 2.dp, bottom = 2.dp))
+            letterSpacing = 0.6.sp,
+            modifier   = Modifier.padding(start = 4.dp))
         Card(
             colors = CardDefaults.cardColors(containerColor = a.surfaceBg),
-            shape  = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.08f))
-        ) { Column(modifier = Modifier.padding(2.dp), content = content) }
+            shape  = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.07f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) { Column(modifier = Modifier.padding(4.dp), content = content) }
+    }
+}
+
+// Small Windows-11-style icon badge: icon sitting inside a soft rounded
+// square, used consistently across every settings row for a less "plain
+// list" look.
+@Composable
+private fun SIconBadge(icon: ImageVector, tint: Color, bg: Color) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(17.dp))
     }
 }
 
@@ -476,15 +539,15 @@ internal fun SToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onToggle() }           // ← FIX: whole row tappable
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment  = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Icon(icon, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+        SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp)
+            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
             if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
         }
         Switch(
@@ -507,15 +570,15 @@ internal fun SNav(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment  = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Icon(icon, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+        SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp)
+            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
             if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
         }
         if (value.isNotEmpty()) Text(value, color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * (a.scale)).sp)
@@ -534,11 +597,11 @@ internal fun SSlider(
     a             : ScreenArgs,
     onValueChange : (Float) -> Unit
 ) {
-    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Icon(icon, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+            SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
             Column(modifier = Modifier.weight(1f)) {
-                Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp)
+                Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
                 if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
             }
             Text(valueLabel, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * (a.scale)).sp)
@@ -548,7 +611,7 @@ internal fun SSlider(
             onValueChange = onValueChange,
             valueRange    = range,
             colors        = SliderDefaults.colors(thumbColor = a.accent, activeTrackColor = a.accent),
-            modifier      = Modifier.padding(start = 32.dp)
+            modifier      = Modifier.padding(start = 48.dp)
         )
     }
 }
@@ -567,25 +630,24 @@ internal fun SDropdown(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { expanded = true }
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment  = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Icon(icon, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+        SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp)
+            Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
             if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
         }
         Box {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .border(1.dp, a.textColor.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                    .background(a.textColor.copy(alpha = 0.04f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(a.textColor.copy(alpha = 0.05f))
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
                 Text(selected, color = a.textColor, fontSize = (12 * (a.scale)).sp)
                 Spacer(Modifier.width(4.dp))
@@ -606,7 +668,7 @@ internal fun SDropdown(
     }
 }
 
-internal fun divColor(a: ScreenArgs) = a.textColor.copy(alpha = 0.06f)
+internal fun divColor(a: ScreenArgs) = a.textColor.copy(alpha = 0.05f)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Personalization — ported from Desktop.kt's WallpaperPersonalisePanel
@@ -1210,7 +1272,7 @@ private fun AccountsSettings(a: ScreenArgs) {
                             modifier = Modifier.fillMaxSize().clip(CircleShape))
                     } else {
                         Box(modifier = Modifier.fillMaxSize().background(a.accent, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(FluentIcons.Regular.Person, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                            Image(painter = painterResource(R.drawable.ic_user), contentDescription = null, modifier = Modifier.size(32.dp))
                         }
                     }
                 }
@@ -1368,7 +1430,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                         .background(a.accent.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(FluentIcons.Regular.Bug, null, tint = a.accent, modifier = Modifier.size(19.dp))
+                    Image(painter = painterResource(R.drawable.ic_feedback), contentDescription = null, modifier = Modifier.size(19.dp))
                 }
                 Column {
                     Text("Send feedback",
