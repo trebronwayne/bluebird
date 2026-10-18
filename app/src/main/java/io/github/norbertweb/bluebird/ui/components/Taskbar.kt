@@ -204,7 +204,7 @@ fun bluebirdTaskbar(
             // Left-aligned Windows-style shell order:
             // Widgets → Start → Search → app/window strip.
             TaskbarIconButton(
-                icon = FluentIcon.Widget,
+                iconRes = R.drawable.ic_taskbar_widgets,
                 contentDescription = "Widgets",
                 isActive = uiState.isWidgetsOpen,
                 isDark = isDark,
@@ -224,7 +224,8 @@ fun bluebirdTaskbar(
 
             SearchPill(
                 isDark = isDark,
-                onClick = { viewModel.toggleSearch() }
+                onClick = { viewModel.toggleSearch() },
+                onWeatherClick = { viewModel.toggleWidgets() }
             )
 
             Spacer(Modifier.width(6.dp))
@@ -248,7 +249,7 @@ fun bluebirdTaskbar(
                 horizontalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 TaskbarIconButton(
-                    icon = FluentIcon.Desktop,
+                    iconRes = R.drawable.ic_taskbar_show_desktop,
                     contentDescription = if (desktopIconsVisible) "Hide desktop icons" else "Show desktop icons",
                     isDark = isDark,
                     onClick = {
@@ -361,7 +362,8 @@ private fun StartButton(isActive: Boolean, isDark: Boolean, onClick: () -> Unit)
         Image(
             painter = painterResource(id = R.drawable.ic_taskbar_start_logo),
             contentDescription = "Start",
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(24.dp),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit
         )
     }
 }
@@ -373,7 +375,7 @@ private fun StartButton(isActive: Boolean, isDark: Boolean, onClick: () -> Unit)
 // Search Pill
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun SearchPill(isDark: Boolean, onClick: () -> Unit) {
+private fun SearchPill(isDark: Boolean, onClick: () -> Unit, onWeatherClick: () -> Unit) {
     var pressed by remember { mutableStateOf(false) }
     val bgColor = if (isDark) {
         if (pressed) Color(0x1FFFFFFF) else Color(0x14FFFFFF)
@@ -399,8 +401,17 @@ private fun SearchPill(isDark: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Icon(imageVector = FluentIcon.Search, contentDescription = "Search", tint = mutedIcon, modifier = Modifier.size(15.dp))
+        Image(painter = painterResource(id = R.drawable.ic_taskbar_search), contentDescription = "Search", modifier = Modifier.size(16.dp))
         Text("Search", color = mutedText, fontSize = 12.sp)
+        Spacer(Modifier.weight(1f))
+        // Weather icon inside the bar (like Windows' search highlights) — opens the widgets panel.
+        Image(
+            painter = painterResource(id = R.drawable.ic_taskbar_weather),
+            contentDescription = "Weather",
+            modifier = Modifier
+                .size(20.dp)
+                .pointerInput(Unit) { detectTapGestures(onTap = { onWeatherClick() }) }
+        )
     }
 }
 
@@ -409,8 +420,9 @@ private fun SearchPill(isDark: Boolean, onClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 internal fun TaskbarIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    @androidx.annotation.DrawableRes iconRes: Int? = null,
     isActive: Boolean = false,
     isDark: Boolean = true,
     onClick: () -> Unit,
@@ -446,7 +458,16 @@ internal fun TaskbarIconButton(
                 },
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = contentDescription, tint = textColor, modifier = Modifier.size(iconSize))
+            if (iconRes != null) {
+                // Colored PNG — drawn with Image so it keeps its own colors (no tint).
+                Image(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(iconSize + 4.dp)
+                )
+            } else if (icon != null) {
+                Icon(imageVector = icon, contentDescription = contentDescription, tint = textColor, modifier = Modifier.size(iconSize))
+            }
         }
         if (isActive) {
             Box(Modifier.width(12.dp).height(2.dp)
@@ -597,11 +618,7 @@ private fun TaskbarWindowIcon(
                     } else {
                         // Now checks for the same custom SVG Start Menu/Desktop use before
                         // falling back to iconForKey()'s Fluent glyph.
-                        WindowKeyIcon(
-                            key = windowState.iconKey,
-                            tint = if (isActive) textColor else textColor.copy(alpha = 0.8f),
-                            modifier = Modifier.size(15.dp)
-                        )
+                        PngIcon(res = windowIconRes(windowState.iconKey), modifier = Modifier.size(15.dp))
                     }
                     if (windowCount > 1) {
                         Box(

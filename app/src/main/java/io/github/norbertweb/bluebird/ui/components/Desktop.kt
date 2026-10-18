@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import io.github.norbertweb.bluebird.*
+import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.Dispatchers
@@ -583,24 +584,6 @@ fun getFileIcon(file: File): androidx.compose.ui.graphics.vector.ImageVector = w
     file.extension.lowercase() == "webapp" -> FluentIcon.Globe
     file.extension.lowercase() == "desktop" -> FluentIcon.Apps
     else -> FluentIcon.Document
-}
-
-private fun getUriShortcutIcon(
-    context: android.content.Context,
-    uri: Uri,
-    isFolder: Boolean
-): androidx.compose.ui.graphics.vector.ImageVector {
-    if (isFolder) return FluentIcon.Folder
-    val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
-    return when {
-        mime.startsWith("audio/") -> FluentIcon.MusicNote2
-        mime.startsWith("video/") -> FluentIcon.PlayCircle
-        mime.startsWith("image/") -> FluentIcon.Image
-        mime == "application/pdf" -> FluentIcon.DocumentPdf
-        mime.contains("html") -> FluentIcon.Globe
-        mime.startsWith("text/") -> FluentIcon.DocumentText
-        else -> FluentIcon.Document
-    }
 }
 
 fun getFileIconColor(file: File): Color = when {
@@ -3073,7 +3056,7 @@ fun Desktop(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(FluentIcon.Folder, contentDescription = null, tint = DS.accentStart, modifier = Modifier.size(18.dp))
+                    PngIcon(res = R.drawable.ic_folder, modifier = Modifier.size(18.dp))
                     Text(
                         "Desktop is full. Some items are still available in Desktop.",
                         color = desktopTextPrimary(isDark), fontSize = 13.sp, modifier = Modifier.weight(1f)
@@ -3114,11 +3097,7 @@ fun Desktop(
                     verticalAlignment    = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        imageVector = FluentIcon.FolderProhibited, contentDescription = null,
-                        tint     = DS.accentStart,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    PngIcon(res = R.drawable.ic_folder_locked, modifier = Modifier.size(18.dp))
                     Text(
                         "File access not granted",
                         color    = desktopTextPrimary(isDark),
@@ -3465,53 +3444,25 @@ private fun DesktopIcon(
     ) {
         (item.targetItemType ?: shortcutTargetInfo?.type) == DesktopItemType.IMAGE_FILE
     }
-    val fallbackIcon = remember(
+    // Colored PNG for this desktop item. Built-in apps and system items use the
+    // ic_app_* set; everything else resolves by file extension / MIME type.
+    val fallbackIconRes: Int = remember(
         item.file.absolutePath, item.type, item.builtInScreen, item.targetFilePath,
         item.targetUri, item.targetUriIsFolder, item.targetItemType, shortcutTargetInfo?.type
     ) {
-        when (item.builtInScreen) {
-            LauncherScreen.FILE_EXPLORER -> FluentIcon.Folder
-            LauncherScreen.SETTINGS -> FluentIcon.Settings
-            LauncherScreen.BROWSER -> FluentIcon.Globe
-            LauncherScreen.CALCULATOR -> FluentIcon.Calculator
-            LauncherScreen.CALENDAR -> FluentIcon.Calendar
-
-            LauncherScreen.MEDIA_PLAYER -> FluentIcon.PlayCircle
-            LauncherScreen.IMAGE_VIEWER -> FluentIcon.Image
-            LauncherScreen.WORD_IMPRESS -> FluentIcon.DocumentText
-            LauncherScreen.PremiumTextEditorScreen -> FluentIcon.TextFont
-
-
-            LauncherScreen.RECYCLE_BIN -> FluentIcon.Delete
-            LauncherScreen.BLUEBIRD_STORE -> FluentIcon.Moon
-            LauncherScreen.PROGRAM_MANAGER -> FluentIcon.Apps
-            else -> {
-                val targetFile = shortcutTargetFile
-                if (targetFile != null) {
-                    getFileIcon(targetFile)
-                } else if (item.targetUri != null) {
-                    getUriShortcutIcon(context, Uri.parse(item.targetUri), item.targetUriIsFolder)
-                } else {
-                    getFileIcon(item.file)
-                }
-            }
-        }
-    }
-    val fallbackTint = remember(
-        item.file.absolutePath, item.type, item.builtInScreen, item.targetFilePath,
-        item.targetUri, item.targetUriIsFolder, item.targetItemType, shortcutTargetInfo?.type
-    ) {
+        val builtIn = appIconRes(item.builtInScreen)
         when {
-            item.builtInScreen != null -> DS.accentStart
-            shortcutTargetFile != null -> getFileIconColor(shortcutTargetFile)
-            item.targetUri != null ->
-                if (item.targetUriIsFolder) Color(0xFFFFC107)
-                else when (context.contentResolver.getType(Uri.parse(item.targetUri)).orEmpty().lowercase()) {
-                    "application/pdf" -> Color(0xFFD83B01)
-                    "text/html", "application/xhtml+xml" -> DS.accentStart
-                    else -> DS.accentStart
-                }
-            else -> getFileIconColor(item.file)
+            builtIn != null                                   -> builtIn
+            item.builtInScreen != null                        -> R.drawable.ic_app_generic
+            item.type == DesktopItemType.THIS_PC              -> R.drawable.ic_app_this_pc
+            item.type == DesktopItemType.RECYCLE_BIN          -> R.drawable.ic_app_recycle_bin_empty
+            item.type == DesktopItemType.SETTINGS_ICON        -> R.drawable.ic_app_settings
+            item.type == DesktopItemType.WEB_APP_SHORTCUT     -> R.drawable.ic_app_web_app
+            shortcutTargetFile != null                        -> fileIconRes(shortcutTargetFile)
+            item.targetUri != null                            ->
+                uriShortcutIconRes(context, Uri.parse(item.targetUri), item.targetUriIsFolder)
+            item.type == DesktopItemType.APP_SHORTCUT         -> R.drawable.ic_app_generic
+            else                                              -> fileIconRes(item.file)
         }
     }
 
@@ -3599,61 +3550,16 @@ private fun DesktopIcon(
                         )
                     }
                     else -> {
-                        // Built-in apps now check for a custom Windows-11-style SVG icon
-                        // first (same set Start Menu uses via BuiltInAppIcons.kt), falling
-                        // back to the Fluent glyph automatically if one isn't found — so
-                        // desktop icons and Start Menu icons for the same app always match.
-                        val builtInName = item.builtInScreen?.let { builtInAppDisplayName(it) }
-                        if (builtInName != null) {
-                            BuiltInAppIcon(
-                                appName = builtInName,
-                                fallback = fallbackIcon,
-                                tint = fallbackTint,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(
-                                imageVector            = fallbackIcon,
-                                contentDescription = null,
-                                tint               = fallbackTint,
-                                modifier           = Modifier.fillMaxSize()
-                            )
-                        }
+                        PngIcon(res = fallbackIconRes, modifier = Modifier.fillMaxSize())
                     }
                 }
 
-                // Shortcut arrow badge (all .desktop shortcuts, including files, folders, apps, and URI targets)
+                // Shortcut arrow overlay (all .desktop shortcuts, including files, folders, apps, and URI targets)
                 if (item.type == DesktopItemType.APP_SHORTCUT || item.type == DesktopItemType.WEB_APP_SHORTCUT) {
-                    Box(
-                        Modifier
-                            .size(14.dp)
-                            .align(Alignment.BottomStart)
-                            .background(Color.White, RoundedCornerShape(2.dp))
-                            .border(0.5.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(2.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = FluentIcon.ArrowReply, contentDescription = null,
-                            tint     = Color.Black,
-                            modifier = Modifier.size(10.dp).graphicsLayer(scaleX = -1f))
-                    }
-                }
-
-                // Audio/Video badge follows the TARGET type for shortcuts, so a shortcut
-                // keeps the same small media identity as the corresponding normal file.
-                val effectiveItemType = item.targetItemType ?: shortcutTargetInfo?.type ?: item.type
-                if (effectiveItemType == DesktopItemType.MUSIC_FILE || effectiveItemType == DesktopItemType.VIDEO_FILE) {
-                    val badgeColor = if (effectiveItemType == DesktopItemType.MUSIC_FILE) Color(0xFFFF8C00) else Color(0xFF8764B8)
-                    val badgeIcon  = if (effectiveItemType == DesktopItemType.MUSIC_FILE) FluentIcon.MusicNote2 else FluentIcon.Play
-                    // A video with a generated thumbnail gets its media identity from the
-                    // thumbnail itself; music retains the compact badge just like normal files.
-                    if (effectiveItemType == DesktopItemType.MUSIC_FILE || targetVideoThumbnail == null) {
-                        Box(
-                            Modifier.size(13.dp).align(Alignment.BottomEnd).background(Color(0xFF1C1C1C), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(imageVector = badgeIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(9.dp))
-                        }
-                    }
+                    PngIcon(
+                        res = R.drawable.ic_shortcut_arrow,
+                        modifier = Modifier.size(16.dp).align(Alignment.BottomStart)
+                    )
                 }
             }
 
@@ -4628,7 +4534,7 @@ fun PropertiesDialog(item: DesktopFileInfo, isDark: Boolean, onDismiss: () -> Un
         shape            = RoundedCornerShape(8.dp),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(imageVector = getFileIcon(item.file), contentDescription = null, tint = getFileIconColor(item.file), modifier = Modifier.size(22.dp))
+                PngIcon(res = fileIconRes(item.file), modifier = Modifier.size(22.dp))
                 Text("Properties", color = tc, fontWeight = FontWeight.Medium, fontSize = 14.sp)
             }
         },

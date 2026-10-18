@@ -69,6 +69,8 @@ import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.components.BluebirdExecutable
 import io.github.norbertweb.bluebird.ui.components.BpkPackageIcon
+import io.github.norbertweb.bluebird.ui.components.PngIcon
+import io.github.norbertweb.bluebird.ui.components.fileIconRes
 import io.github.norbertweb.bluebird.LauncherScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fluent.ui.system.icons.FluentIcons
@@ -508,12 +510,7 @@ private fun PermissionGate(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                FluentIcons.Regular.FolderProhibited,
-                contentDescription = null,
-                tint = textColor.copy(alpha = 0.4f),
-                modifier = Modifier.size(48.dp)
-            )
+PngIcon(res = R.drawable.ic_folder_locked, modifier = Modifier.size(48.dp))
             Text("Storage access required", color = textColor, style = MaterialTheme.typography.titleMedium)
             Text(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
@@ -1193,12 +1190,7 @@ private fun HomeDashboard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(
-                                    getFileIcon(item),
-                                    contentDescription = null,
-                                    tint = getFileIconColor(item),
-                                    modifier = Modifier.size(21.dp)
-                                )
+PngIcon(res = fileIconRes(item.isDirectory, item.extension), modifier = Modifier.size(22.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         item.name,
@@ -1292,12 +1284,7 @@ private fun FileListArea(
             state.isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            FluentIcons.Regular.FolderOpen,
-                            contentDescription = null,
-                            tint = textColor.copy(alpha = 0.28f),
-                            modifier = Modifier.size(30.dp)
-                        )
+PngIcon(res = R.drawable.ic_folder_open, modifier = Modifier.size(34.dp))
                         Spacer(Modifier.height(8.dp))
                         Text("Loading", color = textColor.copy(alpha = 0.5f), fontSize = 12.5.sp)
                     }
@@ -1310,12 +1297,16 @@ private fun FileListArea(
                             shape = RoundedCornerShape(12.dp),
                             color = surfaceBg.copy(alpha = 0.55f)
                         ) {
-                            Icon(
-                                if (state.searchQuery.isNotBlank()) FluentIcons.Regular.Search else FluentIcons.Regular.FolderOpen,
-                                null,
-                                tint = textColor.copy(alpha = 0.25f),
-                                modifier = Modifier.padding(14.dp).size(30.dp)
-                            )
+                            if (state.searchQuery.isNotBlank()) {
+                                Icon(
+                                    FluentIcons.Regular.Search,
+                                    null,
+                                    tint = textColor.copy(alpha = 0.25f),
+                                    modifier = Modifier.padding(14.dp).size(30.dp)
+                                )
+                            } else {
+                                PngIcon(res = R.drawable.ic_folder_empty, modifier = Modifier.padding(14.dp).size(34.dp))
+                            }
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(
@@ -1687,7 +1678,7 @@ private fun FilePropertiesDialog(
                     modifier = Modifier.size(44.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(getFileIcon(target), null, tint = getFileIconColor(target), modifier = Modifier.size(24.dp))
+                        PngIcon(res = fileIconRes(target.isDirectory, target.extension), modifier = Modifier.size(26.dp))
                     }
                 }
                 Spacer(Modifier.width(12.dp))
@@ -2694,7 +2685,7 @@ private fun FileExplorerThumbnail(
                 )
             }
             else -> {
-                Icon(getFileIcon(item), null, tint = getFileIconColor(item), modifier = Modifier.size(iconSize))
+                PngIcon(res = fileIconRes(item.isDirectory, item.extension), modifier = Modifier.size(iconSize))
             }
         }
     }

@@ -799,11 +799,7 @@ private fun PipThumbnail(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Now checks for the same custom SVG Start Menu/Desktop use before
             // falling back to iconForKey()'s Fluent glyph.
-            WindowKeyIcon(
-                key = windowState.iconKey,
-                tint = if (isDark) bluebirdColors.TextPrimary.copy(0.7f) else bluebirdColors.TextPrimaryLight.copy(0.7f),
-                modifier = Modifier.size(28.dp)
-            )
+            PngIcon(res = windowIconRes(windowState.iconKey), modifier = Modifier.size(28.dp))
             Spacer(Modifier.height(4.dp))
             Text(windowState.title, fontSize = 10.sp,
                 color = if (isDark) bluebirdColors.TextPrimary.copy(0.6f) else bluebirdColors.TextPrimaryLight.copy(0.6f),
@@ -1114,11 +1110,7 @@ fun WindowTitleBar(
         } else {
             // Now checks for the same custom SVG Start Menu/Desktop use before
             // falling back to iconForKey()'s Fluent glyph.
-            WindowKeyIcon(
-                key = iconKey,
-                tint = if (isDark) bluebirdColors.TextPrimary.copy(0.75f) else bluebirdColors.TextPrimaryLight.copy(0.75f),
-                modifier = Modifier.size(14.dp)
-            )
+            PngIcon(res = windowIconRes(iconKey), modifier = Modifier.size(14.dp))
         }
         Spacer(Modifier.width(6.dp))
 

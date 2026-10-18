@@ -268,6 +268,11 @@ internal val builtInApps = listOf(
 
 )
 
+/** Colored PNG for a built-in (system) app in Start, or null if it has none. Installed apps are unaffected. */
+@androidx.annotation.DrawableRes
+internal fun builtInPngIconRes(name: String): Int? =
+    builtInApps.firstOrNull { it.first == name }?.let { appIconRes(it.third) }
+
 // ─────────────────────────────────────────────────────────
 // MAIN START MENU — WINDOWS 11 STYLE
 // The Start surface deliberately follows the Windows 11 visual hierarchy:
@@ -1905,25 +1910,11 @@ fun AnimatedBuiltInIcon(
             }
             .padding(vertical = 8.dp, horizontal = 4.dp)
     ) {
-        // Custom SVG-derived icons (see BuiltInAppIcons.kt) already contain
-        // their own colored rounded-square background, so they render
-        // full-bleed here. Apps without a custom icon yet fall back to the
-        // original accent-tile + white Fluent glyph treatment.
-        val customIconResId = rememberBuiltInIconResourceId(name)
-        if (customIconResId != 0) {
-            Box(
-                modifier = Modifier
-                    .size(iconSize.dp)
-                    .clip(RoundedCornerShape(DS.sectionCorner)),
-                contentAlignment = Alignment.Center
-            ) {
-                BuiltInAppIcon(
-                    appName = name,
-                    fallback = icon,
-                    tint = Color.White,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+        // Built-in apps use the shared colored PNG set (ic_app_*); anything without
+        // a PNG falls back to the accent tile + white Fluent glyph.
+        val pngRes = builtInPngIconRes(name)
+        if (pngRes != null) {
+            PngIcon(res = pngRes, contentDescription = name, modifier = Modifier.size(iconSize.dp))
         } else {
             Box(
                 modifier = Modifier
@@ -2087,12 +2078,7 @@ private fun BuiltInAppListRow(
     var showMenu by remember { mutableStateOf(false) }
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val hasMenu = onAddToDesktop != null || onTogglePinToStart != null
-    // Custom SVG-derived icons (BuiltInAppIcons.kt) previously weren't
-    // consulted here at all — this row always drew the plain Fluent glyph
-    // on a flat accent tile, which is why system apps' custom icons never
-    // showed up in All Apps. Now it checks for a custom icon the same way
-    // AnimatedBuiltInIcon does.
-    val customIconResId = rememberBuiltInIconResourceId(name)
+    val pngRes = builtInPngIconRes(name)
     Box {
         Row(
             modifier = Modifier
@@ -2110,13 +2096,8 @@ private fun BuiltInAppListRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (customIconResId != 0) {
-                Box(
-                    modifier = Modifier.size(30.dp).clip(RoundedCornerShape(DS.tileCorner)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BuiltInAppIcon(appName = name, fallback = icon, tint = Color.White, modifier = Modifier.fillMaxSize())
-                }
+            if (pngRes != null) {
+                PngIcon(res = pngRes, contentDescription = null, modifier = Modifier.size(30.dp))
             } else {
                 Box(
                     modifier = Modifier.size(30.dp).clip(RoundedCornerShape(DS.tileCorner)).background(DS.accentStart),
