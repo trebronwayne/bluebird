@@ -16,3 +16,4 @@ local.properties
 
 # Project exclude paths
 /app/build/
+/app/google-services.json
