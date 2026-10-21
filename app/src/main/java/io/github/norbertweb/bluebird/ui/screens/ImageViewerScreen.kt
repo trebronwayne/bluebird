@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.i18n.ui
+import io.github.norbertweb.bluebird.i18n.pluralText
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -82,6 +84,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -421,7 +424,7 @@ private fun PhotoPermissionGate(
                 }
 
                 Text(
-                    "Let Bluebird Photos access your pictures",
+                    stringResource(R.string.let_bluebird_photos_access_your),
                     color = text,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -429,7 +432,7 @@ private fun PhotoPermissionGate(
                 )
 
                 Text(
-                    "Bluebird only needs image access. On supported Android versions, you can choose which pictures to share.",
+                    stringResource(R.string.bluebird_only_needs_image_access_on),
                     color = secondary,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
@@ -443,7 +446,7 @@ private fun PhotoPermissionGate(
                         containerColor = PhotosTheme.Accent
                     )
                 ) {
-                    Text("Choose pictures")
+                    Text(stringResource(R.string.photos_choose_pictures))
                 }
             }
         }
@@ -695,7 +698,7 @@ fun ImageViewerScreen(
                 shadowElevation = 8.dp
             ) {
                 Text(
-                    msg,
+                    ui(msg),
                     color = Color.White,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
@@ -774,13 +777,13 @@ private fun PhotosHome(
 
     Column(Modifier.fillMaxSize()) {
         PhotosTopBar(
-            title = "Photos",
+            title = stringResource(R.string.photos_2),
             isDark = isDark,
             onBack = null,
             actions = {
                 PhotosIconButton(
                     icon = FluentIcon.Refresh,
-                    contentDescription = "Refresh",
+                    contentDescription = stringResource(R.string.common_refresh),
                     tint = text,
                     onClick = onRescan
                 )
@@ -810,13 +813,13 @@ private fun PhotosHome(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "Your photos",
+                        stringResource(R.string.your_photos),
                         color = text,
                         fontSize = 25.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "${state.allPhotos.size} photos",
+                        pluralText(R.plurals.plural_photos, state.allPhotos.size),
                         color = secondary,
                         fontSize = 13.sp
                     )
@@ -848,8 +851,8 @@ private fun PhotosHome(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     HomeActionCard(
-                        title = "All photos",
-                        subtitle = "${state.allPhotos.size} items",
+                        title = stringResource(R.string.all_photos),
+                        subtitle = pluralText(R.plurals.plural_items, state.allPhotos.size),
                         icon = FluentIcon.ImageMultiple,
                         iconTint = PhotosTheme.Accent,
                         isDark = isDark,
@@ -858,8 +861,8 @@ private fun PhotosHome(
                     )
 
                     HomeActionCard(
-                        title = "Favorites",
-                        subtitle = "${state.favorites.size} items",
+                        title = stringResource(R.string.favorites),
+                        subtitle = pluralText(R.plurals.plural_items, state.favorites.size),
                         icon = FluentIcon.Favorite,
                         iconTint = PhotosTheme.Favorite,
                         isDark = isDark,
@@ -871,8 +874,8 @@ private fun PhotosHome(
 
             item {
                 HomeSectionHeader(
-                    title = "Recent",
-                    actionText = "View all",
+                    title = stringResource(R.string.recent),
+                    actionText = stringResource(R.string.view_all),
                     isDark = isDark,
                     onAction = onOpenAll
                 )
@@ -906,7 +909,7 @@ private fun PhotosHome(
 
             item {
                 HomeSectionHeader(
-                    title = "Albums",
+                    title = stringResource(R.string.albums),
                     actionText = "${state.albums.size}",
                     isDark = isDark,
                     onAction = {}
@@ -959,13 +962,13 @@ private fun PhotosHome(
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "Bluebird Photos",
+                                stringResource(R.string.bluebird_photos),
                                 color = text,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                "A focused image viewer with desktop-style navigation.",
+                                stringResource(R.string.a_focused_image_viewer_with_desktop),
                                 color = muted,
                                 fontSize = 11.sp
                             )
@@ -1048,7 +1051,7 @@ private fun PhotosSearchBar(
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_bluebird_search),
-            contentDescription = "Search",
+            contentDescription = stringResource(R.string.search),
             tint = Color.Unspecified,
             modifier = Modifier.size(17.dp)
         )
@@ -1061,7 +1064,7 @@ private fun PhotosSearchBar(
         ) {
             if (value.isEmpty()) {
                 Text(
-                    "Search your photos",
+                    stringResource(R.string.search_your_photos),
                     color = muted,
                     fontSize = 12.sp
                 )
@@ -1086,7 +1089,7 @@ private fun PhotosSearchBar(
         if (value.isNotEmpty()) {
             PhotosIconButton(
                 icon = FluentIcon.Close,
-                contentDescription = "Clear search",
+                contentDescription = stringResource(R.string.clear_search),
                 tint = muted,
                 onClick = { onValueChange("") },
                 size = 28.dp,
@@ -1244,7 +1247,7 @@ private fun AlbumCard(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "${album.count} items",
+                pluralText(R.plurals.plural_items, album.count),
                 color = mutedColor(isDark),
                 fontSize = 10.sp
             )
@@ -1281,8 +1284,8 @@ private fun PhotosGrid(
     Column(Modifier.fillMaxSize()) {
         PhotosTopBar(
             title = state.activeAlbum?.name ?: when (state.filter) {
-                PhotoFilter.ALL -> "All photos"
-                PhotoFilter.FAVORITES -> "Favorites"
+                PhotoFilter.ALL -> stringResource(R.string.all_photos)
+                PhotoFilter.FAVORITES -> stringResource(R.string.favorites)
             },
             isDark = isDark,
             onBack = onBack,
@@ -1300,7 +1303,7 @@ private fun PhotosGrid(
                         GridSize.MEDIUM -> FluentIcon.GridMedium
                         GridSize.LARGE -> FluentIcon.GridLarge
                     },
-                    contentDescription = "Grid size",
+                    contentDescription = stringResource(R.string.grid_size),
                     tint = textColor(isDark),
                     onClick = {
                         state.gridSize = when (state.gridSize) {
@@ -1314,7 +1317,7 @@ private fun PhotosGrid(
                 Box {
                     PhotosIconButton(
                         icon = FluentIcon.Sort,
-                        contentDescription = "Sort",
+                        contentDescription = stringResource(R.string.sort),
                         tint = textColor(isDark),
                         onClick = { state.showSortMenu = true }
                     )
@@ -1324,10 +1327,10 @@ private fun PhotosGrid(
                         onDismissRequest = { state.showSortMenu = false }
                     ) {
                         listOf(
-                            PhotoSort.DATE_NEW to "Newest first",
-                            PhotoSort.DATE_OLD to "Oldest first",
-                            PhotoSort.NAME to "Name",
-                            PhotoSort.SIZE to "Size"
+                            PhotoSort.DATE_NEW to stringResource(R.string.newest_first),
+                            PhotoSort.DATE_OLD to stringResource(R.string.oldest_first),
+                            PhotoSort.NAME to stringResource(R.string.name),
+                            PhotoSort.SIZE to stringResource(R.string.size)
                         ).forEach { (sort, label) ->
                             DropdownMenuItem(
                                 text = {
@@ -1358,7 +1361,7 @@ private fun PhotosGrid(
 
                 PhotosIconButton(
                     icon = FluentIcon.Refresh,
-                    contentDescription = "Refresh",
+                    contentDescription = stringResource(R.string.common_refresh),
                     tint = textColor(isDark),
                     onClick = onRescan
                 )
@@ -1390,14 +1393,14 @@ private fun PhotosGrid(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "${photos.size} items",
+                pluralText(R.plurals.plural_items, photos.size),
                 color = mutedColor(isDark),
                 fontSize = 11.sp
             )
             Spacer(Modifier.weight(1f))
             if (state.filter == PhotoFilter.FAVORITES) {
                 FilterPill(
-                    label = "Favorites",
+                    label = stringResource(R.string.favorites),
                     icon = FluentIcon.Favorite,
                     active = true,
                     isDark = isDark,
@@ -1477,14 +1480,14 @@ private fun PhotosGrid(
             containerColor = surfaceColor(isDark),
             title = {
                 Text(
-                    "Delete ${state.selected.size} photo${if (state.selected.size == 1) "" else "s"}?",
+                    pluralText(R.plurals.plural_delete_photos, state.selected.size),
                     color = textColor(isDark),
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
-                    "The selected photos will be removed from the device.",
+                    stringResource(R.string.the_selected_photos_will_be_removed),
                     color = secondaryColor(isDark),
                     fontSize = 13.sp
                 )
@@ -1512,7 +1515,7 @@ private fun PhotosGrid(
                     ),
                     shape = RoundedCornerShape(7.dp)
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
@@ -1520,7 +1523,7 @@ private fun PhotosGrid(
                     onClick = { state.showDeleteDialog = false },
                     shape = RoundedCornerShape(7.dp)
                 ) {
-                    Text("Cancel", color = textColor(isDark))
+                    Text(stringResource(R.string.common_cancel), color = textColor(isDark))
                 }
             }
         )
@@ -1568,7 +1571,7 @@ private fun GridPhotoCell(
         if (isFavorite && !selectionMode) {
             Icon(
                 painter = painterResource(R.drawable.ic_bluebird_favorite),
-                contentDescription = "Favorite",
+                contentDescription = stringResource(R.string.favorite),
                 tint = Color.Unspecified,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -1766,7 +1769,7 @@ private fun PhotoViewer(
                 if (state.viewerIndex > 0) {
                     ViewerSideButton(
                         icon = FluentIcon.ChevronLeft,
-                        contentDescription = "Previous",
+                        contentDescription = stringResource(R.string.previous),
                         modifier = Modifier.align(Alignment.CenterStart),
                         onClick = { navigate(-1) }
                     )
@@ -1775,7 +1778,7 @@ private fun PhotoViewer(
                 if (state.viewerIndex < photos.lastIndex) {
                     ViewerSideButton(
                         icon = FluentIcon.ChevronRight,
-                        contentDescription = "Next",
+                        contentDescription = stringResource(R.string.next),
                         modifier = Modifier.align(Alignment.CenterEnd),
                         onClick = { navigate(1) }
                     )
@@ -1867,7 +1870,7 @@ private fun ViewerTopBar(
     ) {
         PhotosIconButton(
             icon = FluentIcon.ArrowBack,
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.setup_back),
             tint = Color.White,
             onClick = onBack
         )
@@ -1911,14 +1914,14 @@ private fun ViewerTopBar(
 
         PhotosIconButton(
             icon = if (isFavorite) FluentIcon.Favorite else FluentIcon.FavoriteBorder,
-            contentDescription = "Favorite",
+            contentDescription = stringResource(R.string.favorite),
             tint = if (isFavorite) PhotosTheme.Favorite else Color.White,
             onClick = onFavorite
         )
 
         PhotosIconButton(
             icon = FluentIcon.Info,
-            contentDescription = "Photo information",
+            contentDescription = stringResource(R.string.photo_information),
             tint = Color.White,
             onClick = onInfo
         )
@@ -1987,32 +1990,32 @@ private fun BoxScope.ViewerBottomBar(
         ) {
             ViewerAction(
                 icon = FluentIcon.RotateLeft,
-                label = "Rotate",
+                label = stringResource(R.string.rotate),
                 onClick = onRotateLeft
             )
             ViewerAction(
                 icon = FluentIcon.RotateRight,
-                label = "Rotate",
+                label = stringResource(R.string.rotate),
                 onClick = onRotateRight
             )
             ViewerAction(
                 icon = FluentIcon.Share,
-                label = "Share",
+                label = stringResource(R.string.share),
                 onClick = onShare
             )
             ViewerAction(
                 icon = FluentIcon.WallpaperIcon,
-                label = "Wallpaper",
+                label = stringResource(R.string.wallpaper),
                 onClick = onWallpaper
             )
             ViewerAction(
                 icon = FluentIcon.OpenWith,
-                label = "Open with",
+                label = stringResource(R.string.open_with),
                 onClick = onOpenWith
             )
             ViewerAction(
                 icon = FluentIcon.Delete,
-                label = "Delete",
+                label = stringResource(R.string.delete),
                 tint = PhotosTheme.Danger,
                 onClick = onDelete
             )
@@ -2077,7 +2080,7 @@ private fun PhotoInfoPanel(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Photo information",
+                    stringResource(R.string.photo_information),
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
@@ -2085,7 +2088,7 @@ private fun PhotoInfoPanel(
                 Spacer(Modifier.weight(1f))
                 PhotosIconButton(
                     icon = FluentIcon.Close,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.close),
                     tint = Color.White.copy(alpha = 0.72f),
                     onClick = onClose,
                     size = 28.dp,
@@ -2097,12 +2100,12 @@ private fun PhotoInfoPanel(
                 color = Color.White.copy(alpha = 0.1f)
             )
 
-            PhotoInfoRow("Name", photo.name)
-            PhotoInfoRow("Type", photo.extension.uppercase(Locale.getDefault()))
-            PhotoInfoRow("Size", formatSize(photo.sizeBytes))
-            PhotoInfoRow("Modified", formatDate(photo.lastModified))
-            PhotoInfoRow("Location", photo.displayPath)
-            PhotoInfoRow("Zoom", "${(zoom * 100).roundToInt()}%")
+            PhotoInfoRow(stringResource(R.string.name), photo.name)
+            PhotoInfoRow(stringResource(R.string.type), photo.extension.uppercase(Locale.getDefault()))
+            PhotoInfoRow(stringResource(R.string.size), formatSize(photo.sizeBytes))
+            PhotoInfoRow(stringResource(R.string.modified), formatDate(photo.lastModified))
+            PhotoInfoRow(stringResource(R.string.location), photo.displayPath)
+            PhotoInfoRow(stringResource(R.string.zoom), "${(zoom * 100).roundToInt()}%")
         }
     }
 }
@@ -2146,12 +2149,12 @@ private fun PhotoLoadingState(isDark: Boolean) {
                 modifier = Modifier.size(34.dp)
             )
             Text(
-                "Loading your photos…",
+                stringResource(R.string.loading_your_photos),
                 color = textColor(isDark),
                 fontSize = 14.sp
             )
             Text(
-                "Building your photo library",
+                stringResource(R.string.building_your_photo_library),
                 color = mutedColor(isDark),
                 fontSize = 11.sp
             )
@@ -2177,13 +2180,13 @@ private fun EmptyLibraryState(
                 modifier = Modifier.size(46.dp)
             )
             Text(
-                "No photos found",
+                stringResource(R.string.no_photos_found),
                 color = textColor(isDark),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Add pictures to your device, then refresh the library.",
+                stringResource(R.string.add_pictures_to_your_device_then),
                 color = secondaryColor(isDark),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
@@ -2195,7 +2198,7 @@ private fun EmptyLibraryState(
                     containerColor = PhotosTheme.Accent
                 )
             ) {
-                Text("Refresh")
+                Text(stringResource(R.string.common_refresh))
             }
         }
     }
@@ -2219,14 +2222,14 @@ private fun PhotoNoResults(
                 modifier = Modifier.size(38.dp)
             )
             Text(
-                if (hasSearch) "No matching photos" else "No photos in this view",
+                if (hasSearch) stringResource(R.string.no_matching_photos) else stringResource(R.string.no_photos_in_this_view),
                 color = textColor(isDark),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
             if (hasSearch) {
                 Text(
-                    "Try another search term.",
+                    stringResource(R.string.try_another_search_term),
                     color = mutedColor(isDark),
                     fontSize = 12.sp
                 )
@@ -2278,7 +2281,7 @@ private fun PhotosTopBar(
             if (onBack != null) {
                 PhotosIconButton(
                     icon = FluentIcon.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.setup_back),
                     tint = textColor(isDark),
                     onClick = onBack
                 )
@@ -2358,7 +2361,7 @@ private fun SelectionBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "$count selected",
+            stringResource(R.string.selected, count),
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium
@@ -2367,19 +2370,19 @@ private fun SelectionBar(
 
         PhotosIconButton(
             icon = FluentIcon.Share,
-            contentDescription = "Share selected",
+            contentDescription = stringResource(R.string.share_selected),
             tint = Color.White,
             onClick = onShare
         )
         PhotosIconButton(
             icon = FluentIcon.Delete,
-            contentDescription = "Delete selected",
+            contentDescription = stringResource(R.string.delete_selected),
             tint = Color.White,
             onClick = onDelete
         )
         PhotosIconButton(
             icon = FluentIcon.Close,
-            contentDescription = "Cancel selection",
+            contentDescription = stringResource(R.string.cancel_selection),
             tint = Color.White,
             onClick = onCancel
         )
@@ -2428,7 +2431,7 @@ private fun sharePhoto(context: Context, uri: Uri) {
         }
 
         context.startActivity(
-            Intent.createChooser(send, "Share photo").addFlags(
+            Intent.createChooser(send, ui(context, "Share photo")).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK
             )
         )
@@ -2449,7 +2452,7 @@ private fun sharePhotos(context: Context, uris: List<Uri>) {
         }
 
         context.startActivity(
-            Intent.createChooser(send, "Share photos").addFlags(
+            Intent.createChooser(send, ui(context, "Share photos")).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK
             )
         )
@@ -2464,7 +2467,7 @@ private fun openWith(context: Context, uri: Uri) {
         }
 
         context.startActivity(
-            Intent.createChooser(open, "Open with").addFlags(
+            Intent.createChooser(open, ui(context, "Open with")).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK
             )
         )

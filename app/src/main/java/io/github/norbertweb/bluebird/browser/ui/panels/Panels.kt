@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.browser.ui.panels
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,10 +67,10 @@ fun BrowserPanelView(
             ) {
                 Text(
                     when (panel) {
-                        BrowserPanel.BOOKMARKS -> "Bookmarks"
-                        BrowserPanel.HISTORY -> "History"
-                        BrowserPanel.DOWNLOADS -> "Downloads"
-                        BrowserPanel.SETTINGS -> "Settings"
+                        BrowserPanel.BOOKMARKS -> stringResource(R.string.browser_bookmarks)
+                        BrowserPanel.HISTORY -> stringResource(R.string.browser_history)
+                        BrowserPanel.DOWNLOADS -> stringResource(R.string.browser_downloads)
+                        BrowserPanel.SETTINGS -> stringResource(R.string.media_settings)
                         else -> ""
                     },
                     color = text,
@@ -76,14 +78,14 @@ fun BrowserPanelView(
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onClose) {
-                    FluentIcon(FluentIcons.Close, "Close", tint = text, modifier = Modifier.size(18.dp))
+                    FluentIcon(FluentIcons.Close, stringResource(R.string.close), tint = text, modifier = Modifier.size(18.dp))
                 }
             }
             HorizontalDivider()
             when (panel) {
                 BrowserPanel.BOOKMARKS -> {
                     if (bookmarks.isEmpty()) {
-                        EmptyPanel("No bookmarks yet", muted)
+                        EmptyPanel(stringResource(R.string.no_bookmarks_yet), muted)
                     } else {
                         LazyColumn(Modifier.fillMaxSize()) {
                             items(bookmarks, key = { it.id }) { bookmark ->
@@ -103,7 +105,7 @@ fun BrowserPanelView(
                                     },
                                     trailingContent = {
                                         IconButton(onClick = { onBookmarkDelete(bookmark) }) {
-                                            FluentIcon(FluentIcons.Delete, "Delete", tint = text, modifier = Modifier.size(18.dp))
+                                            FluentIcon(FluentIcons.Delete, stringResource(R.string.delete), tint = text, modifier = Modifier.size(18.dp))
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth().clickable { onNavigate(bookmark.url) }
@@ -114,21 +116,21 @@ fun BrowserPanelView(
                 }
                 BrowserPanel.HISTORY -> {
                     if (history.isEmpty()) {
-                        EmptyPanel("No history yet", muted)
+                        EmptyPanel(stringResource(R.string.no_history_yet), muted)
                     } else {
                         Column(Modifier.fillMaxSize()) {
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                TextButton(onClick = onClearHistory) { Text("Clear history") }
+                                TextButton(onClick = onClearHistory) { Text(stringResource(R.string.clear_history)) }
                             }
                             LazyColumn(Modifier.fillMaxSize()) {
                                 items(history.asReversed(), key = { it.id }) { entry ->
                                     ListItem(
                                         headlineContent = {
                                             Text(
-                                                entry.title.ifBlank { "Web page" },
+                                                entry.title.ifBlank { stringResource(R.string.web_page) },
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
@@ -148,7 +150,7 @@ fun BrowserPanelView(
                 }
                 BrowserPanel.DOWNLOADS -> {
                     if (downloads.isEmpty()) {
-                        EmptyPanel("No downloads in this session", muted)
+                        EmptyPanel(stringResource(R.string.no_downloads_in_this_session), muted)
                     } else {
                         LazyColumn(Modifier.fillMaxSize()) {
                             items(downloads, key = { it.id }) { download ->
@@ -184,12 +186,12 @@ fun BrowserPanelView(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             if (download.status == DownloadStatus.COMPLETED) {
                                                 IconButton(onClick = { onDownloadOpen(download) }) {
-                                                    FluentIcon(FluentIcons.Delete, "Open", tint = text, modifier = Modifier.size(18.dp))
+                                                    FluentIcon(FluentIcons.Delete, stringResource(R.string.open), tint = text, modifier = Modifier.size(18.dp))
                                                // temporary icon needs to be taken back to fluentiocns documents
                                                 }
                                             }
                                             IconButton(onClick = { onDownloadRemove(download) }) {
-                                                FluentIcon(FluentIcons.Delete, "Remove", tint = text, modifier = Modifier.size(18.dp))
+                                                FluentIcon(FluentIcons.Delete, stringResource(R.string.remove), tint = text, modifier = Modifier.size(18.dp))
                                             }
                                         }
                                     },
@@ -221,7 +223,7 @@ private fun SettingsContent(
     onChange: (BrowserSettings) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Search engine", color = text, fontSize = 12.sp)
+        Text(stringResource(R.string.search_engine), color = text, fontSize = 12.sp)
         Spacer(Modifier.height(4.dp))
         SearchEngine.values().forEach { engine ->
             Row(
@@ -236,9 +238,9 @@ private fun SettingsContent(
             }
         }
         Spacer(Modifier.height(14.dp))
-        Text("Browser", color = text, fontSize = 12.sp)
+        Text(stringResource(R.string.browser), color = text, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Show bookmarks bar", color = text, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.show_bookmarks_bar), color = text, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Switch(
                 checked = settings.showBookmarksBar,
                 onCheckedChange = { onChange(settings.copy(showBookmarksBar = it)) }
@@ -246,7 +248,7 @@ private fun SettingsContent(
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Bluebird Browser stays intentionally small: browsing, tabs, bookmarks, history and downloads.",
+            stringResource(R.string.bluebird_browser_stays_intentionally),
             color = muted,
             fontSize = 10.sp
         )

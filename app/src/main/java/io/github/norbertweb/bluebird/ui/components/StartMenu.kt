@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.i18n.localizedAppName
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
+
 // Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
@@ -92,7 +96,6 @@ import io.github.norbertweb.bluebird.AppInfo
 import io.github.norbertweb.bluebird.LauncherScreen
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
-import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 import kotlinx.coroutines.Dispatchers
@@ -234,11 +237,11 @@ private const val START_MENU_PREFS = "start_menu_layout_prefs"
 
 private enum class StartMenuTab { PINNED, ALL_APPS, RECENT, SEARCH }
 
-private fun timeGreeting(): String {
+private fun timeGreetingRes(): Int {
     return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-        in 5..11  -> "Good morning"
-        in 12..16 -> "Good afternoon"
-        else      -> "Good evening"
+        in 5..11  -> R.string.good_morning
+        in 12..16 -> R.string.good_afternoon
+        else      -> R.string.good_evening
     }
 }
 
@@ -397,8 +400,8 @@ fun StartMenu(
                     )
                 } else if (activeTab == StartMenuTab.ALL_APPS) {
                     Windows11SectionHeader(
-                        title = "All apps",
-                        actionLabel = "Back",
+                        title = stringResource(R.string.all_apps),
+                        actionLabel = stringResource(R.string.setup_back),
                         isDark = isDark,
                         onAction = { activeTab = StartMenuTab.PINNED }
                     )
@@ -421,8 +424,8 @@ fun StartMenu(
                     }
                 } else {
                     Windows11SectionHeader(
-                        title = "Pinned",
-                        actionLabel = "All apps  ›",
+                        title = stringResource(R.string.pinned),
+                        actionLabel = stringResource(R.string.all_apps_3),
                         isDark = isDark,
                         onAction = { activeTab = StartMenuTab.ALL_APPS }
                     )
@@ -504,7 +507,7 @@ private fun Windows11StartSearchBar(
     ) {
         Image(
             painter = painterResource(R.drawable.ic_bluebird_start_search),
-            contentDescription = "Search",
+            contentDescription = stringResource(R.string.search),
             modifier = Modifier.size(18.dp),
             contentScale = ContentScale.Fit
         )
@@ -530,8 +533,7 @@ private fun Windows11StartSearchBar(
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (query.isBlank()) {
-                        Text(
-                            "Search apps, settings, and documents",
+                        Text(stringResource(R.string.search_apps_settings_documents),
                             color = textPrimary.copy(alpha = 0.48f),
                             fontSize = 14.sp
                         )
@@ -544,7 +546,7 @@ private fun Windows11StartSearchBar(
         if (query.isNotBlank()) {
             Icon(
                 FluentIcon.Dismiss,
-                contentDescription = "Clear search",
+                contentDescription = stringResource(R.string.clear_search),
                 tint = textPrimary.copy(alpha = 0.55f),
                 modifier = Modifier
                     .size(18.dp)
@@ -632,12 +634,12 @@ private fun Windows11PinnedContent(
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Pin apps to Start",
+                    stringResource(R.string.pin_apps_to_start),
                     color = textSecondary.copy(alpha = 0.62f),
                     fontSize = 13.sp
                 )
                 Text(
-                    "Long-press an app and choose Add to Start",
+                    stringResource(R.string.long_press_an_app_and_choose_add_to),
                     color = textSecondary.copy(alpha = 0.38f),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center
@@ -726,8 +728,8 @@ private fun Windows11RecommendedRow(
 
     Column {
         Windows11SectionHeader(
-            title = "Recommended",
-            actionLabel = if (allRecommended.size > 6) (if (showAllRecommended) "Less  ‹" else "More  ›") else "",
+            title = stringResource(R.string.recommended),
+            actionLabel = if (allRecommended.size > 6) (if (showAllRecommended) stringResource(R.string.less) else stringResource(R.string.more_2)) else "",
             isDark = isDark,
             onAction = { if (allRecommended.size > 6) showAllRecommended = !showAllRecommended }
         )
@@ -841,7 +843,7 @@ private fun Windows11StartFooter(
                     if (uiState.userProfile.profilePicturePath.isNotEmpty()) {
                         AsyncImage(
                             model = Uri.parse(uiState.userProfile.profilePicturePath),
-                            contentDescription = "User profile",
+                            contentDescription = stringResource(R.string.user_profile),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
@@ -862,7 +864,7 @@ private fun Windows11StartFooter(
                     }
                 }
                 Text(
-                    uiState.userProfile.userName.ifBlank { "User" },
+                    uiState.userProfile.userName.ifBlank { stringResource(R.string.user) },
                     color = textPrimary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -890,9 +892,9 @@ private fun PremiumTabRow(
 ) {
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val tabs = listOf(
-        StartMenuTab.PINNED   to "Pinned",
-        StartMenuTab.ALL_APPS to "All Apps",
-        StartMenuTab.RECENT   to "Recent"
+        StartMenuTab.PINNED   to stringResource(R.string.pinned),
+        StartMenuTab.ALL_APPS to stringResource(R.string.all_apps_2),
+        StartMenuTab.RECENT   to stringResource(R.string.recent)
     )
     val density = LocalDensity.current
     // Was a fixed 40dp/16dp indicator width regardless of label — under
@@ -1031,7 +1033,7 @@ private fun PinnedView(
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             SectionHeader(
-                title = "Pinned",
+                title = stringResource(R.string.pinned),
                 isDark = isDark,
                 rightContent = {
                     CompactActionChip(
@@ -1056,7 +1058,7 @@ private fun PinnedView(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "No pinned apps — long-press any app and choose Add to Start",
+                        stringResource(R.string.no_pinned_apps_long_press_any_app_and),
                         color = (if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight).copy(alpha = 0.25f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
@@ -1152,7 +1154,7 @@ private fun AllAppsView(
                 item(key = "sys_header") {
                     CollapsibleGroupHeader(
                         letter = "⚙",
-                        label = "System",
+                        label = stringResource(R.string.system),
                         appCount = builtInApps.size,
                         isDark = isDark,
                         isExpanded = '⚙' in expandedGroups,
@@ -1318,14 +1320,14 @@ private fun RecentAppsView(
     val frequentApps = recentAndFrequent.value.second
 
     if (recentApps.isEmpty() && frequentApps.isEmpty()) {
-        EmptyStateView("No recent activities detected", isDark)
+        EmptyStateView(stringResource(R.string.no_recent_activities_detected), isDark)
         return
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (frequentApps.isNotEmpty()) {
             item {
-                SectionHeader(title = "Most used", isDark = isDark)
+                SectionHeader(title = stringResource(R.string.most_used), isDark = isDark)
                 Spacer(Modifier.height(10.dp))
             }
             item {
@@ -1348,7 +1350,7 @@ private fun RecentAppsView(
         }
 
         item {
-            SectionHeader(title = "Recently installed", isDark = isDark)
+            SectionHeader(title = stringResource(R.string.recently_installed), isDark = isDark)
             Spacer(Modifier.height(10.dp))
         }
         item {
@@ -1424,12 +1426,12 @@ private fun SearchResultsView(
                 letterSpacing = 0.3.sp
             )
             TextButton(onClick = onClearSearch) {
-                Text("Clear", color = DS.accentStart, fontSize = 11.sp)
+                Text(stringResource(R.string.clear), color = DS.accentStart, fontSize = 11.sp)
             }
         }
 
         if (totalCount == 0) {
-            EmptyStateView("Try a different search term", isDark)
+            EmptyStateView(stringResource(R.string.try_a_different_search_term), isDark)
             return@Column
         }
 
@@ -1439,7 +1441,7 @@ private fun SearchResultsView(
         ) {
             if (appResults.isNotEmpty()) {
                 item {
-                    SearchCategoryChip(label = "Apps", isDark = isDark)
+                    SearchCategoryChip(label = stringResource(R.string.apps), isDark = isDark)
                     Spacer(Modifier.height(4.dp))
                 }
                 items(appResults, key = { "search_app_" + it.packageName }) { app ->
@@ -1466,7 +1468,7 @@ private fun SearchResultsView(
 
             if (systemResults.isNotEmpty()) {
                 item {
-                    SearchCategoryChip(label = "System Actions", isDark = isDark)
+                    SearchCategoryChip(label = stringResource(R.string.system_actions), isDark = isDark)
                     Spacer(Modifier.height(4.dp))
                 }
                 items(systemResults, key = { "search_sys_" + it.first }) { (name, icon, screen) ->
@@ -1477,7 +1479,7 @@ private fun SearchResultsView(
 
             if (settingResults.isNotEmpty()) {
                 item {
-                    SearchCategoryChip(label = "Settings Links", isDark = isDark)
+                    SearchCategoryChip(label = stringResource(R.string.settings_links), isDark = isDark)
                     Spacer(Modifier.height(4.dp))
                 }
                 items(settingResults, key = { "search_sett_" + it }) { kw ->
@@ -1539,7 +1541,7 @@ private fun SettingsKeywordRow(keyword: String, isDark: Boolean, onClick: () -> 
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(keyword.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Normal, maxLines = 1)
-            Text("System Settings Link", fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1)
+            Text(stringResource(R.string.system_settings_link), fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1)
         }
     }
 }
@@ -1772,14 +1774,14 @@ fun PremiumSearchBar(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor, fontSize = 13.sp),
                 decorationBox = { inner ->
                     if (query.isEmpty()) {
-                        Text("Search apps, files, settings…", color = textColor.copy(alpha = 0.3f), fontSize = 13.sp)
+                        Text(stringResource(R.string.search_apps_files_settings), color = textColor.copy(alpha = 0.3f), fontSize = 13.sp)
                     }
                     inner()
                 }
             )
             if (query.isNotEmpty()) {
                 Icon(
-                    FluentIcon.Dismiss, "Clear",
+                    FluentIcon.Dismiss, stringResource(R.string.clear),
                     tint = textColor.copy(alpha = 0.4f),
                     modifier = Modifier.size(14.dp).clickable { onQueryChange("") }
                 )
@@ -1866,11 +1868,11 @@ fun AnimatedPinnedIcon(
 
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(
-                text = { Text("Open application") },
+                text = { Text(stringResource(R.string.open_application)) },
                 onClick = { showMenu = false; onClick() }
             )
             DropdownMenuItem(
-                text = { Text(if (isPinnedToTaskbar) "Unpin from Start" else "Pin to Start") },
+                text = { Text(if (isPinnedToTaskbar) stringResource(R.string.unpin_from_start) else stringResource(R.string.pin_to_start)) },
                 onClick = { showMenu = false; if (isPinnedToTaskbar) onUnpin() else onPinToTaskbar() }
             )
         }
@@ -1935,10 +1937,10 @@ fun AnimatedBuiltInIcon(
             )
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("Open") }, onClick = { showMenu = false; onClick() })
-            DropdownMenuItem(text = { Text("Add to desktop") }, onClick = { showMenu = false; onAddToDesktop() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.open)) }, onClick = { showMenu = false; onClick() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.add_to_desktop)) }, onClick = { showMenu = false; onAddToDesktop() })
             DropdownMenuItem(
-                text = { Text(if (isPinnedToStart) "Remove from Start" else "Add to Start") },
+                text = { Text(if (isPinnedToStart) stringResource(R.string.remove_from_start) else stringResource(R.string.add_to_start)) },
                 onClick = { showMenu = false; onTogglePinToStart() }
             )
         }
@@ -1982,11 +1984,11 @@ private fun HorizontalAppCard(app: AppInfo, isDark: Boolean, onClick: () -> Unit
                 }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(app.name, fontSize = 9.sp, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                Text(localizedAppName(app.name), fontSize = 9.sp, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
             }
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("Pin to start layer") }, onClick = { showMenu = false; onPin() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_start_layer)) }, onClick = { showMenu = false; onPin() })
         }
     }
 }
@@ -2051,15 +2053,15 @@ private fun AllAppsRow(
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(app.name, fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(localizedAppName(app.name), fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // Was app.packageName (e.g. "com.android.chrome") — not
                 // something an end user needs to see in a launcher list row.
-                Text("App", fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.app), fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("Pin to Start Menu") }, onClick = { showMenu = false; onPinToStart() })
-            DropdownMenuItem(text = { Text("Pin to Taskbar") }, onClick = { showMenu = false; onPinToTaskbar() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_start_menu)) }, onClick = { showMenu = false; onPinToStart() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_taskbar)) }, onClick = { showMenu = false; onPinToTaskbar() })
         }
     }
 }
@@ -2107,19 +2109,19 @@ private fun BuiltInAppListRow(
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(name, fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("System app", fontSize = 10.sp, color = textPrimary.copy(alpha = 0.4f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(localizedAppName(name), fontSize = 13.sp, color = textPrimary, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.system_app), fontSize = 10.sp, color = textPrimary.copy(alpha = 0.4f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (hasMenu) {
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(text = { Text("Open") }, onClick = { showMenu = false; onClick() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.open)) }, onClick = { showMenu = false; onClick() })
                 onAddToDesktop?.let { addToDesktop ->
-                    DropdownMenuItem(text = { Text("Add to desktop") }, onClick = { showMenu = false; addToDesktop() })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.add_to_desktop)) }, onClick = { showMenu = false; addToDesktop() })
                 }
                 onTogglePinToStart?.let { togglePin ->
                     DropdownMenuItem(
-                        text = { Text(if (isPinnedToStart) "Remove from Start" else "Add to Start") },
+                        text = { Text(if (isPinnedToStart) stringResource(R.string.remove_from_start) else stringResource(R.string.add_to_start)) },
                         onClick = { showMenu = false; togglePin() }
                     )
                 }
@@ -2165,7 +2167,7 @@ private fun BottomUserBar(
     isDark: Boolean
 ) {
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val greeting    = remember { timeGreeting() }
+    val greeting    = stringResource(remember { timeGreetingRes() })
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -2221,7 +2223,7 @@ private fun BottomUserBar(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "Account settings",
+                    stringResource(R.string.account_settings),
                     fontSize = 9.sp,
                     color = DS.accentStart,
                     maxLines = 1,

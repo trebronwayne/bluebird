@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -340,7 +342,7 @@ private fun CalcToolbar(isDark: Boolean, subtle: Color, historyOpen: Boolean, on
             )
         }
         Spacer(Modifier.weight(1f))
-        Text("Calculator", style = MaterialTheme.typography.labelMedium, color = subtle)
+        Text(stringResource(R.string.calculator), style = MaterialTheme.typography.labelMedium, color = subtle)
         Spacer(Modifier.weight(1f))
         Spacer(Modifier.size(32.dp)) // balances the icon button so the title stays centered
     }
@@ -479,18 +481,18 @@ private fun CalcHistoryPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("History", fontWeight = FontWeight.SemiBold,
+            Text(stringResource(R.string.browser_history), fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleSmall,
                 color = if (isDark) Mac.textPrimaryDark else Mac.textPrimaryLight)
             if (history.isNotEmpty()) {
                 TextButton(onClick = onClear, contentPadding = PaddingValues(4.dp)) {
-                    Text("Clear", style = MaterialTheme.typography.labelSmall, color = Mac.blue)
+                    Text(stringResource(R.string.clear), style = MaterialTheme.typography.labelSmall, color = Mac.blue)
                 }
             }
         }
         if (history.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("No history", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.no_history), style = MaterialTheme.typography.bodySmall,
                     color = if (isDark) Mac.textSecondaryDark else Mac.textSecondaryLight)
             }
         } else {
@@ -526,7 +528,7 @@ private fun CalcHistoryStrip(isDark: Boolean, history: List<Pair<String, String>
     ) {
         if (history.isEmpty()) {
             Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
-                Text("No history yet", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.no_history_yet), style = MaterialTheme.typography.bodySmall,
                     color = if (isDark) Mac.textSecondaryDark else Mac.textSecondaryLight)
             }
         } else {
@@ -534,10 +536,10 @@ private fun CalcHistoryStrip(isDark: Boolean, history: List<Pair<String, String>
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("History", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(R.string.browser_history), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
                     color = if (isDark) Mac.textSecondaryDark else Mac.textSecondaryLight)
                 TextButton(onClick = onClear, contentPadding = PaddingValues(2.dp)) {
-                    Text("Clear", style = MaterialTheme.typography.labelSmall, color = Mac.blue)
+                    Text(stringResource(R.string.clear), style = MaterialTheme.typography.labelSmall, color = Mac.blue)
                 }
             }
             Column(
@@ -615,11 +617,18 @@ fun CalendarScreen(isDark: Boolean) {
     val todayMonth = today.get(java.util.Calendar.MONTH)
     val todayYear = today.get(java.util.Calendar.YEAR)
 
-    val monthNames = remember {
-        listOf("January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December")
+    // Locale-aware names (correct for every supported language, no translated arrays needed).
+    val calLocale = androidx.core.os.ConfigurationCompat
+        .getLocales(androidx.compose.ui.platform.LocalContext.current.resources.configuration)
+        .get(0) ?: java.util.Locale.getDefault()
+    val monthNames = remember(calLocale) {
+        java.text.DateFormatSymbols.getInstance(calLocale).months.take(12)
+            .map { it.replaceFirstChar { c -> c.titlecase(calLocale) } }
     }
-    val dayHeaders = remember { listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat") }
+    val dayHeaders = remember(calLocale) {
+        java.text.DateFormatSymbols.getInstance(calLocale).shortWeekdays.drop(1).take(7)
+            .map { it.replaceFirstChar { c -> c.titlecase(calLocale) } }
+    }
 
     // Starts empty — no placeholder/sample events. Users add their own.
     var events by remember { mutableStateOf(listOf<CalEvent>()) }
@@ -749,7 +758,7 @@ private fun WideCalendarLayout(
             ) {
                 Icon(FluentIcon.Add, null, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Add Event", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.add_event), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -781,7 +790,7 @@ private fun CompactCalendarLayout(
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             TextButton(onClick = onToday) {
-                Text("Today", style = MaterialTheme.typography.labelMedium, color = Mac.blue)
+                Text(stringResource(R.string.today), style = MaterialTheme.typography.labelMedium, color = Mac.blue)
             }
             IconButton(onClick = onPrev, modifier = Modifier.size(36.dp)) {
                 Icon(FluentIcon.ChevronLeft, null, tint = subtle, modifier = Modifier.size(18.dp))
@@ -823,7 +832,7 @@ private fun CompactCalendarLayout(
             ) {
                 Icon(FluentIcon.Add, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Add Event")
+                Text(stringResource(R.string.add_event))
             }
         }
     }
@@ -846,7 +855,7 @@ private fun CalendarHeader(
         )
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onToday) {
-            Text("Today", style = MaterialTheme.typography.labelMedium, color = Mac.blue)
+            Text(stringResource(R.string.today), style = MaterialTheme.typography.labelMedium, color = Mac.blue)
         }
         IconButton(onClick = onPrev, modifier = Modifier.size(34.dp)) {
             Icon(FluentIcon.ChevronLeft, null, tint = subtle, modifier = Modifier.size(18.dp))
@@ -970,8 +979,8 @@ private fun AgendaPanel(
 ) {
     Text(
         text = if (state.selectedDay == todayDay && state.displayMonth == todayMonth && state.displayYear == todayYear)
-            "Today, ${monthNames[state.displayMonth]} ${state.selectedDay}"
-        else "${monthNames[state.displayMonth]} ${state.selectedDay}, ${state.displayYear}",
+            stringResource(R.string.calendar_today_date, monthNames[state.displayMonth], state.selectedDay)
+        else stringResource(R.string.calendar_selected_date, monthNames[state.displayMonth], state.selectedDay, state.displayYear),
         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
         color = text
     )
@@ -979,7 +988,7 @@ private fun AgendaPanel(
 
     if (selectedEvents.isEmpty()) {
         Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-            Text("No events", style = MaterialTheme.typography.bodySmall, color = subtle)
+            Text(stringResource(R.string.no_events), style = MaterialTheme.typography.bodySmall, color = subtle)
         }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -991,7 +1000,7 @@ private fun AgendaPanel(
                             Text(ev.title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = text, maxLines = 1)
                             if (ev.isAllDay) {
-                                Text("All day", style = MaterialTheme.typography.labelSmall, color = subtle)
+                                Text(stringResource(R.string.all_day), style = MaterialTheme.typography.labelSmall, color = subtle)
                             } else {
                                 Text("${ev.time} – ${ev.endTime}", style = MaterialTheme.typography.labelSmall, color = subtle)
                             }
@@ -1029,13 +1038,13 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
                 .background(panel)
                 .padding(20.dp)
         ) {
-            Text("New Event", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = text)
+            Text(stringResource(R.string.new_event), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = text)
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text("Event title") },
+                placeholder = { Text(stringResource(R.string.event_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -1046,7 +1055,7 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("All day", style = MaterialTheme.typography.bodyMedium, color = text)
+                Text(stringResource(R.string.all_day), style = MaterialTheme.typography.bodyMedium, color = text)
                 Switch(
                     checked = isAllDay,
                     onCheckedChange = { isAllDay = it },
@@ -1063,14 +1072,14 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
                     OutlinedTextField(
                         value = startTime,
                         onValueChange = { startTime = it },
-                        label = { Text("Start") },
+                        label = { Text(stringResource(R.string.start)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = endTime,
                         onValueChange = { endTime = it },
-                        label = { Text("End") },
+                        label = { Text(stringResource(R.string.end)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -1081,13 +1090,13 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
             OutlinedTextField(
                 value = location,
                 onValueChange = { location = it },
-                placeholder = { Text("Location (optional)") },
+                placeholder = { Text(stringResource(R.string.location_optional)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
             if (title.isBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text("Title is required", style = MaterialTheme.typography.labelSmall, color = subtle)
+                Text(stringResource(R.string.title_is_required), style = MaterialTheme.typography.labelSmall, color = subtle)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -1096,7 +1105,7 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
                 Button(
                     onClick = {
@@ -1107,7 +1116,7 @@ private fun AddEventDialog(isDark: Boolean, onDismiss: () -> Unit, onAdd: (NewEv
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Mac.blue)
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.add))
                 }
             }
         }

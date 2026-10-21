@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.i18n.ui
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -311,7 +313,7 @@ fun SearchOverlay(
                         ) {
                             if (localSearchQuery.isEmpty()) {
                                 androidx.compose.material3.Text(
-                                    "Search apps, settings, and documents",
+                                    stringResource(R.string.search_apps_settings_documents),
                                     color = textColor.copy(alpha = 0.48f),
                                     fontSize = 14.sp
                                 )
@@ -426,7 +428,7 @@ private fun RecentSection(
 ) {
     Column(modifier = modifier) {
         SectionHeader(
-            title = "Recent",
+            title = stringResource(R.string.recent),
             icon = FluentIcon.List,
             textColor = textColor,
             action = if (recentSearches.isNotEmpty()) "Clear" to onClearRecent else null
@@ -456,7 +458,7 @@ private fun RecentSection(
             }
         } else {
             Text(
-                "No recent searches yet",
+                stringResource(R.string.no_recent_searches_yet),
                 color = textColor.copy(alpha = 0.42f),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -465,7 +467,7 @@ private fun RecentSection(
 
         if (recentlyInstalledApps.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            SectionHeader("Recently installed", FluentIcon.Apps, textColor)
+            SectionHeader(stringResource(R.string.recently_installed), FluentIcon.Apps, textColor)
             Spacer(Modifier.height(6.dp))
             recentlyInstalledApps.take(6).forEach { app ->
                 SuggestedAppRow(
@@ -516,7 +518,7 @@ private fun IdleSearchContent(
     @Composable
     fun RightColumn(modifier: Modifier = Modifier) {
         Column(modifier = modifier) {
-            SectionHeader("Quick searches", FluentIcon.Flash, textColor)
+            SectionHeader(stringResource(R.string.quick_searches), FluentIcon.Flash, textColor)
             Spacer(Modifier.height(7.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -527,7 +529,7 @@ private fun IdleSearchContent(
                     ) {
                         pair.forEach { (label, icon) ->
                             QuickSearchChip(
-                                label = label,
+                                label = ui(label),
                                 icon = icon,
                                 isDark = isDark,
                                 modifier = Modifier.weight(1f),
@@ -541,7 +543,7 @@ private fun IdleSearchContent(
 
             Spacer(Modifier.height(16.dp))
 
-            SectionHeader("Top apps", FluentIcon.Apps, textColor)
+            SectionHeader(stringResource(R.string.top_apps), FluentIcon.Apps, textColor)
             Spacer(Modifier.height(7.dp))
 
             if (topApps.isNotEmpty()) {
@@ -567,7 +569,7 @@ private fun IdleSearchContent(
                 }
             } else {
                 Text(
-                    "No apps available",
+                    stringResource(R.string.no_apps_available),
                     color = textColor.copy(alpha = 0.42f),
                     fontSize = 12.sp
                 )
@@ -612,7 +614,7 @@ private fun SearchResultsContent(
     val showWeb = activeFilter == SearchFilter.All || activeFilter == SearchFilter.Web
 
     if (showApps) {
-        SectionHeader("Best match", FluentIcon.Apps, textColor)
+        SectionHeader(stringResource(R.string.best_match), FluentIcon.Apps, textColor)
         Spacer(Modifier.height(6.dp))
 
         if (appResults.isNotEmpty()) {
@@ -642,7 +644,7 @@ private fun SearchResultsContent(
 
     if (showWeb) {
         Spacer(Modifier.height(12.dp))
-        SectionHeader("Search the web", FluentIcon.Globe, textColor)
+        SectionHeader(stringResource(R.string.search_the_web), FluentIcon.Globe, textColor)
 
         Spacer(Modifier.height(6.dp))
 
@@ -685,7 +687,7 @@ private fun EmptySearchState(query: String, textColor: Color) {
         )
         Spacer(Modifier.height(8.dp))
         androidx.compose.material3.Text(
-            "No apps found for \"$query\"",
+            stringResource(R.string.no_apps_found_for, query),
             color = textColor.copy(alpha = 0.48f),
             fontSize = 12.sp
         )
@@ -727,14 +729,14 @@ private fun BestMatchItem(
                 overflow = TextOverflow.Ellipsis
             )
             androidx.compose.material3.Text(
-                "App",
+                stringResource(R.string.app),
                 color = textColor.copy(alpha = 0.48f),
                 fontSize = 11.sp
             )
         }
 
         TextButton(
-            label = "Open",
+            label = stringResource(R.string.open),
             tint = bluebirdColors.AccentBlue,
             onClick = onClick
         )
@@ -793,7 +795,7 @@ private fun AppResultRow(
                 overflow = TextOverflow.Ellipsis
             )
             androidx.compose.material3.Text(
-                "App",
+                stringResource(R.string.app),
                 color = textColor.copy(alpha = 0.42f),
                 fontSize = 10.sp
             )
@@ -835,7 +837,7 @@ private fun SuggestedAppRow(
                 overflow = TextOverflow.Ellipsis
             )
             androidx.compose.material3.Text(
-                "Suggested",
+                stringResource(R.string.suggested),
                 color = textColor.copy(alpha = 0.40f),
                 fontSize = 9.5.sp
             )
@@ -1064,7 +1066,7 @@ private fun SearchFilterChip(
             modifier = Modifier.size(12.dp)
         )
         androidx.compose.material3.Text(
-            filter.label,
+            ui(filter.label),
             color = if (selected) bluebirdColors.AccentBlue else textColor.copy(alpha = 0.68f),
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal

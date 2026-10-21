@@ -4,6 +4,9 @@ package io.github.norbertweb.bluebird.ui.components
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
 //     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
+import io.github.norbertweb.bluebird.i18n.ui
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.Manifest
 import android.app.AlarmManager
 import android.app.AppOpsManager
@@ -553,9 +556,9 @@ private fun WidgetPickerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Add a widget", color = textColor, fontSize = (17 * textScale).sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.add_a_widget), color = textColor, fontSize = (17 * textScale).sp, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
-                    Icon(imageVector = FluentIcon.Dismiss, contentDescription = "Close", tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                    Icon(imageVector = FluentIcon.Dismiss, contentDescription = stringResource(R.string.close), tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -572,7 +575,7 @@ private fun WidgetPickerSheet(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text("Search widgets or apps", color = textColor.copy(alpha = 0.4f), fontSize = (13 * textScale).sp)
+                        Text(stringResource(R.string.search_widgets_or_apps), color = textColor.copy(alpha = 0.4f), fontSize = (13 * textScale).sp)
                     }
                     BasicTextField(
                         value = query,
@@ -585,7 +588,7 @@ private fun WidgetPickerSheet(
                 }
                 if (query.isNotEmpty()) {
                     Icon(
-                        imageVector = FluentIcon.Dismiss, contentDescription = "Clear search",
+                        imageVector = FluentIcon.Dismiss, contentDescription = stringResource(R.string.clear_search),
                         tint = textColor.copy(alpha = 0.4f),
                         modifier = Modifier.size(14.dp).clickable { query = "" }
                     )
@@ -599,7 +602,7 @@ private fun WidgetPickerSheet(
                     CircularProgressIndicator(color = LocalWidgetAccent.current, modifier = Modifier.size(28.dp))
                 }
                 grouped.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No widgets found", color = textColor.copy(alpha = 0.5f), fontSize = (13 * textScale).sp)
+                    Text(stringResource(R.string.no_widgets_found), color = textColor.copy(alpha = 0.5f), fontSize = (13 * textScale).sp)
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -889,7 +892,7 @@ fun WidgetsPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Widgets",
+                    stringResource(R.string.widgets),
                     color = textColor,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold
@@ -908,7 +911,7 @@ fun WidgetsPanel(
                             }
                         }
                     }, modifier = Modifier.size(32.dp)) {
-                        Icon(imageVector = FluentIcon.ArrowSync, contentDescription = "Refresh widgets",
+                        Icon(imageVector = FluentIcon.ArrowSync, contentDescription = stringResource(R.string.refresh_widgets),
                             tint = textColor.copy(alpha = 0.6f),
                             modifier = Modifier.size(18.dp).rotate(rotation.value))
                     }
@@ -917,7 +920,7 @@ fun WidgetsPanel(
                         modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = if (editMode) FluentIcon.Checkmark else FluentIcon.Edit,
-                            contentDescription = if (editMode) "Done editing" else "Edit widgets",
+                            contentDescription = if (editMode) stringResource(R.string.done_editing) else stringResource(R.string.edit_widgets),
                             tint = if (editMode) LocalWidgetAccent.current else textColor.copy(alpha = 0.6f),
                             modifier = Modifier.size(18.dp)
                         )
@@ -1097,13 +1100,13 @@ private fun WidgetEditPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Edit widgets",
+                stringResource(R.string.edit_widgets),
                 color      = LocalWidgetAccent.current,
                 fontSize   = (13 * textScale).sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Hold the grip to drag",
+                stringResource(R.string.hold_the_grip_to_drag),
                 color      = textColor.copy(alpha = 0.4f),
                 fontSize   = (10 * textScale).sp,
                 fontWeight = FontWeight.Medium
@@ -1115,7 +1118,7 @@ private fun WidgetEditPanel(
                 val isExternal = id.startsWith("ext:")
                 val externalId = if (isExternal) id.removePrefix("ext:").toIntOrNull() else null
                 val meta = externalId?.let { externalMeta[it] }
-                val label = meta?.label ?: (WIDGET_LABELS[id] ?: id)
+                val label = meta?.label ?: ui(WIDGET_LABELS[id] ?: id)
                 val visible = id !in hidden
                 val isPinned = id in pinned
                 val isDragged = id == draggingId
@@ -1289,7 +1292,7 @@ private fun WidgetEditPanel(
                     IconButton(onClick = { onTogglePin(id) }, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = FluentIcon.Pin,
-                            contentDescription = if (isPinned) "Unpin widget" else "Pin widget to top",
+                            contentDescription = if (isPinned) stringResource(R.string.unpin_widget) else stringResource(R.string.pin_widget_to_top),
                             tint = if (isPinned) accent else textColor.copy(alpha = 0.3f),
                             modifier = Modifier.size(19.dp)
                         )
@@ -1299,7 +1302,7 @@ private fun WidgetEditPanel(
                             onClick = { externalId?.let(onRemoveExternal) },
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(imageVector = FluentIcon.Delete, contentDescription = "Remove widget",
+                            Icon(imageVector = FluentIcon.Delete, contentDescription = stringResource(R.string.remove_widget),
                                 tint = bluebirdColors.Error.copy(alpha = 0.75f), modifier = Modifier.size(19.dp))
                         }
                     }
@@ -1345,7 +1348,7 @@ private fun WidgetEditPanel(
                     tint = LocalWidgetAccent.current, modifier = Modifier.size(15.dp))
             }
             Text(
-                "Add widget from an app",
+                stringResource(R.string.add_widget_from_an_app),
                 color = LocalWidgetAccent.current,
                 fontSize = (13 * textScale).sp,
                 fontWeight = FontWeight.SemiBold
@@ -1431,7 +1434,7 @@ private fun ExpandToggle(expanded: Boolean, textScale: Float, onToggle: () -> Un
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            if (expanded) "Show less" else "Show more",
+            if (expanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
             color = LocalWidgetAccent.current,
             fontSize = (11 * textScale).sp,
             fontWeight = FontWeight.Medium
@@ -1630,7 +1633,7 @@ private fun WeatherWidget(isDark: Boolean, context: Context, textScale: Float, r
                         Icon(imageVector = FluentIcon.LocationOff, contentDescription = null,
                             tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(4.dp))
-                        Text("Location permission needed",
+                        Text(stringResource(R.string.location_permission_needed),
                             color = Color.White.copy(alpha = 0.7f), fontSize = (11 * textScale).sp)
                     }
                 }
@@ -1641,7 +1644,7 @@ private fun WeatherWidget(isDark: Boolean, context: Context, textScale: Float, r
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(imageVector = FluentIcon.CloudOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(4.dp))
-                        Text("Could not load weather", color = Color.White.copy(alpha = 0.7f), fontSize = (11 * textScale).sp)
+                        Text(stringResource(R.string.could_not_load_weather), color = Color.White.copy(alpha = 0.7f), fontSize = (11 * textScale).sp)
                     }
                 }
                 weatherData != null -> {
@@ -1653,7 +1656,7 @@ private fun WeatherWidget(isDark: Boolean, context: Context, textScale: Float, r
                                 Text(data.condition, color = Color.White.copy(alpha = 0.8f), fontSize = (12 * textScale).sp)
                                 Spacer(Modifier.height(8.dp))
                                 Text("${data.temp}°", fontSize = (48 * textScale).sp, color = Color.White, fontWeight = FontWeight.Light)
-                                Text("H:${data.high}°  L:${data.low}°", color = Color.White.copy(alpha = 0.7f), fontSize = (11 * textScale).sp)
+                                Text(stringResource(R.string.weather_high_low, data.high, data.low), color = Color.White.copy(alpha = 0.7f), fontSize = (11 * textScale).sp)
                             }
                             Icon(
                                 when {
@@ -1773,15 +1776,15 @@ private fun NowPlayingWidget(isDark: Boolean, context: Context, textScale: Float
     val albumImage = remember(albumArt) { albumArt?.asImageBitmap() }
 
     WidgetCard(isDark) {
-        WidgetHeader("Now Playing", FluentIcon.MusicNote2, textColor, textScale)
+        WidgetHeader(stringResource(R.string.now_playing), FluentIcon.MusicNote2, textColor, textScale)
         Spacer(Modifier.height(10.dp))
 
         if (!hasPermission) {
             TextButton(onClick = {
                 context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }) { Text("Grant notification access", fontSize = (12 * textScale).sp) }
+            }) { Text(stringResource(R.string.grant_notification_access), fontSize = (12 * textScale).sp) }
         } else if (title == null) {
-            Text("Nothing playing", color = textColor.copy(alpha = 0.5f), fontSize = (13 * textScale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.nothing_playing), color = textColor.copy(alpha = 0.5f), fontSize = (13 * textScale).sp, fontWeight = FontWeight.Medium)
         } else {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1892,13 +1895,13 @@ private fun StockWidget(isDark: Boolean, textScale: Float, refreshTick: Int) {
 
     WidgetCard(isDark) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Markets", color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.markets), color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
             if (loading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalWidgetAccent.current)
             else Icon(imageVector = FluentIcon.ArrowTrendingUp, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.height(10.dp))
         when {
-            error && stocks.isEmpty() -> Text("Could not load markets", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            error && stocks.isEmpty() -> Text(stringResource(R.string.could_not_load_markets), color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
             else -> {
                 val shown = if (expanded) stocks else stocks.take(STOCKS_COLLAPSED_COUNT)
                 shown.forEach { stock ->
@@ -1970,7 +1973,7 @@ private fun NewsWidget(isDark: Boolean, textScale: Float, refreshTick: Int) {
 
     WidgetCard(isDark) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("News", color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.news), color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
             if (loading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalWidgetAccent.current)
             else Icon(imageVector = FluentIcon.DocumentText, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(18.dp))
         }
@@ -2038,13 +2041,13 @@ private fun CalendarWidget(isDark: Boolean, context: Context, textScale: Float) 
     }
 
     WidgetCard(isDark) {
-        WidgetHeader("Calendar", FluentIcon.Calendar, textColor, textScale)
+        WidgetHeader(stringResource(R.string.appname_calendar), FluentIcon.Calendar, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         when {
             !hasPermission -> TextButton(onClick = { permLauncher.launch(Manifest.permission.READ_CALENDAR) }) {
-                Text("Grant calendar access", fontSize = (12 * textScale).sp)
+                Text(stringResource(R.string.grant_calendar_access), fontSize = (12 * textScale).sp)
             }
-            events.isEmpty() -> Text("No upcoming events", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            events.isEmpty() -> Text(stringResource(R.string.no_upcoming_events), color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
             else -> events.forEach { event ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -2133,7 +2136,7 @@ private fun PhotosWidget(
     }
 
     WidgetCard(isDark) {
-        WidgetHeader("Photos", FluentIcon.Image, textColor, textScale)
+        WidgetHeader(stringResource(R.string.photos_2), FluentIcon.Image, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         when {
             !hasPermission -> TextButton(onClick = {
@@ -2147,9 +2150,9 @@ private fun PhotosWidget(
                 }
                 permLauncher.launch(perms)
             }) {
-                Text("Grant photo access", fontSize = (12 * textScale).sp)
+                Text(stringResource(R.string.grant_photo_access), fontSize = (12 * textScale).sp)
             }
-            photos.isEmpty() -> Text("No recent photos", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            photos.isEmpty() -> Text(stringResource(R.string.no_recent_photos), color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
             else -> LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(photos) { uri ->
                     AsyncImage(
@@ -2215,11 +2218,12 @@ private fun daysFromToday(dueAt: Long): Int {
     return ((due - today) / (24 * 60 * 60 * 1000L)).toInt()
 }
 
+@Composable
 private fun dueLabel(dueAt: Long): String = when (val d = daysFromToday(dueAt)) {
-    0 -> "Today"
-    1 -> "Tomorrow"
-    -1 -> "Yesterday"
-    in -6..-2 -> "${-d}d overdue"
+    0 -> stringResource(R.string.today)
+    1 -> stringResource(R.string.tomorrow)
+    -1 -> stringResource(R.string.yesterday)
+    in -6..-2 -> stringResource(R.string.overdue_days, -d)
     in 2..6 -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(dueAt))
     else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(dueAt))
 }
@@ -2281,7 +2285,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
 
     WidgetCard(isDark) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("To Do", color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.to_do), color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val done = tasks.count { it.done }
                 if (tasks.isNotEmpty()) {
@@ -2299,7 +2303,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                 ) {
                     Icon(
                         imageVector = FluentIcon.ArrowSort,
-                        contentDescription = if (sortByPriority) "Sorting by priority" else "Sort by priority",
+                        contentDescription = if (sortByPriority) stringResource(R.string.sorting_by_priority) else stringResource(R.string.sort_by_priority),
                         tint = if (sortByPriority) LocalWidgetAccent.current else textColor.copy(alpha = 0.4f),
                         modifier = Modifier.size(15.dp)
                     )
@@ -2307,7 +2311,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                 IconButton(onClick = { showAddField = !showAddField }, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = if (showAddField) FluentIcon.Dismiss else FluentIcon.Add,
-                        contentDescription = if (showAddField) "Cancel" else "Add task",
+                        contentDescription = if (showAddField) stringResource(R.string.cancel) else stringResource(R.string.add_task),
                         tint = LocalWidgetAccent.current, modifier = Modifier.size(16.dp)
                     )
                 }
@@ -2339,7 +2343,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            f.label,
+                            ui(f.label),
                             color = if (selected) LocalWidgetAccent.current else textColor.copy(alpha = 0.5f),
                             fontSize = (11 * textScale).sp,
                             fontWeight = FontWeight.SemiBold
@@ -2351,10 +2355,10 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
         Spacer(Modifier.height(10.dp))
 
         if (tasks.isEmpty() && !showAddField) {
-            Text("Nothing on your list — tap + to add a task", color = textColor.copy(alpha = 0.45f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.nothing_on_your_list_tap_to_add_a_task), color = textColor.copy(alpha = 0.45f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
         } else if (displayedTasks.isEmpty()) {
             Text(
-                if (filter == TodoFilter.DONE) "No completed tasks yet" else "Nothing active — nice work",
+                if (filter == TodoFilter.DONE) stringResource(R.string.no_completed_tasks_yet) else stringResource(R.string.nothing_active_nice_work),
                 color = textColor.copy(alpha = 0.45f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium
             )
         }
@@ -2452,12 +2456,12 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                         }
                         DropdownMenu(expanded = menuForTaskId == task.id, onDismissRequest = { menuForTaskId = null }) {
                             Text(
-                                "PRIORITY", color = textColor.copy(alpha = 0.4f), fontSize = 10.sp,
+                                stringResource(R.string.priority), color = textColor.copy(alpha = 0.4f), fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                             TaskPriority.values().forEach { p ->
                                 DropdownMenuItem(
-                                    text = { Text(p.label, fontSize = 13.sp) },
+                                    text = { Text(ui(p.label), fontSize = 13.sp) },
                                     leadingIcon = {
                                         Box(Modifier.size(10.dp).clip(CircleShape).background(if (p == TaskPriority.NONE) widgetDividerColor(textColor) else p.color))
                                     },
@@ -2469,7 +2473,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                             }
                             HorizontalDivider(color = widgetDividerColor(textColor), thickness = 0.5.dp)
                             Text(
-                                "DUE DATE", color = textColor.copy(alpha = 0.4f), fontSize = 10.sp,
+                                stringResource(R.string.due_date), color = textColor.copy(alpha = 0.4f), fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                             val dueOptions = listOf(
@@ -2477,7 +2481,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                             )
                             dueOptions.forEach { (label, offsetDays) ->
                                 DropdownMenuItem(
-                                    text = { Text(label, fontSize = 13.sp) },
+                                    text = { Text(ui(label), fontSize = 13.sp) },
                                     onClick = {
                                         val due = startOfDay() + offsetDays * 24L * 60 * 60 * 1000
                                         save(tasks.map { if (it.id == task.id) it.copy(dueAt = due) else it })
@@ -2487,7 +2491,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                             }
                             if (task.dueAt != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Clear due date", fontSize = 13.sp, color = textColor.copy(alpha = 0.6f)) },
+                                    text = { Text(stringResource(R.string.clear_due_date), fontSize = 13.sp, color = textColor.copy(alpha = 0.6f)) },
                                     onClick = {
                                         save(tasks.map { if (it.id == task.id) it.copy(dueAt = null) else it })
                                         menuForTaskId = null
@@ -2496,7 +2500,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                             }
                             HorizontalDivider(color = widgetDividerColor(textColor), thickness = 0.5.dp)
                             DropdownMenuItem(
-                                text = { Text("Delete task", fontSize = 13.sp, color = bluebirdColors.Error) },
+                                text = { Text(stringResource(R.string.delete_task), fontSize = 13.sp, color = bluebirdColors.Error) },
                                 onClick = {
                                     save(tasks.filterNot { it.id == task.id })
                                     menuForTaskId = null
@@ -2513,7 +2517,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                 OutlinedTextField(
                     value = newTaskText, onValueChange = { newTaskText = it },
                     modifier = Modifier.weight(1f).focusRequester(focusRequester), singleLine = true,
-                    placeholder = { Text("New task", fontSize = (12 * textScale).sp) },
+                    placeholder = { Text(stringResource(R.string.new_task), fontSize = (12 * textScale).sp) },
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = (13 * textScale).sp, color = textColor),
                     shape = RoundedCornerShape(10.dp),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
@@ -2526,7 +2530,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                     )
                 )
                 IconButton(onClick = { submitNewTask(); showAddField = false }, modifier = Modifier.size(32.dp)) {
-                    Icon(imageVector = FluentIcon.Checkmark, contentDescription = "Save task", tint = bluebirdColors.SuccessGreen)
+                    Icon(imageVector = FluentIcon.Checkmark, contentDescription = stringResource(R.string.save_task), tint = bluebirdColors.SuccessGreen)
                 }
             }
         }
@@ -2534,7 +2538,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
         if (tasks.any { it.done }) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Clear completed",
+                stringResource(R.string.clear_completed),
                 color = textColor.copy(alpha = 0.45f),
                 fontSize = (10 * textScale).sp,
                 modifier = Modifier.clickable { save(tasks.filterNot { it.done }) }
@@ -2566,11 +2570,11 @@ private fun StickyNotesWidget(isDark: Boolean, context: Context, textScale: Floa
         // it's already proven to exist in this icon set and "pinned note"
         // is a reasonable read; swap for a dedicated notepad glyph if one's
         // available in your FluentIcon wrapper.
-        WidgetHeader("Sticky Notes", FluentIcon.Pin, textColor, textScale)
+        WidgetHeader(stringResource(R.string.sticky_notes), FluentIcon.Pin, textColor, textScale)
         Spacer(Modifier.height(10.dp))
 
         if (notes.isEmpty() && !showAdd) {
-            Text("No notes yet — tap + to jot something down", color = textColor.copy(alpha = 0.45f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.no_notes_yet_tap_to_jot_something_down), color = textColor.copy(alpha = 0.45f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(8.dp))
         }
 
@@ -2610,7 +2614,7 @@ private fun StickyNotesWidget(isDark: Boolean, context: Context, textScale: Floa
                     decorationBox = { inner ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (newNoteText.isEmpty()) {
-                                Text("Write a note…", fontSize = (13 * textScale).sp, color = Color(0xFF3E3A2E).copy(alpha = 0.45f))
+                                Text(stringResource(R.string.write_a_note), fontSize = (13 * textScale).sp, color = Color(0xFF3E3A2E).copy(alpha = 0.45f))
                             }
                             inner()
                         }
@@ -2636,7 +2640,7 @@ private fun StickyNotesWidget(isDark: Boolean, context: Context, textScale: Floa
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         IconButton(onClick = { showAdd = false; newNoteText = "" }, modifier = Modifier.size(26.dp)) {
-                            Icon(imageVector = FluentIcon.Dismiss, contentDescription = "Cancel", tint = Color(0xFF3E3A2E).copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                            Icon(imageVector = FluentIcon.Dismiss, contentDescription = stringResource(R.string.cancel), tint = Color(0xFF3E3A2E).copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
                         }
                         IconButton(
                             onClick = {
@@ -2647,7 +2651,7 @@ private fun StickyNotesWidget(isDark: Boolean, context: Context, textScale: Floa
                             },
                             modifier = Modifier.size(26.dp)
                         ) {
-                            Icon(imageVector = FluentIcon.Checkmark, contentDescription = "Save note", tint = Color(0xFF3E3A2E))
+                            Icon(imageVector = FluentIcon.Checkmark, contentDescription = stringResource(R.string.save_note), tint = Color(0xFF3E3A2E))
                         }
                     }
                 }
@@ -2666,7 +2670,7 @@ private fun StickyNotesWidget(isDark: Boolean, context: Context, textScale: Floa
             ) {
                 Icon(imageVector = FluentIcon.Add, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("New note", color = LocalWidgetAccent.current, fontSize = (12 * textScale).sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.new_note), color = LocalWidgetAccent.current, fontSize = (12 * textScale).sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -2702,7 +2706,7 @@ private fun StickyNoteCard(
         )
         Icon(
             imageVector = FluentIcon.Dismiss,
-            contentDescription = "Delete note",
+            contentDescription = stringResource(R.string.delete_note),
             tint = ink.copy(alpha = 0.4f),
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -2732,10 +2736,10 @@ private fun AlarmWidget(isDark: Boolean, context: Context, textScale: Float) {
     }
 
     WidgetCard(isDark) {
-        WidgetHeader("Next Alarm", FluentIcon.Alarm, textColor, textScale)
+        WidgetHeader(stringResource(R.string.next_alarm), FluentIcon.Alarm, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         if (nextAlarm == null) {
-            Text("No alarm set", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.no_alarm_set), color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(imageVector = FluentIcon.Alarm, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(20.dp))
@@ -2772,13 +2776,13 @@ private fun NetworkSpeedWidget(isDark: Boolean, textScale: Float) {
     }
 
     WidgetCard(isDark) {
-        WidgetHeader("Network Speed", FluentIcon.TopSpeed, textColor, textScale)
+        WidgetHeader(stringResource(R.string.network_speed), FluentIcon.TopSpeed, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(imageVector = FluentIcon.ArrowDownload, contentDescription = null, tint = LocalWidgetAccent.current, modifier = Modifier.size(14.dp))
-                    Text("Download", color = textColor.copy(alpha = 0.55f), fontSize = (10 * textScale).sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.download), color = textColor.copy(alpha = 0.55f), fontSize = (10 * textScale).sp, fontWeight = FontWeight.Medium)
                 }
                 Text(rxSpeed, color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
             }
@@ -2786,7 +2790,7 @@ private fun NetworkSpeedWidget(isDark: Boolean, textScale: Float) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(imageVector = FluentIcon.ArrowUpload, contentDescription = null, tint = bluebirdColors.Success, modifier = Modifier.size(14.dp))
-                    Text("Upload", color = textColor.copy(alpha = 0.55f), fontSize = (10 * textScale).sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.upload), color = textColor.copy(alpha = 0.55f), fontSize = (10 * textScale).sp, fontWeight = FontWeight.Medium)
                 }
                 Text(txSpeed, color = textColor, fontSize = (15 * textScale).sp, fontWeight = FontWeight.SemiBold)
             }
@@ -2852,14 +2856,14 @@ private fun ScreenTimeWidget(isDark: Boolean, context: Context, textScale: Float
     }
 
     WidgetCard(isDark) {
-        WidgetHeader("Screen Time", FluentIcon.PhoneAndroid, textColor, textScale)
+        WidgetHeader(stringResource(R.string.screen_time), FluentIcon.PhoneAndroid, textColor, textScale)
         Spacer(Modifier.height(10.dp))
         if (!hasPermission) {
             TextButton(onClick = {
                 context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }) { Text("Grant usage access", fontSize = (12 * textScale).sp) }
+            }) { Text(stringResource(R.string.grant_usage_access), fontSize = (12 * textScale).sp) }
         } else if (topApps.isEmpty()) {
-            Text("No data yet", color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.no_data_yet), color = textColor.copy(alpha = 0.5f), fontSize = (12 * textScale).sp, fontWeight = FontWeight.Medium)
         } else {
             topApps.forEach { app ->
                 Row(

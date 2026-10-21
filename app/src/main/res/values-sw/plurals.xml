@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="one">kipengee %1$d</item>
+        <item quantity="other">vipengee %1$d</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="one">wimbo %1$d</item>
+        <item quantity="other">nyimbo %1$d</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="one">video %1$d</item>
+        <item quantity="other">video %1$d</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="one">picha %1$d</item>
+        <item quantity="other">picha %1$d</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="one">Sandbox ya programu ya faragha • faili %1$d</item>
+        <item quantity="other">Sandbox ya programu ya faragha • faili %1$d</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="one">herufi %1$d</item>
+        <item quantity="other">herufi %1$d</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="one">Futa picha %1$d?</item>
+        <item quantity="other">Futa picha %1$d?</item>
+    </plurals>
+</resources>

@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.wordprocessor
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -95,8 +97,8 @@ fun PdfReaderScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Could not open this PDF", color = palette.text)
-            androidx.compose.material3.TextButton(onClick = onBack) { Text("Back") }
+            Text(stringResource(R.string.could_not_open_this_pdf), color = palette.text)
+            androidx.compose.material3.TextButton(onClick = onBack) { Text(stringResource(R.string.setup_back)) }
         }
         return
     }
@@ -107,7 +109,7 @@ fun PdfReaderScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                FluentIcon("arrow_undo", "Back", Modifier.size(20.dp), Color.White)
+                FluentIcon("arrow_undo", stringResource(R.string.setup_back), Modifier.size(20.dp), Color.White)
             }
             Text(
                 text = pdfDisplayName(uri, context.contentResolver),
@@ -125,11 +127,11 @@ fun PdfReaderScreen(
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(onClick = { zoomState.floatValue = (zoom - .1f).coerceIn(.75f, 2.5f) }, modifier = Modifier.size(36.dp)) {
-                FluentIcon("zoom_out", "Zoom out", Modifier.size(18.dp), palette.text)
+                FluentIcon("zoom_out", stringResource(R.string.zoom_out), Modifier.size(18.dp), palette.text)
             }
             Text("${(zoom * 100).toInt()}%", color = palette.text, style = MaterialTheme.typography.labelSmall)
             IconButton(onClick = { zoomState.floatValue = (zoom + .1f).coerceIn(.75f, 2.5f) }, modifier = Modifier.size(36.dp)) {
-                FluentIcon("zoom_in", "Zoom in", Modifier.size(18.dp), palette.text)
+                FluentIcon("zoom_in", stringResource(R.string.zoom_in), Modifier.size(18.dp), palette.text)
             }
         }
 
@@ -168,7 +170,7 @@ private fun PdfPage(session: PdfSession, pageIndex: Int, zoom: Float) {
             } else {
                 Image(
                     bitmap = bitmap!!.asImageBitmap(),
-                    contentDescription = "PDF page ${pageIndex + 1}",
+                    contentDescription = stringResource(R.string.pdf_page, pageIndex + 1),
                     modifier = Modifier.width((width / androidx.compose.ui.platform.LocalDensity.current.density).dp),
                     contentScale = ContentScale.FillWidth
                 )

@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.graphics.Bitmap
 import android.provider.Settings
 import android.net.Uri
@@ -213,7 +215,7 @@ fun WebAppViewerScreen(
             }
         } else {
             Text(
-                text = "Application entry point is invalid. Check the installation and app logs.",
+                text = stringResource(R.string.application_entry_point_is_invalid),
                 color = text,
                 modifier = Modifier.align(Alignment.Center)
             )

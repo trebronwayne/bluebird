@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="one">%1$d Element</item>
+        <item quantity="other">%1$d Elemente</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="one">%1$d Titel</item>
+        <item quantity="other">%1$d Titel</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="one">%1$d Video</item>
+        <item quantity="other">%1$d Videos</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="one">%1$d Foto</item>
+        <item quantity="other">%1$d Fotos</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="one">Privater App-Speicher • %1$d Datei</item>
+        <item quantity="other">Privater App-Speicher • %1$d Dateien</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="one">%1$d Zeichen</item>
+        <item quantity="other">%1$d Zeichen</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="one">%1$d Foto löschen?</item>
+        <item quantity="other">%1$d Fotos löschen?</item>
+    </plurals>
+</resources>

@@ -1,5 +1,8 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.i18n.pluralText
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,12 +30,12 @@ fun BpkPrivateDataBrowserScreen(isDark: Boolean, appId: String? = null, onBack: 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
-                Text(if (appId == null) "Bluebird App Data" else "App Data: $appId", style = MaterialTheme.typography.titleLarge, color = text)
-                Text("Private app sandbox • ${files.size} files", style = MaterialTheme.typography.bodySmall)
+                Text(if (appId == null) stringResource(R.string.bluebird_app_data) else "App Data: $appId", style = MaterialTheme.typography.titleLarge, color = text)
+                Text(pluralText(R.plurals.plural_files, files.size), style = MaterialTheme.typography.bodySmall)
             }
-            TextButton(onClick = onBack) { Text("Back") }
+            TextButton(onClick = onBack) { Text(stringResource(R.string.setup_back)) }
         }
-        Text("Stored inside Bluebird's private data. Other apps cannot browse this folder; use this screen to inspect or delete files.", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.stored_inside_bluebirds_private_data), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(files, key = { it.absolutePath }) { file ->
@@ -43,9 +46,9 @@ fun BpkPrivateDataBrowserScreen(isDark: Boolean, appId: String? = null, onBack: 
                             preview = if (file.length() <= 128 * 1024 && file.extension.lowercase() in setOf("txt", "json", "html", "css", "js", "md", "log")) runCatching { file.readText().take(12000) }.getOrDefault("Unable to read file") else "Preview is only available for small text files."
                         }) {
                             Text(file.relativeTo(root).path, color = text, style = MaterialTheme.typography.bodyMedium)
-                            Text("${file.length()} bytes", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.bytes, file.length()), style = MaterialTheme.typography.bodySmall)
                         }
-                        TextButton(onClick = { deleteTarget = file }) { Text("Delete") }
+                        TextButton(onClick = { deleteTarget = file }) { Text(stringResource(R.string.delete)) }
                     }
                 }
             }
@@ -53,14 +56,14 @@ fun BpkPrivateDataBrowserScreen(isDark: Boolean, appId: String? = null, onBack: 
     }
     if (selected != null && preview != null) AlertDialog(
         onDismissRequest = { selected = null; preview = null },
-        title = { Text(selected?.name ?: "File preview") },
+        title = { Text(selected?.name ?: stringResource(R.string.file_preview)) },
         text = { Text(preview.orEmpty(), style = MaterialTheme.typography.bodySmall) },
-        confirmButton = { TextButton(onClick = { selected = null; preview = null }) { Text("Close") } }
+        confirmButton = { TextButton(onClick = { selected = null; preview = null }) { Text(stringResource(R.string.close)) } }
     )
     deleteTarget?.let { file -> AlertDialog(
-        onDismissRequest = { deleteTarget = null }, title = { Text("Delete private data?") },
-        text = { Text("Delete ${file.name}? This cannot be undone.") },
-        confirmButton = { TextButton(onClick = { file.delete(); deleteTarget = null; refresh++ }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel") } }
+        onDismissRequest = { deleteTarget = null }, title = { Text(stringResource(R.string.delete_private_data)) },
+        text = { Text(stringResource(R.string.delete_this_cannot_be_undone, file.name)) },
+        confirmButton = { TextButton(onClick = { file.delete(); deleteTarget = null; refresh++ }) { Text(stringResource(R.string.delete)) } },
+        dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) } }
     ) }
 }

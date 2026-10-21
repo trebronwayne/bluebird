@@ -1,5 +1,8 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.micaLayerOr
+import io.github.norbertweb.bluebird.ui.components.micaOr
+import io.github.norbertweb.bluebird.i18n.ui
 import androidx.annotation.DrawableRes
 import io.github.norbertweb.bluebird.R
 import android.content.Context
@@ -12,6 +15,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.lerp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -172,6 +176,7 @@ private fun CategoryIconView(icon: CategoryIcon, modifier: Modifier = Modifier, 
 }
 
 private enum class SettingsCategory(val label: String, val icon: CategoryIcon) {
+    LANGUAGE        ("Language",             CategoryIcon.Png(R.drawable.ic_about)),
     APPEARANCE      ("Appearance",          CategoryIcon.Png(R.drawable.ic_appearance)),
     ACCOUNTS        ("Accounts",            CategoryIcon.Png(R.drawable.ic_user)),
     PRIVACY_SECURITY("Privacy & security",  CategoryIcon.Png(R.drawable.ic_privacy)),
@@ -280,14 +285,14 @@ fun SettingsScreen(
     // still opaque — by the time the row gets cramped it's already invisible.
     val labelAlpha = ((expandProgress - 0.35f) / 0.65f).coerceIn(0f, 1f)
 
-    Row(modifier = Modifier.fillMaxSize().background(resolvedBg)) {
+    Row(modifier = Modifier.fillMaxSize().background(micaOr(resolvedBg))) {
 
         // ── Left nav pane ─────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .width(navWidth)
                 .fillMaxHeight()
-                .background(resolvedNav)
+                .background(micaOr(resolvedNav))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
@@ -315,7 +320,7 @@ fun SettingsScreen(
                             // non-square photos are letterboxed (Fit) into a thin vertical strip.
                             AsyncImage(
                                 model = Uri.parse(uiState.userProfile.profilePicturePath),
-                                contentDescription = "Profile picture",
+                                contentDescription = stringResource(R.string.profile_picture),
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize().clip(CircleShape)
                             )
@@ -335,7 +340,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                             fontSize   = (13 * uiState.textScale).sp,
                             maxLines   = 1, overflow = TextOverflow.Ellipsis)
-                        Text("Local Account",
+                        Text(stringResource(R.string.local_account),
                             style    = MaterialTheme.typography.labelSmall,
                             color    = resolvedText.copy(alpha = 0.5f))
                     }
@@ -369,7 +374,7 @@ fun SettingsScreen(
                         // different code shape (decorationBox vs. an unwrapped Box).
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (navSearch.isEmpty()) Text("Find a setting", color = resolvedText.copy(alpha = 0.4f), fontSize = (13 * (uiState?.textScale ?: 1f)).sp)
+                                if (navSearch.isEmpty()) Text(stringResource(R.string.settings_find), color = resolvedText.copy(alpha = 0.4f), fontSize = (13 * (uiState?.textScale ?: 1f)).sp)
                                 inner()
                             }
                         }
@@ -412,7 +417,7 @@ fun SettingsScreen(
                     CategoryIconView(cat.icon, modifier = Modifier.size(18.dp),
                         tint = if (isSelected) specialAccent else resolvedText.copy(alpha = 0.75f))
                     if (expandProgress > 0.001f) {
-                        Text(cat.label,
+                        Text(ui(cat.label),
                             color      = if (isSelected) specialAccent else resolvedText,
                             fontSize   = (13 * (uiState?.textScale ?: 1f)).sp,
                             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
@@ -439,7 +444,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .background(resolvedBg)
+                .background(micaLayerOr(resolvedBg, effectiveDark))
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 36.dp, vertical = 28.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -454,7 +459,7 @@ fun SettingsScreen(
                 ) {
                     CategoryIconView(selectedCategoryState.value.icon, modifier = Modifier.size(22.dp), tint = specialAccent)
                 }
-                Text(selectedCategoryState.value.label,
+                Text(ui(selectedCategoryState.value.label),
                     style      = MaterialTheme.typography.headlineSmall,
                     color      = resolvedText,
                     fontWeight = FontWeight.SemiBold,
@@ -465,6 +470,7 @@ fun SettingsScreen(
                 scale = uiState?.textScale ?: 1f)
 
             when (selectedCategoryState.value) {
+                SettingsCategory.LANGUAGE            -> LanguageSettings(args)
                 SettingsCategory.APPEARANCE       -> AppearanceSettings(args)
                 SettingsCategory.ACCOUNTS         -> AccountsSettings(args)
                 SettingsCategory.PRIVACY_SECURITY -> PrivacySecuritySettings(args)
@@ -804,7 +810,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
         }
     }
 
-    SettingsGroup("Personalization", a) {
+    SettingsGroup(stringResource(R.string.personalization), a) {
         Column(modifier = Modifier.fillMaxWidth()) {
 
             // ── Sub-tabs ──
@@ -824,7 +830,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                label, fontSize = (12 * scale).sp,
+                                ui(label), fontSize = (12 * scale).sp,
                                 color = if (selected) acc else tcm,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                             )
@@ -839,12 +845,12 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // ── Mode selector ──
-                    Text("Wallpaper type", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.wallpaper_type), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(
-                            DesktopWallpaperMode.APPARENT to "Apparent",
-                            DesktopWallpaperMode.DEFAULT  to "Default",
-                            DesktopWallpaperMode.CUSTOM   to "Custom"
+                            DesktopWallpaperMode.APPARENT to stringResource(R.string.apparent),
+                            DesktopWallpaperMode.DEFAULT  to stringResource(R.string.default_label),
+                            DesktopWallpaperMode.CUSTOM   to stringResource(R.string.custom)
                         ).forEach { (mode, label) ->
                             val selected = wallpaperMode == mode
                             Surface(
@@ -884,7 +890,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     // ── Apparent gradient picker — shown/hidden instantly ──
                     if (wallpaperMode == DesktopWallpaperMode.APPARENT) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Colour scheme", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.colour_scheme), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 wallpaperGradients.forEachIndexed { idx, gradient ->
                                     val isActive = idx == gradientIdx
@@ -905,7 +911,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                                 .background(Brush.linearGradient(gradient, start = Offset(0f, 0f), end = Offset(200f, 100f)))
                                         )
                                         Text(
-                                            gradientNames.getOrElse(idx) { "Preset ${idx + 1}" },
+                                            ui(gradientNames.getOrElse(idx) { stringResource(R.string.preset_n, idx + 1) }),
                                             color = tc, fontSize = (12.5 * scale).sp, modifier = Modifier.weight(1f)
                                         )
                                         if (isActive) {
@@ -920,9 +926,9 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     // ── Default image picker — shown/hidden instantly ──
                     if (wallpaperMode == DesktopWallpaperMode.DEFAULT) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Wallpaper image", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.wallpaper_image), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                             Text(
-                                "Select one or more. With more than one selected, they rotate automatically every hour.",
+                                stringResource(R.string.select_one_or_more_with_more_than_one),
                                 color = tcm.copy(alpha = 0.7f), fontSize = (10 * scale).sp
                             )
                             if (DEFAULT_WALLPAPERS.all { it == 0 }) {
@@ -932,7 +938,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "Add wallpapers to res/drawable\nas desktop_wp_1.png, desktop_wp_2.png, …",
+                                        stringResource(R.string.add_wallpapers_to_res_drawable_nas),
                                         color = tcm, fontSize = (11 * scale).sp, textAlign = TextAlign.Center
                                     )
                                 }
@@ -1001,9 +1007,9 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     // ── Custom wallpaper — shown/hidden instantly ──
                     if (wallpaperMode == DesktopWallpaperMode.CUSTOM) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Your wallpapers", color = tc, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.your_wallpapers), color = tc, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                             Text(
-                                "Tap one to use it, or add another from your gallery.",
+                                stringResource(R.string.tap_one_to_use_it_or_add_another_from),
                                 color = tcm, fontSize = (10 * scale).sp
                             )
                             Row(
@@ -1096,8 +1102,8 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Background animation", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
-                        Text("Select one or more to mix them together", color = tcm.copy(alpha = 0.7f), fontSize = (10 * scale).sp)
+                        Text(stringResource(R.string.background_animation), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.select_one_or_more_to_mix_them), color = tcm.copy(alpha = 0.7f), fontSize = (10 * scale).sp)
                     }
 
                     val liveActive = bgEffects.liveWallpaper != LiveWallpaperType.NONE
@@ -1121,7 +1127,7 @@ private fun PersonalizationSection(a: ScreenArgs) {
                                     ) {
                                         Text(bgAnimationEmoji(type), fontSize = (14 * scale).sp)
                                         Text(
-                                            bgAnimationLabel(type), fontSize = (11.5 * scale).sp,
+                                            ui(bgAnimationLabel(type)), fontSize = (11.5 * scale).sp,
                                             color = if (active) Color.White else tc,
                                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
                                         )
@@ -1134,12 +1140,12 @@ private fun PersonalizationSection(a: ScreenArgs) {
 
                     if (bgEffects.activeAnimations.isNotEmpty()) {
                         TextButton(onClick = { a.vm?.clearBgAnimations() }) {
-                            Text("Turn off all animations", fontSize = (11 * scale).sp, color = acc)
+                            Text(stringResource(R.string.turn_off_animations), fontSize = (11 * scale).sp, color = acc)
                         }
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Intensity", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.intensity), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                         Slider(
                             value = bgEffects.intensity.toFloat(),
                             onValueChange = { a.vm?.setBgAnimationIntensity(it.toInt()) },
@@ -1152,9 +1158,9 @@ private fun PersonalizationSection(a: ScreenArgs) {
                     Divider(color = tcm.copy(alpha = 0.15f))
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Live wallpaper", color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.live_wallpaper), color = tcm, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium)
                         Text(
-                            "Replaces the static wallpaper and turns off particle animations",
+                            stringResource(R.string.replaces_the_static_wallpaper_and),
                             color = tcm.copy(alpha = 0.7f), fontSize = (10 * scale).sp
                         )
                     }
@@ -1176,13 +1182,13 @@ private fun PersonalizationSection(a: ScreenArgs) {
                             ) {
                                 Icon(FluentIcons.Regular.Dismiss, null, tint = tcm, modifier = Modifier.size(16.dp))
                             }
-                            Text("Off", fontSize = (10 * scale).sp, color = if (offActive) acc else tcm)
+                            Text(stringResource(R.string.off), fontSize = (10 * scale).sp, color = if (offActive) acc else tcm)
                         }
                         listOf(
-                            LiveWallpaperType.AURORA to "Aurora",
-                            LiveWallpaperType.NEBULA to "Nebula",
-                            LiveWallpaperType.WAVES  to "Waves",
-                            LiveWallpaperType.BOKEH  to "Bokeh"
+                            LiveWallpaperType.AURORA to stringResource(R.string.aurora),
+                            LiveWallpaperType.NEBULA to stringResource(R.string.nebula),
+                            LiveWallpaperType.WAVES  to stringResource(R.string.waves),
+                            LiveWallpaperType.BOKEH  to stringResource(R.string.bokeh)
                         ).forEach { (lw, label) ->
                             val isActive = bgEffects.liveWallpaper == lw
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1275,7 +1281,7 @@ private fun AccountsSettings(a: ScreenArgs) {
         }
     }
 
-    SettingsGroup("Your account", a) {
+    SettingsGroup(stringResource(R.string.your_account), a) {
         if (a.uiState != null && a.vm != null) {
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1297,7 +1303,7 @@ private fun AccountsSettings(a: ScreenArgs) {
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(a.uiState.userProfile.userName, color = a.textColor, fontSize = (16 * scale).sp, fontWeight = FontWeight.Medium)
-                    Text("Local Account", color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * scale).sp)
+                    Text(stringResource(R.string.local_account), color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * scale).sp)
                 }
             }
             Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
@@ -1322,7 +1328,7 @@ private fun AccountsSettings(a: ScreenArgs) {
                         value = editedName,
                         onValueChange = { editedName = it },
                         singleLine = true,
-                        placeholder = { Text("Display name") },
+                        placeholder = { Text(stringResource(R.string.setup_display_name)) },
                         colors = OutlinedTextFieldDefaults.colors(),
                         modifier = Modifier
                             .weight(1f)
@@ -1333,18 +1339,18 @@ private fun AccountsSettings(a: ScreenArgs) {
                                 } else false
                             }
                     )
-                    TextButton(enabled = editedName.isNotBlank(), onClick = { commit() }) { Text("Save") }
-                    TextButton(onClick = { isEditingName = false }) { Text("Cancel") }
+                    TextButton(enabled = editedName.isNotBlank(), onClick = { commit() }) { Text(stringResource(R.string.save)) }
+                    TextButton(onClick = { isEditingName = false }) { Text(stringResource(R.string.cancel)) }
                 }
             } else {
-                SNav(FluentIcons.Regular.Edit, "Change username", "Update your display name", a = a) {
+                SNav(FluentIcons.Regular.Edit, stringResource(R.string.change_username), stringResource(R.string.update_your_display_name), a = a) {
                     editedName = a.uiState.userProfile.userName
                     isEditingName = true
                 }
             }
 
             Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
-            SNav(FluentIcons.Regular.CameraAdd, "Change profile picture", "Pick a photo from your gallery",   a = a) {
+            SNav(FluentIcons.Regular.CameraAdd, stringResource(R.string.change_profile_picture), stringResource(R.string.pick_a_photo_from_your_gallery),   a = a) {
                 profilePictureLauncher.launch("image/*")
             }
         }
@@ -1366,9 +1372,9 @@ private fun PrivacySecuritySettings(a: ScreenArgs) {
     // and "App permissions" (Location, Camera, Microphone access) groups
     // removed — none of these toggles were backed by real enforcement; they
     // just flipped a stored boolean that nothing else in the app read.
-    SettingsGroup("Data & diagnostics", a) {
-        SToggle(FluentIcons.Regular.DataTrending, "Usage & diagnostics",
-            "Send anonymous crash reports and usage data",
+    SettingsGroup(stringResource(R.string.data_diagnostics), a) {
+        SToggle(FluentIcons.Regular.DataTrending, stringResource(R.string.usage_diagnostics),
+            stringResource(R.string.send_anonymous_crash_reports_and_usage),
             a, a.uiState?.usageDiagnostics ?: true) { a.vm?.setUsageDiagnostics(!(a.uiState?.usageDiagnostics ?: true)) }
     }
 
@@ -1401,7 +1407,7 @@ private fun AnimatedStatusChip(result: Boolean?, scale: Float) {
                 null, tint = tint, modifier = Modifier.size(13.dp)
             )
             Text(
-                if (isSuccess) "Sent" else "Failed — retry",
+                if (isSuccess) stringResource(R.string.sent) else stringResource(R.string.failed_retry),
                 color = tint, fontSize = (11.5f * scale).sp, fontWeight = FontWeight.Medium
             )
         }
@@ -1491,11 +1497,11 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                     Image(painter = painterResource(R.drawable.ic_feedback), contentDescription = null, modifier = Modifier.size(19.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Send feedback",
+                    Text(stringResource(R.string.send_feedback),
                         color = a.textColor,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = (15 * scale).sp)
-                    Text("Report a bug or share an idea — it goes straight to the team",
+                    Text(stringResource(R.string.report_a_bug_or_share_an_idea_it_goes),
                         color = a.textColor.copy(alpha = 0.55f),
                         fontSize = (12 * scale).sp)
                 }
@@ -1512,7 +1518,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                         value = message,
                         onValueChange = { if (it.length <= 1000) { message = it; submitResult = null } },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("What's on your mind?") },
+                        placeholder = { Text(stringResource(R.string.whats_on_your_mind)) },
                         minLines = 4,
                         shape = RoundedCornerShape(12.dp),
                         colors = feedbackFieldColors
@@ -1529,7 +1535,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                         value = email,
                         onValueChange = { email = it; submitResult = null },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Email (optional — only if you'd like a reply)") },
+                        placeholder = { Text(stringResource(R.string.email_optional_only_if_youd_like_a)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         colors = feedbackFieldColors
@@ -1575,7 +1581,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                                     trackColor = Color.White.copy(alpha = 0.3f)
                                 )
                             } else {
-                                Text("Send feedback", fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.send_feedback), fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -1623,7 +1629,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
 
     LaunchedEffect(Unit) { runUpdateCheck() }
 
-    SettingsGroup("Check for updates", a) {
+    SettingsGroup(stringResource(R.string.check_for_updates), a) {
         val pkgInfo = remember(a.ctx) {
             try { a.ctx.packageManager.getPackageInfo(a.ctx.packageName, 0) } catch (_: Exception) { null }
         }
@@ -1632,14 +1638,14 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Current version", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
+                Text(stringResource(R.string.current_version), color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
                 Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
             }
             when {
-                isChecking  -> StatusPill(null, "Checking…", a.textColor.copy(alpha = 0.55f), scale, spinning = true)
-                checkError  -> StatusPill(FluentIcons.Regular.Dismiss, "Couldn't check", Color(0xFFE57373), scale)
-                updateInfo != null -> StatusPill(FluentIcons.Regular.ArrowDownload, "Update available", a.accent, scale)
-                upToDate    -> StatusPill(FluentIcons.Regular.Checkmark, "Up to date", Color(0xFF4CAF50), scale)
+                isChecking  -> StatusPill(null, stringResource(R.string.checking), a.textColor.copy(alpha = 0.55f), scale, spinning = true)
+                checkError  -> StatusPill(FluentIcons.Regular.Dismiss, stringResource(R.string.couldnt_check), Color(0xFFE57373), scale)
+                updateInfo != null -> StatusPill(FluentIcons.Regular.ArrowDownload, stringResource(R.string.update_available), a.accent, scale)
+                upToDate    -> StatusPill(FluentIcons.Regular.Checkmark, stringResource(R.string.up_to_date), Color(0xFF4CAF50), scale)
             }
         }
 
@@ -1654,7 +1660,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(FluentIcons.Regular.ArrowClockwise, null, tint = a.accent, modifier = Modifier.size(16.dp))
-            Text("Check again", color = a.accent, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.check_again), color = a.accent, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
         }
 
         // Update details — expand in place, no popup.
@@ -1669,7 +1675,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                 ) {
                     Divider(color = divColor(a))
                     Spacer(Modifier.height(2.dp))
-                    Text("Version ${info.versionName} is available",
+                    Text(stringResource(R.string.version_is_available, info.versionName),
                         color = a.textColor, fontWeight = FontWeight.Medium, fontSize = (13 * scale).sp)
                     if (info.releaseNotes.isNotBlank()) {
                         Text(info.releaseNotes, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp)
@@ -1683,9 +1689,9 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                                     Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 )
                             }
-                        ) { Text("Download", fontSize = (12.5f * scale).sp) }
+                        ) { Text(stringResource(R.string.download), fontSize = (12.5f * scale).sp) }
                         TextButton(onClick = { updateInfo = null }) {
-                            Text("Dismiss", fontSize = (12.5f * scale).sp)
+                            Text(stringResource(R.string.common_dismiss), fontSize = (12.5f * scale).sp)
                         }
                     }
                 }
@@ -1738,37 +1744,37 @@ private fun BpkAppsSettings(a: ScreenArgs) {
                         contentAlignment = Alignment.Center
                     ) { Icon(FluentIcons.Regular.Code, null, tint = a.accent, modifier = Modifier.size(27.dp)) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Bluebird Package Kit", color = a.textColor, fontSize = (19 * scale).sp, fontWeight = FontWeight.Bold)
-                        Text("Installable web apps · .bpk", color = a.textColor.copy(alpha = 0.68f), fontSize = (12.5f * scale).sp)
+                        Text(stringResource(R.string.bluebird_package_kit), color = a.textColor, fontSize = (19 * scale).sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.installable_web_apps_bpk), color = a.textColor.copy(alpha = 0.68f), fontSize = (12.5f * scale).sp)
                     }
                 }
                 Text(
-                    "BPK turns a web project into an application that Bluebird can install, identify, launch, manage, and remove. Build the interface with HTML, CSS, and JavaScript, then package the project as a .bpk file.",
+                    stringResource(R.string.bpk_turns_a_web_project_into_an),
                     color = a.textColor.copy(alpha = 0.86f), fontSize = (13.2f * scale).sp, lineHeight = (19 * scale).sp
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     BpkTag("HTML / CSS / JS", a)
-                    BpkTag("Version 1", a)
-                    BpkTag("ZIP-based", a)
+                    BpkTag(stringResource(R.string.version_1), a)
+                    BpkTag(stringResource(R.string.zip_based), a)
                 }
             }
         }
 
-        SettingsGroup("What you can do", a) {
-            BpkFeatureRow(FluentIcons.Regular.Add, "Install and launch", "Install a .bpk package and launch it as a Bluebird app with its own name and icon.", a)
+        SettingsGroup(stringResource(R.string.what_you_can_do), a) {
+            BpkFeatureRow(FluentIcons.Regular.Add, stringResource(R.string.install_and_launch), stringResource(R.string.install_a_bpk_package_and_launch_it_as), a)
             Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.Shield, "App permissions", "Review each app's capabilities in Program Manager. Grant only what the app needs, and revoke grants you no longer want.", a)
+            BpkFeatureRow(FluentIcons.Regular.Shield, stringResource(R.string.app_permissions), stringResource(R.string.review_each_apps_capabilities_in), a)
             Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.DataTrending, "Private app data", "Apps can keep small key/value settings in their own private data directory when App Storage is granted. Use Program Manager or File Explorer to inspect supported data files.", a)
+            BpkFeatureRow(FluentIcons.Regular.DataTrending, stringResource(R.string.private_app_data), stringResource(R.string.apps_can_keep_small_key_value_settings), a)
             Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.Bug, "Logs and troubleshooting", "Apps can write diagnostic messages, and runtime errors may be recorded for review in Program Manager. Logs can be cleared there.", a)
+            BpkFeatureRow(FluentIcons.Regular.Bug, stringResource(R.string.logs_and_troubleshooting), stringResource(R.string.apps_can_write_diagnostic_messages_and), a)
             Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.ArrowClockwise, "Updates and reinstall", "The BPK update client can check an HTTPS feed, download a package, verify its SHA-256 hash, and stage an update. The host should ask the user before installing it.", a)
+            BpkFeatureRow(FluentIcons.Regular.ArrowClockwise, stringResource(R.string.updates_and_reinstall), stringResource(R.string.the_bpk_update_client_can_check_an), a)
         }
 
-        SettingsGroup("Package structure", a) {
+        SettingsGroup(stringResource(R.string.package_structure), a) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("A .bpk is a ZIP archive renamed with the .bpk extension. Keep the paths and names exact:", color = a.textColor.copy(alpha = 0.78f), fontSize = (12.8f * scale).sp)
+                Text(stringResource(R.string.a_bpk_is_a_zip_archive_renamed_with), color = a.textColor.copy(alpha = 0.78f), fontSize = (12.8f * scale).sp)
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(a.textColor.copy(alpha = 0.045f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     BpkTreeLine("my-app.bpk/", true, a)
                     BpkTreeLine("manifest.json", false, a)
@@ -1778,26 +1784,26 @@ private fun BpkAppsSettings(a: ScreenArgs) {
                     BpkTreeLine("app/main.js", false, a)
                     BpkTreeLine("installer/  (optional custom installer assets)", false, a)
                 }
-                Text("The manifest entry must point to a real file inside app/. The icon path must point to the included PNG. Keep application files inside the package and avoid absolute paths or ../ path traversal.", color = a.textColor.copy(alpha = 0.64f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
+                Text(stringResource(R.string.the_manifest_entry_must_point_to_a), color = a.textColor.copy(alpha = 0.64f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
             }
         }
 
-        SettingsGroup("Capabilities", a) {
+        SettingsGroup(stringResource(R.string.capabilities), a) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                BpkCapabilityLine("App Storage", "Read/write the app's own key/value data through the Bluebird bridge.", a)
-                BpkCapabilityLine("Internet", "Network access. Only grant this to apps that genuinely need remote content or services.", a)
-                BpkCapabilityLine("File Picker", "Request the system file picker; the user still chooses the file.", a)
-                BpkCapabilityLine("Media Picker", "Request the system media picker; the user chooses what to share.", a)
-                BpkCapabilityLine("Logs", "Allow the app to send diagnostic messages to its app log.", a)
-                BpkCapabilityLine("Audio / Video Playback", "Capability flags for media playback. Actual enforcement depends on the host runtime integration.", a)
-                BpkCapabilityLine("Brightness Control", "Request a brightness change; Android may require separate system permission and host support.", a)
-                Text("Important: a permission toggle is not a guarantee that every related browser feature is sandboxed. Only expose the JavaScript bridge to trusted local BPK content, and test network and media behavior in the actual runtime.", color = a.textColor.copy(alpha = 0.72f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
+                BpkCapabilityLine(stringResource(R.string.app_storage), stringResource(R.string.read_write_the_apps_own_key_value_data), a)
+                BpkCapabilityLine(stringResource(R.string.internet), stringResource(R.string.network_access_only_grant_this_to_apps), a)
+                BpkCapabilityLine(stringResource(R.string.file_picker), stringResource(R.string.request_the_system_file_picker_the), a)
+                BpkCapabilityLine(stringResource(R.string.media_picker), stringResource(R.string.request_the_system_media_picker_the), a)
+                BpkCapabilityLine(stringResource(R.string.logs), stringResource(R.string.allow_the_app_to_send_diagnostic), a)
+                BpkCapabilityLine(stringResource(R.string.audio_video_playback), stringResource(R.string.capability_flags_for_media_playback), a)
+                BpkCapabilityLine(stringResource(R.string.brightness_control), stringResource(R.string.request_a_brightness_change_android), a)
+                Text(stringResource(R.string.important_a_permission_toggle_is_not_a), color = a.textColor.copy(alpha = 0.72f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
             }
         }
 
-        SettingsGroup("Build a BPK with an AI assistant", a) {
+        SettingsGroup(stringResource(R.string.build_a_bpk_with_an_ai_assistant), a) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("You can ask an AI to create a complete small app, then package its files using the structure above. Include the guide below in your prompt so the assistant knows Bluebird's manifest and bridge API.", color = a.textColor.copy(alpha = 0.76f), fontSize = (12.8f * scale).sp, lineHeight = (18 * scale).sp)
+                Text(stringResource(R.string.you_can_ask_an_ai_to_create_a_complete), color = a.textColor.copy(alpha = 0.76f), fontSize = (12.8f * scale).sp, lineHeight = (18 * scale).sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Button(
                         onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true },
@@ -1807,22 +1813,22 @@ private fun BpkAppsSettings(a: ScreenArgs) {
                     ) {
                         Icon(if (copied) FluentIcons.Regular.Checkmark else FluentIcons.Regular.Code, null, modifier = Modifier.size(16.dp), tint = Color.White)
                         Spacer(Modifier.width(7.dp))
-                        Text(if (copied) "Guide copied" else "Copy developer guide", fontSize = (12.5f * scale).sp)
+                        Text(if (copied) stringResource(R.string.guide_copied) else stringResource(R.string.copy_developer_guide), fontSize = (12.5f * scale).sp)
                     }
                     OutlinedButton(onClick = { showFullGuide = true }, shape = RoundedCornerShape(14.dp)) {
-                        Text("Preview", fontSize = (12.5f * scale).sp)
+                        Text(stringResource(R.string.preview), fontSize = (12.5f * scale).sp)
                     }
                 }
             }
         }
 
-        SettingsGroup("Recommended workflow", a) {
+        SettingsGroup(stringResource(R.string.recommended_workflow), a) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                BpkStep("1", "Create", "Build the app in HTML, CSS, and JavaScript. Keep it responsive for phone-sized windows.", a)
+                BpkStep("1", stringResource(R.string.create), stringResource(R.string.build_the_app_in_html_css_and), a)
                 BpkStep("2", "Describe", "Fill in manifest.json with a unique id, app name, version, publisher, entry file, icon, and description.", a)
                 BpkStep("3", "Package", "Zip the package contents so manifest.json is at the archive root, then rename the ZIP to .bpk.", a)
-                BpkStep("4", "Install and test", "Install it in Bluebird, test launch and close, then test every capability with permission both granted and denied.", a)
-                BpkStep("5", "Release carefully", "Use HTTPS for update feeds and verify the downloaded package hash. A hash detects file mismatch; it does not prove who published the app.", a)
+                BpkStep("4", stringResource(R.string.install_and_test), stringResource(R.string.install_it_in_bluebird_test_launch_and), a)
+                BpkStep("5", stringResource(R.string.release_carefully), stringResource(R.string.use_https_for_update_feeds_and_verify), a)
             }
         }
     }
@@ -1830,16 +1836,16 @@ private fun BpkAppsSettings(a: ScreenArgs) {
     if (showFullGuide) {
         AlertDialog(
             onDismissRequest = { showFullGuide = false },
-            title = { Text("BPK developer guide") },
+            title = { Text(stringResource(R.string.bpk_developer_guide)) },
             text = {
                 Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(BPK_SETTINGS_DEVELOPER_GUIDE, color = a.textColor, fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
                 }
             },
             confirmButton = {
-                TextButton(onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true; showFullGuide = false }) { Text("Copy guide") }
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true; showFullGuide = false }) { Text(stringResource(R.string.copy_guide)) }
             },
-            dismissButton = { TextButton(onClick = { showFullGuide = false }) { Text("Close") } }
+            dismissButton = { TextButton(onClick = { showFullGuide = false }) { Text(stringResource(R.string.close)) } }
         )
     }
 }
@@ -1980,7 +1986,7 @@ private fun AboutSettings(a: ScreenArgs) {
     // and it duplicated the device's own Settings > About).
     val pkgInfo = remember(a.ctx) { try { pm.getPackageInfo(a.ctx.packageName, 0) } catch (_: Exception) { null } }
 
-    SettingsGroup("Device", a) {
+    SettingsGroup(stringResource(R.string.device), a) {
         listOf(
             "Device name"     to Build.MODEL,
             "Manufacturer"    to Build.MANUFACTURER,
@@ -1990,15 +1996,15 @@ private fun AboutSettings(a: ScreenArgs) {
         ).forEachIndexed { i, (label, value) ->
             if (i > 0) Divider(color = a.textColor.copy(alpha = 0.04f), modifier = Modifier.padding(horizontal = 12.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(label, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
+                Text(ui(label), color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
                 Text(value, color = a.textColor, fontSize = (12 * scale).sp)
             }
         }
     }
 
-    SettingsGroup("Bluebird Launcher", a) {
+    SettingsGroup(stringResource(R.string.bluebird_launcher), a) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Text("Version", color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
+            Text(stringResource(R.string.version), color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * scale).sp, modifier = Modifier.width(140.dp))
             Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (12 * scale).sp)
         }
         Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
@@ -2006,7 +2012,7 @@ private fun AboutSettings(a: ScreenArgs) {
         // reports now go straight to the GitHub issue tracker instead of email,
         // so reports are visible, searchable, and trackable rather than landing
         // in a personal inbox.
-        SNav(FluentIcons.Regular.Bug, "Report a bug", "Open an issue on GitHub", a = a) {
+        SNav(FluentIcons.Regular.Bug, stringResource(R.string.report_a_bug), stringResource(R.string.open_an_issue_on_github), a = a) {
             a.ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/trebronwayne/bluebird-releases/issues"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -2018,7 +2024,7 @@ private fun AboutSettings(a: ScreenArgs) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(FluentIcons.Regular.Shield, null, tint = a.textColor.copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
-            Text("All data is stored locally on your device", color = a.textColor, fontSize = (13 * scale).sp)
+            Text(stringResource(R.string.all_data_local), color = a.textColor, fontSize = (13 * scale).sp)
         }
         // "Open source licenses" row removed — it had no content or onClick
         // behind it.

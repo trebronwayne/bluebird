@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.R
+
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -83,7 +85,7 @@ fun BpkInstallerDialog(
     var isInstalling by remember(packageFile.absolutePath) { mutableStateOf(false) }
     var finished by remember(packageFile.absolutePath) { mutableStateOf(false) }
     var progress by remember(packageFile.absolutePath) { mutableStateOf(0f) }
-    var installStage by remember(packageFile.absolutePath) { mutableStateOf("Preparing installation…") }
+    var installStage by remember(packageFile.absolutePath) { mutableStateOf(context.getString(R.string.bpk_install_preparing)) }
     var showLocationPicker by remember(packageFile.absolutePath) { mutableStateOf(false) }
     var installPath by remember(packageFile.absolutePath) { mutableStateOf("") }
     var addToStart by remember(packageFile.absolutePath) { mutableStateOf(false) }
@@ -121,18 +123,18 @@ fun BpkInstallerDialog(
         isInstalling = true
         error = null
         progress = 0f
-        installStage = "Preparing installation…"
+        installStage = context.getString(R.string.bpk_install_preparing)
         scope.launch {
             runCatching {
                 val installed = withContext(Dispatchers.IO) {
                     val manager = BpkPackageManager(context)
                     manager.install(current, selected) { stage, value ->
                         val (label, base, span) = when (stage) {
-                            BpkInstallStage.COPYING -> Triple("Installing application files…", 0.05f, 0.55f)
-                            BpkInstallStage.OPTIMIZING -> Triple("Optimizing web assets…", 0.60f, 0.14f)
-                            BpkInstallStage.CREATING_LAUNCHER -> Triple("Creating application launcher…", 0.76f, 0.10f)
-                            BpkInstallStage.CACHING_PACKAGE -> Triple("Preparing reinstall package…", 0.87f, 0.06f)
-                            BpkInstallStage.REGISTERING -> Triple("Registering application…", 0.94f, 0.06f)
+                            BpkInstallStage.COPYING -> Triple(context.getString(R.string.bpk_stage_copying), 0.05f, 0.55f)
+                            BpkInstallStage.OPTIMIZING -> Triple(context.getString(R.string.bpk_stage_optimizing), 0.60f, 0.14f)
+                            BpkInstallStage.CREATING_LAUNCHER -> Triple(context.getString(R.string.bpk_stage_launcher), 0.76f, 0.10f)
+                            BpkInstallStage.CACHING_PACKAGE -> Triple(context.getString(R.string.bpk_stage_cache), 0.87f, 0.06f)
+                            BpkInstallStage.REGISTERING -> Triple(context.getString(R.string.bpk_stage_register), 0.94f, 0.06f)
                         }
                         installStage = label
                         progress = (base + span * value).coerceIn(0f, 1f)
@@ -140,7 +142,7 @@ fun BpkInstallerDialog(
                 }
                 installed
             }.onSuccess {
-                installStage = "Installation completed"
+                installStage = context.getString(R.string.bpk_install_complete)
                 progress = 1f
                 isInstalling = false
                 installedResult = it
@@ -149,7 +151,7 @@ fun BpkInstallerDialog(
                 isInstalling = false
                 error = it.message ?: "Installation failed"
                 progress = 0f
-                installStage = "Installation failed"
+                installStage = context.getString(R.string.bpk_install_failed)
             }
         }
     }
@@ -158,7 +160,7 @@ fun BpkInstallerDialog(
         finished = false
         error = null
         progress = 0f
-        installStage = "Preparing installation…"
+        installStage = context.getString(R.string.bpk_install_preparing)
         staged = null
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -181,11 +183,11 @@ fun BpkInstallerDialog(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Package cannot be installed", color = text, fontSize = 17.sp)
+                    Text(context.getString(R.string.bpk_install_invalid_title), color = text, fontSize = 17.sp)
                     Text(error.orEmpty(), color = dim, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onDismiss) { Text("Close") }
-                        Button(onClick = { restartInstallation() }) { Text("Retry") }
+                        TextButton(onClick = onDismiss) { Text(context.getString(R.string.bpk_close)) }
+                        Button(onClick = { restartInstallation() }) { Text(context.getString(R.string.bpk_retry)) }
                     }
                 }
             }
@@ -197,7 +199,7 @@ fun BpkInstallerDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     CircularInstallerSpinner()
-                    Text("Preparing installation…", color = text, fontSize = 14.sp)
+                    Text(context.getString(R.string.bpk_install_preparing), color = text, fontSize = 14.sp)
                 }
             }
 
@@ -215,20 +217,20 @@ fun BpkInstallerDialog(
                             modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))
                         )
                     }
-                    Text("Installation finished", color = text, fontSize = 19.sp)
+                    Text(context.getString(R.string.bpk_install_finished), color = text, fontSize = 19.sp)
                     Text(staged?.manifest?.name.orEmpty(), color = dim, fontSize = 14.sp)
-                    Text("The application has been installed and is ready to use.", color = dim, fontSize = 12.sp)
+                    Text(context.getString(R.string.bpk_install_ready_message), color = dim, fontSize = 12.sp)
 
-                    Text("Choose where to place it", color = text, fontSize = 13.sp)
-                    InstallOptionRow("Add to Start menu", addToStart, { addToStart = it }, text)
-                    InstallOptionRow("Pin to taskbar", pinToTaskbar, { pinToTaskbar = it }, text)
-                    InstallOptionRow("Create desktop shortcut", createDesktopShortcut, { createDesktopShortcut = it }, text)
+                    Text(context.getString(R.string.bpk_choose_placement), color = text, fontSize = 13.sp)
+                    InstallOptionRow(context.getString(R.string.bpk_add_start_menu), addToStart, { addToStart = it }, text)
+                    InstallOptionRow(context.getString(R.string.bpk_pin_taskbar), pinToTaskbar, { pinToTaskbar = it }, text)
+                    InstallOptionRow(context.getString(R.string.bpk_desktop_shortcut), createDesktopShortcut, { createDesktopShortcut = it }, text)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = onDismiss) { Text("Later") }
+                        TextButton(onClick = onDismiss) { Text(context.getString(R.string.bpk_later)) }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
@@ -240,7 +242,7 @@ fun BpkInstallerDialog(
                                 }
                                 onDismiss()
                             }
-                        ) { Text("Finish") }
+                        ) { Text(context.getString(R.string.bpk_finish)) }
                     }
                 }
             }
@@ -334,7 +336,7 @@ fun BpkInstallerDialog(
                         Text(staged!!.manifest.description, color = dim, fontSize = 12.sp)
                     }
 
-                    Text("Install location", color = text, fontSize = 13.sp)
+                    Text(context.getString(R.string.bpk_install_location), color = text, fontSize = 13.sp)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -345,12 +347,12 @@ fun BpkInstallerDialog(
                             onValueChange = { installPath = it },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
-                            label = { Text("Installation path") }
+                            label = { Text(context.getString(R.string.bpk_install_path)) }
                         )
                         Button(
                             onClick = { showLocationPicker = !showLocationPicker },
                             enabled = !isInstalling
-                        ) { Text("Browse…") }
+                        ) { Text(context.getString(R.string.bpk_browse)) }
                     }
                     if (showLocationPicker) {
                         val manager = BpkPackageManager(context)
@@ -366,7 +368,7 @@ fun BpkInstallerDialog(
                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isDark) DS.surfaceDark else DS.surfaceLight).padding(8.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Text("Choose a folder in Bluebird Storage", color = text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(context.getString(R.string.bpk_choose_storage_folder), color = text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             folders.forEach { folder ->
                                 TextButton(
@@ -378,7 +380,7 @@ fun BpkInstallerDialog(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(Modifier.fillMaxWidth()) {
-                                        Text(folder.name.ifBlank { "Bluebird Storage" }, color = text, fontSize = 12.sp)
+                                        Text(folder.name.ifBlank { context.getString(R.string.bpk_storage_default_folder) }, color = text, fontSize = 12.sp)
                                         Text(folder.absolutePath, color = dim, fontSize = 9.sp)
                                     }
                                 }
@@ -386,15 +388,15 @@ fun BpkInstallerDialog(
                         }
                     }
                     Text(
-                        "Choose an installation folder inside Bluebird Storage. Bluebird will create the application folder automatically.",
+                        context.getString(R.string.bpk_install_folder_help),
                         color = dim,
                         fontSize = 11.sp
                     )
 
-                    Text("After installation", color = text, fontSize = 13.sp)
-                    InstallOptionRow("Add to Start menu", addToStart, { addToStart = it }, text)
-                    InstallOptionRow("Pin to taskbar", pinToTaskbar, { pinToTaskbar = it }, text)
-                    InstallOptionRow("Create desktop shortcut", createDesktopShortcut, { createDesktopShortcut = it }, text)
+                    Text(context.getString(R.string.bpk_after_install), color = text, fontSize = 13.sp)
+                    InstallOptionRow(context.getString(R.string.bpk_add_start_menu), addToStart, { addToStart = it }, text)
+                    InstallOptionRow(context.getString(R.string.bpk_pin_taskbar), pinToTaskbar, { pinToTaskbar = it }, text)
+                    InstallOptionRow(context.getString(R.string.bpk_desktop_shortcut), createDesktopShortcut, { createDesktopShortcut = it }, text)
 
                     if (isInstalling) {
                         Spacer(Modifier.height(4.dp))
@@ -413,9 +415,9 @@ fun BpkInstallerDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(enabled = !isInstalling, onClick = onDismiss) { Text("Cancel") }
+                        TextButton(enabled = !isInstalling, onClick = onDismiss) { Text(context.getString(R.string.bpk_cancel)) }
                         Spacer(Modifier.width(8.dp))
-                        Button(enabled = !isInstalling && installPath.trim().isNotEmpty(), onClick = ::installNow) { Text("Install") }
+                        Button(enabled = !isInstalling && installPath.trim().isNotEmpty(), onClick = ::installNow) { Text(context.getString(R.string.bpk_install)) }
                     }
                 }
             }

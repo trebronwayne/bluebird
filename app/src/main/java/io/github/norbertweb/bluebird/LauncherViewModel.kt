@@ -249,7 +249,10 @@ data class LauncherUiState(
     val userProfile: UserProfile = UserProfile(),
     val searchQuery: String = "",
     val volume: Float = 0.5f,
-    val brightness: Float = 0.8f,
+    /** Slider position (0..1). Mirrors the SYSTEM brightness until the user moves the slider. */
+    val brightness: Float = 0.5f,
+    /** True only after the user moved the Action Center slider. Never persisted: a restart returns to system brightness. */
+    val brightnessOverridden: Boolean = false,
     val isWifiOn: Boolean = true,
     val isBluetoothOn: Boolean = false,
     val isAirplaneMode: Boolean = false,
@@ -399,7 +402,7 @@ private data class RecycleBinItemSaved(
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(LauncherUiState())
+    private val _uiState = MutableStateFlow(LauncherUiState(brightness = readSystemBrightness(application)))
     val uiState: StateFlow<LauncherUiState> = _uiState.asStateFlow()
 
     private val prefs        = application.getSharedPreferences("launcher_prefs_v3", Context.MODE_PRIVATE)
@@ -2742,9 +2745,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         } catch (e: Exception) { e.printStackTrace() }
     }
 
+    /**
+     * Temporary, per-window brightness override (no WRITE_SETTINGS needed). It is held only in
+     * memory, so closing/restarting the app returns the screen to the system brightness.
+     */
     fun setBrightness(value: Float, context: Context) {
-        _uiState.value = _uiState.value.copy(brightness = value)
-        // Caller should apply via WindowManager.LayoutParams — no WRITE_SETTINGS needed
+        _uiState.value = _uiState.value.copy(
+            brightness = value.coerceIn(MIN_WINDOW_BRIGHTNESS, 1f),
+            brightnessOverridden = true
+        )
+    }
+
+    /** Keep the slider honest while we are NOT overriding (e.g. user changed brightness in system UI). */
+    fun syncBrightnessFromSystem(context: Context) {
+        if (_uiState.value.brightnessOverridden) return
+        val sys = readSystemBrightness(context)
+        if (kotlin.math.abs(sys - _uiState.value.brightness) > 0.005f)
+            _uiState.value = _uiState.value.copy(brightness = sys)
+    }
+
+    /** Drop the temporary override and follow the system brightness again. */
+    fun resetBrightnessToSystem(context: Context) {
+        _uiState.value = _uiState.value.copy(brightness = readSystemBrightness(context), brightnessOverridden = false)
     }
 
     fun toggleWifi() {
@@ -3165,3 +3187,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
 }
+
+
+/** Lowest per-window brightness we allow; 0f can switch the panel off on some devices. */
+internal const val MIN_WINDOW_BRIGHTNESS = 0.02f
+
+/** Current system screen brightness as 0..1 (falls back to 50% if it cannot be read). */
+internal fun readSystemBrightness(context: Context): Float = try {
+    (Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128) / 255f)
+        .coerceIn(MIN_WINDOW_BRIGHTNESS, 1f)
+} catch (e: Exception) { 0.5f }

@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.wordprocessor
 
+import io.github.norbertweb.bluebird.i18n.ui
+import io.github.norbertweb.bluebird.i18n.pluralText
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.content.Context
 import android.net.Uri
 import java.io.File
@@ -79,7 +83,7 @@ fun PhoneScreen(isDark: Boolean, initialPath: String = "") {
 
     fun notify(message: String) {
         scope.launch {
-            snackbar.showSnackbar(message)
+            snackbar.showSnackbar(ui(context, message))
         }
     }
 
@@ -259,7 +263,7 @@ fun PhoneScreen(isDark: Boolean, initialPath: String = "") {
     Surface(Modifier.fillMaxSize(), color = palette.appBackground) {
         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
             TitleBar(
-                title = doc.title.ifBlank { "Document" } + if (doc.isDirty) " *" else "",
+                title = doc.title.ifBlank { stringResource(R.string.document) } + if (doc.isDirty) " *" else "",
                 palette = palette,
                 onNew = ::createDocument,
                 onOpen = { openLauncher.launch(arrayOf("application/pdf", "text/*", "application/octet-stream", "application/zip")) },
@@ -313,11 +317,11 @@ fun PhoneScreen(isDark: Boolean, initialPath: String = "") {
 @Composable
 private fun TitleBar(title: String, palette: WordFluentPalette, onNew: () -> Unit, onOpen: () -> Unit, onSave: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(48.dp).background(palette.titleBar).padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        FluentIcon("document_text", "Document", Modifier.size(20.dp), Color.White)
+        FluentIcon("document_text", stringResource(R.string.document), Modifier.size(20.dp), Color.White)
         Text(title, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 8.dp), maxLines = 1)
-        IconButton(onClick = onNew, Modifier.size(36.dp)) { FluentIcon("add", "New", Modifier.size(19.dp), Color.White) }
-        IconButton(onClick = onOpen, Modifier.size(36.dp)) { FluentIcon("folder_open", "Open", Modifier.size(19.dp), Color.White) }
-        IconButton(onClick = onSave, Modifier.size(36.dp)) { FluentIcon("save", "Save", Modifier.size(19.dp), Color.White) }
+        IconButton(onClick = onNew, Modifier.size(36.dp)) { FluentIcon("add", ui("New"), Modifier.size(19.dp), Color.White) }
+        IconButton(onClick = onOpen, Modifier.size(36.dp)) { FluentIcon("folder_open", ui("Open"), Modifier.size(19.dp), Color.White) }
+        IconButton(onClick = onSave, Modifier.size(36.dp)) { FluentIcon("save", ui("Save"), Modifier.size(19.dp), Color.White) }
     }
 }
 
@@ -327,21 +331,21 @@ private fun TabBar(documents: List<WordDocument>, current: Int, palette: WordFlu
         documents.forEachIndexed { index, doc ->
             val selected = index == current
             Box(Modifier.padding(start = 6.dp, top = 5.dp, bottom = 0.dp).height(35.dp).clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)).background(if (selected) palette.ribbonSurface else Color.Transparent).clickable { onSelect(index) }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                Text(doc.title.ifBlank { "Untitled" } + if (doc.isDirty) " *" else "", color = palette.text, fontSize = 13.sp, maxLines = 1)
+                Text(doc.title.ifBlank { stringResource(R.string.untitled) } + if (doc.isDirty) " *" else "", color = palette.text, fontSize = 13.sp, maxLines = 1)
             }
         }
-        IconButton(onClick = onNew, Modifier.size(36.dp)) { FluentIcon("add", "New document", Modifier.size(18.dp), palette.text) }
+        IconButton(onClick = onNew, Modifier.size(36.dp)) { FluentIcon("add", stringResource(R.string.new_document), Modifier.size(18.dp), palette.text) }
     }
 }
 
 @Composable
 private fun MenuBar(menu: WordMenu?, palette: WordFluentPalette, onMenu: (WordMenu) -> Unit) {
     Row(Modifier.fillMaxWidth().height(38.dp).background(palette.ribbonBackground), verticalAlignment = Alignment.CenterVertically) {
-        listOf(WordMenu.FILE to "File", WordMenu.EDIT to "Edit", WordMenu.VIEW to "View").forEach { (m, label) ->
+        listOf(WordMenu.FILE to stringResource(R.string.file), WordMenu.EDIT to stringResource(R.string.edit), WordMenu.VIEW to stringResource(R.string.view)).forEach { (m, label) ->
             TextButton(onClick = { onMenu(m) }, modifier = Modifier.height(34.dp)) { Text(label, color = palette.text, fontSize = 13.sp) }
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = { }) { FluentIcon("settings", "Settings", Modifier.size(18.dp), palette.text) }
+        IconButton(onClick = { }) { FluentIcon("settings", stringResource(R.string.media_settings), Modifier.size(18.dp), palette.text) }
     }
     HorizontalDivider(color = palette.border)
 }
@@ -385,7 +389,7 @@ private fun MenuPanel(menu: WordMenu, palette: WordFluentPalette, onDismiss: () 
         when (menu) {
             WordMenu.FILE -> listOf("New" to onNew, "Open" to onOpen, "Save" to onSave).forEach { (label, action) -> TextButton(onClick = { action(); onDismiss() }) { Text(label, color = palette.text) } }
             WordMenu.EDIT -> listOf("Find / Replace" to onFind).forEach { (label, action) -> TextButton(onClick = { action(); onDismiss() }) { Text(label, color = palette.text) } }
-            WordMenu.VIEW -> TextButton(onClick = onDismiss) { Text("Zoom and display controls are on the toolbar", color = palette.secondaryText) }
+            WordMenu.VIEW -> TextButton(onClick = onDismiss) { Text(stringResource(R.string.zoom_and_display_controls_are_on_the), color = palette.secondaryText) }
         }
     }
 }
@@ -394,7 +398,7 @@ private fun MenuPanel(menu: WordMenu, palette: WordFluentPalette, onDismiss: () 
 private fun StatusBar(doc: WordDocument, zoom: Float, palette: WordFluentPalette, onZoom: (Float) -> Unit) {
     val text = doc.blocks.filterIsInstance<ParagraphBlock>().sumOf { it.field.text.length }
     Row(Modifier.fillMaxWidth().height(30.dp).background(palette.ribbonSurface).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("${text} characters", color = palette.secondaryText, fontSize = 11.sp, modifier = Modifier.weight(1f))
+        Text(pluralText(R.plurals.plural_characters, text), color = palette.secondaryText, fontSize = 11.sp, modifier = Modifier.weight(1f))
         Text("A4", color = palette.secondaryText, fontSize = 11.sp)
         Spacer(Modifier.width(14.dp))
         Text("${(zoom * 100).toInt()}%", color = palette.secondaryText, fontSize = 11.sp)
@@ -406,12 +410,12 @@ private fun FindBar(query: String, replacement: String, onQuery: (String) -> Uni
     // Kept as a small bottom-sheet-like surface rather than a large modal editor dialog.
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)), contentAlignment = Alignment.BottomCenter) {
         Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(12.dp)) {
-            Text("Find and replace", fontSize = 15.sp)
-            androidx.compose.material3.OutlinedTextField(query, onQuery, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Find") })
-            androidx.compose.material3.OutlinedTextField(replacement, onReplacement, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Replace with") })
+            Text(stringResource(R.string.find_and_replace), fontSize = 15.sp)
+            androidx.compose.material3.OutlinedTextField(query, onQuery, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(R.string.find)) })
+            androidx.compose.material3.OutlinedTextField(replacement, onReplacement, Modifier.fillMaxWidth(), singleLine = true, label = { Text(stringResource(R.string.replace_with)) })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onClose) { Text("Close") }
-                TextButton(onClick = onReplaceAll) { Text("Replace all") }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
+                TextButton(onClick = onReplaceAll) { Text(stringResource(R.string.replace_all)) }
             }
         }
     }

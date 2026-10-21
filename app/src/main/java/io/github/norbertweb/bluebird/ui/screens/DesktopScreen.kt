@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -67,6 +69,9 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
     // — the same way real Windows 11 Mica/Acrylic follow the desktop
     // background, instead of a manual opacity slider.
     val hazeState = rememberBluebirdHazeState()
+    // Separate state whose ONLY source is the wallpaper/desktop: app windows use it for Mica so a
+    // window never blurs other windows (real Windows 11 behaviour) and never samples itself.
+    val windowHazeState = rememberBluebirdHazeState()
     var wallpaperAccent by remember { mutableStateOf(DS.accentStart) }
 
     // Floating bluebird-style toast popups — fed by the ViewModel's one-shot
@@ -124,7 +129,8 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             viewModel = viewModel,
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState),
+                .hazeSource(state = hazeState)
+                .hazeSource(state = windowHazeState),
             bottomSafeAreaPx = if (uiState.isTaskbarVisible) taskbarHeightPx else 0f,
             onWallpaperAccent = { wallpaperAccent = it }
         )
@@ -137,6 +143,8 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             activeWindowId = uiState.activeWindowId,
             isDark = uiState.isDarkTheme,
             viewModel = viewModel,
+            hazeState = windowHazeState,
+            accent = wallpaperAccent,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp)
@@ -382,10 +390,10 @@ private fun UndoToast(
         ) {
             Text(label, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
             TextButton(onClick = onUndo) {
-                Text("Undo", color = Color(0xFF66B3FF), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(stringResource(R.string.undo), color = Color(0xFF66B3FF), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(FluentIcon.Close, contentDescription = "Dismiss", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                Icon(FluentIcon.Close, contentDescription = stringResource(R.string.common_dismiss), tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -421,19 +429,19 @@ fun PowerMenu(
             modifier = Modifier.padding(vertical = 4.dp)
         ) {
             PowerMenuItem(
-                label = "Sleep",
+                label = stringResource(R.string.sleep),
                 icon = FluentIcon.BedtimeOff,
                 textColor = textColor,
                 onClick = { onAction(PowerAction.SLEEP) }
             )
             PowerMenuItem(
-                label = "Shut down",
+                label = stringResource(R.string.shut_down_2),
                 icon = FluentIcon.Power,
                 textColor = textColor,
                 onClick = { onAction(PowerAction.SHUTDOWN) } // Corrected enum variable mapping name
             )
             PowerMenuItem(
-                label = "Restart",
+                label = stringResource(R.string.restart),
                 icon = FluentIcon.RestartAlt,
                 textColor = textColor,
                 onClick = { onAction(PowerAction.RESTART) }
@@ -508,14 +516,14 @@ fun WallpaperPickerDialog(
                     if (target == WallpaperTarget.LOCK_SCREEN) FluentIcon.Lock else FluentIcon.WallpaperIcon,
                     null, tint = bluebirdColors.AccentBlue, modifier = Modifier.size(20.dp)
                 )
-                Text(if (target == WallpaperTarget.LOCK_SCREEN) "Lock Screen Wallpaper" else "Desktop Wallpaper", fontWeight = FontWeight.Medium)
+                Text(if (target == WallpaperTarget.LOCK_SCREEN) stringResource(R.string.lock_screen_wallpaper) else stringResource(R.string.desktop_wallpaper), fontWeight = FontWeight.Medium)
             }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Choose a gradient theme:", style = MaterialTheme.typography.labelMedium, color = textColor.copy(alpha = 0.7f))
+                Text(stringResource(R.string.choose_a_gradient_theme), style = MaterialTheme.typography.labelMedium, color = textColor.copy(alpha = 0.7f))
 
-                val names = listOf("Blue Bloom", "Sunset Purple", "Forest Green", "Deep Space", "Aurora")
+                val names = listOf(stringResource(R.string.blue_bloom), stringResource(R.string.sunset_purple), stringResource(R.string.forest_green), stringResource(R.string.deep_space), stringResource(R.string.aurora))
                 wallpaperGradients.forEachIndexed { index, gradient ->
                     val isSelected = if (target == WallpaperTarget.HOME)
                         currentWallpaper.homeWallpaperIndex == index && currentWallpaper.homeWallpaperUri.isEmpty()
@@ -546,7 +554,7 @@ fun WallpaperPickerDialog(
                 }
 
                 Divider(color = textColor.copy(alpha = 0.1f))
-                Text("Or choose a custom photo:", style = MaterialTheme.typography.labelMedium, color = textColor.copy(alpha = 0.7f))
+                Text(stringResource(R.string.or_choose_a_custom_photo), style = MaterialTheme.typography.labelMedium, color = textColor.copy(alpha = 0.7f))
                 OutlinedButton(
                     onClick = onBrowse,
                     modifier = Modifier.fillMaxWidth(),
@@ -555,12 +563,12 @@ fun WallpaperPickerDialog(
                 ) {
                     Icon(FluentIcon.Image, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Browse Gallery")
+                    Text(stringResource(R.string.browse_gallery))
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.program_done)) }
         }
     )
 }
@@ -654,7 +662,7 @@ fun LockScreenOverlay(
             }
 
             Text(userProfile.userName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text("Tap anywhere to unlock", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+            Text(stringResource(R.string.tap_anywhere_to_unlock), color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
 
             Spacer(Modifier.height(8.dp))
             Icon(FluentIcon.LockOpen, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))

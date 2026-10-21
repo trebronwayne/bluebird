@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.i18n.localizedAppName
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
+
 // Icons come from the shared FluentIcon object (FluentIcon.kt), which wraps
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
@@ -59,7 +63,6 @@ import androidx.compose.ui.unit.sp
 import io.github.norbertweb.bluebird.AppInfo
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
-import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.WindowState
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
@@ -205,7 +208,7 @@ fun bluebirdTaskbar(
             // Widgets → Start → Search → app/window strip.
             TaskbarIconButton(
                 iconRes = R.drawable.ic_taskbar_widgets,
-                contentDescription = "Widgets",
+                contentDescription = stringResource(R.string.widgets),
                 isActive = uiState.isWidgetsOpen,
                 isDark = isDark,
                 onClick = { viewModel.toggleWidgets() },
@@ -250,7 +253,7 @@ fun bluebirdTaskbar(
             ) {
                 TaskbarIconButton(
                     iconRes = R.drawable.ic_taskbar_show_desktop,
-                    contentDescription = if (desktopIconsVisible) "Hide desktop icons" else "Show desktop icons",
+                    contentDescription = if (desktopIconsVisible) stringResource(R.string.hide_desktop_icons) else stringResource(R.string.show_desktop_icons),
                     isDark = isDark,
                     onClick = {
                         val next = !desktopIconsVisible
@@ -361,7 +364,7 @@ private fun StartButton(isActive: Boolean, isDark: Boolean, onClick: () -> Unit)
     ) {
         Image(
             painter = painterResource(id = R.drawable.ic_taskbar_start_logo),
-            contentDescription = "Start",
+            contentDescription = stringResource(R.string.start),
             modifier = Modifier.size(24.dp),
             contentScale = androidx.compose.ui.layout.ContentScale.Fit
         )
@@ -401,13 +404,13 @@ private fun SearchPill(isDark: Boolean, onClick: () -> Unit, onWeatherClick: () 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Image(painter = painterResource(id = R.drawable.ic_taskbar_search), contentDescription = "Search", modifier = Modifier.size(16.dp))
-        Text("Search", color = mutedText, fontSize = 12.sp)
+        Image(painter = painterResource(id = R.drawable.ic_taskbar_search), contentDescription = stringResource(R.string.search), modifier = Modifier.size(16.dp))
+        Text(stringResource(R.string.search), color = mutedText, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         // Weather icon inside the bar (like Windows' search highlights) — opens the widgets panel.
         Image(
             painter = painterResource(id = R.drawable.ic_taskbar_weather),
-            contentDescription = "Weather",
+            contentDescription = stringResource(R.string.weather),
             modifier = Modifier
                 .size(20.dp)
                 .pointerInput(Unit) { detectTapGestures(onTap = { onWeatherClick() }) }
@@ -534,7 +537,7 @@ private fun TaskbarAppIcon(
                 ) {
                     AppIconSmall(drawable = appInfo.icon, contentDescription = appInfo.name,
                         modifier = Modifier.size(18.dp).clip(RoundedCornerShape(3.dp)))
-                    Text(appInfo.name, color = textColor, fontSize = 10.sp,
+                    Text(localizedAppName(appInfo.name), color = textColor, fontSize = 10.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             } else {
@@ -548,19 +551,19 @@ private fun TaskbarAppIcon(
                 modifier = Modifier.background(menuBg)
             ) {
                 DropdownMenuItem(
-                    text = { Text("Open", color = textColor, fontSize = 12.sp) },
+                    text = { Text(stringResource(R.string.open), color = textColor, fontSize = 12.sp) },
                     onClick = { showMenu = false; onClick() },
                     leadingIcon = { Icon(imageVector = FluentIcon.Open, contentDescription = null, tint = textColor,
                         modifier = Modifier.size(13.dp)) }
                 )
                 DropdownMenuItem(
-                    text = { Text("Unpin from taskbar", color = textColor, fontSize = 12.sp) },
+                    text = { Text(stringResource(R.string.unpin_from_taskbar), color = textColor, fontSize = 12.sp) },
                     onClick = { showMenu = false; onLongClick() },
                     leadingIcon = { Icon(imageVector = FluentIcon.Pin, contentDescription = null, tint = textColor,
                         modifier = Modifier.size(13.dp)) }
                 )
                 DropdownMenuItem(
-                    text = { Text("Close window", color = DS.badgeRed, fontSize = 12.sp) },
+                    text = { Text(stringResource(R.string.close_window), color = DS.badgeRed, fontSize = 12.sp) },
                     onClick = { showMenu = false },
                     leadingIcon = { Icon(imageVector = FluentIcon.Dismiss, contentDescription = null, tint = DS.badgeRed,
                         modifier = Modifier.size(13.dp)) }
@@ -695,13 +698,13 @@ private fun SystemTray(
                                 uiState.volume < 0.5f  -> FluentIcon.Speaker1
                                 else                   -> FluentIcon.Speaker2
                             },
-                        contentDescription = "Volume",
+                        contentDescription = stringResource(R.string.media_volume),
                         tint = textColor,
                         modifier = Modifier.size(13.dp)
                     )
                 }
                 if (settings.showBattery) {
-                    Icon(imageVector = FluentIcon.Battery10, contentDescription = "Battery", tint = textColor,
+                    Icon(imageVector = FluentIcon.Battery10, contentDescription = stringResource(R.string.battery), tint = textColor,
                         modifier = Modifier.size(13.dp))
                 }
             }

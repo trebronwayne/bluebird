@@ -1,4 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
+import io.github.norbertweb.bluebird.i18n.ui
+import io.github.norbertweb.bluebird.i18n.localizedAppName
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import android.Manifest
@@ -3058,7 +3061,7 @@ fun Desktop(
                 ) {
                     PngIcon(res = R.drawable.ic_folder, modifier = Modifier.size(18.dp))
                     Text(
-                        "Desktop is full. Some items are still available in Desktop.",
+                        stringResource(R.string.desktop_is_full_some_items_are_still),
                         color = desktopTextPrimary(isDark), fontSize = 13.sp, modifier = Modifier.weight(1f)
                     )
                     TextButton(
@@ -3067,11 +3070,11 @@ fun Desktop(
                             viewModel.openWindow(LauncherScreen.FILE_EXPLORER)
                         },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) { Text("Open", color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+                    ) { Text(stringResource(R.string.open), color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
                     TextButton(
                         onClick = { showDesktopFullDialog = false },
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                    ) { Text("Dismiss", color = desktopTextSecondary(isDark), fontSize = 12.sp) }
+                    ) { Text(stringResource(R.string.common_dismiss), color = desktopTextSecondary(isDark), fontSize = 12.sp) }
                 }
             }
 
@@ -3099,7 +3102,7 @@ fun Desktop(
                 ) {
                     PngIcon(res = R.drawable.ic_folder_locked, modifier = Modifier.size(18.dp))
                     Text(
-                        "File access not granted",
+                        stringResource(R.string.file_access_not_granted),
                         color    = desktopTextPrimary(isDark),
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f)
@@ -3116,7 +3119,7 @@ fun Desktop(
                         },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text("Grant", color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.grant), color = DS.accentStart, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -3594,7 +3597,7 @@ private fun DesktopIcon(
                 )
             } else {
                 Text(
-                    text       = item.name,
+                    text       = localizedAppName(item.name),
                     color      = Color.White,
                     fontSize   = 11.5.sp,
                     lineHeight  = 14.sp,
@@ -3895,7 +3898,7 @@ fun bluebirdDesktopContextMenu(
         ) {
             Column(Modifier.padding(vertical = 5.dp)) {
                 bluebirdFlyoutRow(
-                    icon = FluentIcon.Grid, label = "View", tc = tc, tcDim = tcDim,
+                    icon = FluentIcon.Grid, label = stringResource(R.string.view), tc = tc, tcDim = tcDim,
                     isOpen = openSub == "view",
                     onToggle = { openSub = if (openSub == "view") null else "view" },
                     onCloseFlyout = { openSub = null }
@@ -3905,14 +3908,14 @@ fun bluebirdDesktopContextMenu(
                         shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
-                            W11SubRow("Large icons",  viewMode == DesktopIconSize.LARGE,  tc, accent) { onViewChange(DesktopIconSize.LARGE) }
-                            W11SubRow("Medium icons", viewMode == DesktopIconSize.MEDIUM, tc, accent) { onViewChange(DesktopIconSize.MEDIUM) }
-                            W11SubRow("Small icons",  viewMode == DesktopIconSize.SMALL,  tc, accent) { onViewChange(DesktopIconSize.SMALL) }
+                            W11SubRow(stringResource(R.string.large_icons),  viewMode == DesktopIconSize.LARGE,  tc, accent) { onViewChange(DesktopIconSize.LARGE) }
+                            W11SubRow(stringResource(R.string.medium_icons), viewMode == DesktopIconSize.MEDIUM, tc, accent) { onViewChange(DesktopIconSize.MEDIUM) }
+                            W11SubRow(stringResource(R.string.small_icons),  viewMode == DesktopIconSize.SMALL,  tc, accent) { onViewChange(DesktopIconSize.SMALL) }
                             W11CtxDivider(divColor)
-                            W11SubRow("Auto arrange icons",  autoArrange, tc, accent) { onAutoArrangeToggle(!autoArrange) }
-                            W11SubRow("Align icons to grid", alignToGrid, tc, accent) { onAlignToGridToggle(!alignToGrid) }
+                            W11SubRow(stringResource(R.string.auto_arrange_icons),  autoArrange, tc, accent) { onAutoArrangeToggle(!autoArrange) }
+                            W11SubRow(stringResource(R.string.align_icons_to_grid), alignToGrid, tc, accent) { onAlignToGridToggle(!alignToGrid) }
                             W11CtxDivider(divColor)
-                            W11SubRow("Show desktop icons", showIcons, tc, accent) { onShowIconsToggle(!showIcons) }
+                            W11SubRow(stringResource(R.string.show_desktop_icons), showIcons, tc, accent) { onShowIconsToggle(!showIcons) }
                         }
                     }
                 }
@@ -3926,7 +3929,7 @@ fun bluebirdDesktopContextMenu(
                 // Windows dims unavailable context-menu entries instead of removing
                 // them outright.
                 bluebirdFlyoutRow(
-                    icon = FluentIcon.ArrowSort, label = "Sort by", tc = tc, tcDim = tcDim,
+                    icon = FluentIcon.ArrowSort, label = stringResource(R.string.sort_by), tc = tc, tcDim = tcDim,
                     isOpen = openSub == "sort",
                     enabled = autoArrange,
                     onToggle = { openSub = if (openSub == "sort") null else "sort" },
@@ -3941,25 +3944,25 @@ fun bluebirdDesktopContextMenu(
                             // turn it on). Files stay exactly where created/pasted/dropped.
                             W11SubRow("(None)",        sortMode == DesktopSortMode.NONE,          tc, accent) { onSortChange(DesktopSortMode.NONE,          sortAscending) }
                             W11CtxDivider(divColor)
-                            W11SubRow("Name",          sortMode == DesktopSortMode.NAME,          tc, accent) { onSortChange(DesktopSortMode.NAME,          sortAscending) }
-                            W11SubRow("Size",          sortMode == DesktopSortMode.SIZE,          tc, accent) { onSortChange(DesktopSortMode.SIZE,          sortAscending) }
-                            W11SubRow("Item type",     sortMode == DesktopSortMode.TYPE,          tc, accent) { onSortChange(DesktopSortMode.TYPE,          sortAscending) }
-                            W11SubRow("Date modified", sortMode == DesktopSortMode.DATE_MODIFIED, tc, accent) { onSortChange(DesktopSortMode.DATE_MODIFIED, sortAscending) }
+                            W11SubRow(ui("Name"),          sortMode == DesktopSortMode.NAME,          tc, accent) { onSortChange(DesktopSortMode.NAME,          sortAscending) }
+                            W11SubRow(ui("Size"),          sortMode == DesktopSortMode.SIZE,          tc, accent) { onSortChange(DesktopSortMode.SIZE,          sortAscending) }
+                            W11SubRow(stringResource(R.string.item_type),     sortMode == DesktopSortMode.TYPE,          tc, accent) { onSortChange(DesktopSortMode.TYPE,          sortAscending) }
+                            W11SubRow(stringResource(R.string.date_modified), sortMode == DesktopSortMode.DATE_MODIFIED, tc, accent) { onSortChange(DesktopSortMode.DATE_MODIFIED, sortAscending) }
                             W11CtxDivider(divColor)
-                            W11SubRow("Ascending",  sortAscending,  tc, accent) { onSortChange(sortMode, true) }
-                            W11SubRow("Descending", !sortAscending, tc, accent) { onSortChange(sortMode, false) }
+                            W11SubRow(stringResource(R.string.ascending),  sortAscending,  tc, accent) { onSortChange(sortMode, true) }
+                            W11SubRow(stringResource(R.string.descending), !sortAscending, tc, accent) { onSortChange(sortMode, false) }
                         }
                     }
                 }
 
-                W11CtxRow(FluentIcon.ArrowSync,      "Refresh",          tc, tcDim) { onRefresh(); onDismiss() }
+                W11CtxRow(FluentIcon.ArrowSync,      stringResource(R.string.common_refresh),          tc, tcDim) { onRefresh(); onDismiss() }
                 W11CtxDivider(divColor)
-                W11CtxRow(FluentIcon.ClipboardPaste, "Paste",
+                W11CtxRow(FluentIcon.ClipboardPaste, stringResource(R.string.paste),
                     if (hasPaste) tc else tcDim, tcDim, enabled = hasPaste) { onPaste(); onDismiss() }
                 W11CtxDivider(divColor)
 
                 bluebirdFlyoutRow(
-                    icon = FluentIcon.Add, label = "New", tc = tc, tcDim = tcDim,
+                    icon = FluentIcon.Add, label = stringResource(R.string.new_label), tc = tc, tcDim = tcDim,
                     isOpen = openSub == "new",
                     onToggle = { openSub = if (openSub == "new") null else "new" },
                     onCloseFlyout = { openSub = null }
@@ -3969,18 +3972,18 @@ fun bluebirdDesktopContextMenu(
                         shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
-                            W11SubRowIcon(FluentIcon.Folder,      "Folder",                     Color(0xFFFFC107), tc) { onNewFolder();       onDismiss() }
-                            W11SubRowIcon(FluentIcon.Link,        "Shortcut",              DS.accentStart, tc) { onNewShortcut();      onDismiss() }
-                            W11SubRowIcon(FluentIcon.Apps,        "Add Installed App Shortcut", Color(0xFF107C10), tc) { onAddAppShortcut();   onDismiss() }
+                            W11SubRowIcon(FluentIcon.Folder,      stringResource(R.string.folder),                     Color(0xFFFFC107), tc) { onNewFolder();       onDismiss() }
+                            W11SubRowIcon(FluentIcon.Link,        stringResource(R.string.shortcut),              DS.accentStart, tc) { onNewShortcut();      onDismiss() }
+                            W11SubRowIcon(FluentIcon.Apps,        stringResource(R.string.add_installed_app_shortcut), Color(0xFF107C10), tc) { onAddAppShortcut();   onDismiss() }
                             W11CtxDivider(divColor)
-                            W11SubRowIcon(FluentIcon.DocumentText, "Text Document",              DS.accentStart, tc) { onNewTextFile();      onDismiss() }
+                            W11SubRowIcon(FluentIcon.DocumentText, stringResource(R.string.text_document),              DS.accentStart, tc) { onNewTextFile();      onDismiss() }
                         }
                     }
                 }
 
                 W11CtxDivider(divColor)
-                W11CtxRow(FluentIcon.Desktop, "Display settings", tc, tcDim) { onDisplaySettings(); onDismiss() }
-                W11CtxRow(FluentIcon.Color, "Personalise",      tc, tcDim) { onPersonalize(); onDismiss() }
+                W11CtxRow(FluentIcon.Desktop, stringResource(R.string.display_settings), tc, tcDim) { onDisplaySettings(); onDismiss() }
+                W11CtxRow(FluentIcon.Color, stringResource(R.string.personalise),      tc, tcDim) { onPersonalize(); onDismiss() }
             }
         }
     }
@@ -4039,22 +4042,22 @@ fun bluebirdIconContextMenu(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    W11QuickAction(FluentIcon.Cut,             "Cut",    tc)     { onCut();    onDismiss() }
-                    W11QuickAction(FluentIcon.Copy,            "Copy",   tc)     { onCopy();   onDismiss() }
-                    W11QuickAction(FluentIcon.Rename, "Rename", tc)     { onRename(); onDismiss() }
-                    W11QuickAction(FluentIcon.Share,                  "Share",  tc)     { onShare();  onDismiss() }
-                    W11QuickAction(FluentIcon.Delete,                 "Delete", danger) { onDelete(); onDismiss() }
+                    W11QuickAction(FluentIcon.Cut,             stringResource(R.string.cut),    tc)     { onCut();    onDismiss() }
+                    W11QuickAction(FluentIcon.Copy,            stringResource(R.string.copy),   tc)     { onCopy();   onDismiss() }
+                    W11QuickAction(FluentIcon.Rename, stringResource(R.string.rename), tc)     { onRename(); onDismiss() }
+                    W11QuickAction(FluentIcon.Share,                  stringResource(R.string.share),  tc)     { onShare();  onDismiss() }
+                    W11QuickAction(FluentIcon.Delete,                 stringResource(R.string.delete), danger) { onDelete(); onDismiss() }
                 }
 
                 W11CtxDivider(divColor)
-                W11CtxRow(FluentIcon.Open, "Open", tc, tcDim, isBold = true) { onOpen(); onDismiss() }
+                W11CtxRow(FluentIcon.Open, stringResource(R.string.open), tc, tcDim, isBold = true) { onOpen(); onDismiss() }
 
                 if (item.type == DesktopItemType.FOLDER && onPaste != null) {
-                    W11CtxRow(FluentIcon.ClipboardPaste, "Paste", tc, tcDim) { onPaste(); onDismiss() }
+                    W11CtxRow(FluentIcon.ClipboardPaste, stringResource(R.string.paste), tc, tcDim) { onPaste(); onDismiss() }
                 }
 
                 bluebirdFlyoutRow(
-                    icon = FluentIcon.Apps, label = "Open with", tc = tc, tcDim = tcDim,
+                    icon = FluentIcon.Apps, label = stringResource(R.string.open_with), tc = tc, tcDim = tcDim,
                     isOpen = openSub == "openwith",
                     onToggle = { openSub = if (openSub == "openwith") null else "openwith" },
                     onCloseFlyout = { openSub = null }
@@ -4064,26 +4067,26 @@ fun bluebirdIconContextMenu(
                         shadowElevation = 16.dp, border = BorderStroke(1.dp, borderClr)
                     ) {
                         Column(Modifier.padding(vertical = 5.dp)) {
-                            W11SubRowIcon(FluentIcon.Open, "Choose app", tc.copy(0.8f), tc) { onOpenWith(); onDismiss() }
+                            W11SubRowIcon(FluentIcon.Open, stringResource(R.string.choose_app), tc.copy(0.8f), tc) { onOpenWith(); onDismiss() }
                         }
                     }
                 }
 
                 if (item.type == DesktopItemType.APP_SHORTCUT) {
-                    W11CtxRow(FluentIcon.FolderOpen, "Open file location", tc, tcDim) { onOpenFileLocation(); onDismiss() }
+                    W11CtxRow(FluentIcon.FolderOpen, stringResource(R.string.open_file_location), tc, tcDim) { onOpenFileLocation(); onDismiss() }
                 }
 
                 // "Set as wallpaper" — only for image files
                 if (onSetAsWallpaper != null) {
                     W11CtxDivider(divColor)
-                    W11CtxRow(FluentIcon.ImageMultiple, "Set as wallpaper", tc, tcDim) { onSetAsWallpaper(); onDismiss() }
+                    W11CtxRow(FluentIcon.ImageMultiple, stringResource(R.string.set_as_wallpaper), tc, tcDim) { onSetAsWallpaper(); onDismiss() }
                 }
 
                 W11CtxDivider(divColor)
-                W11CtxRow(FluentIcon.Link,   "Create shortcut", tc,     tcDim) { onCreateShortcut(); onDismiss() }
-                W11CtxRow(FluentIcon.Delete, "Delete",          danger, tcDim) { onDelete();         onDismiss() }
+                W11CtxRow(FluentIcon.Link,   stringResource(R.string.create_shortcut_2), tc,     tcDim) { onCreateShortcut(); onDismiss() }
+                W11CtxRow(FluentIcon.Delete, stringResource(R.string.delete),          danger, tcDim) { onDelete();         onDismiss() }
                 W11CtxDivider(divColor)
-                W11CtxRow(FluentIcon.Info,   "Properties",      tc,     tcDim) { onProperties();     onDismiss() }
+                W11CtxRow(FluentIcon.Info,   stringResource(R.string.properties),      tc,     tcDim) { onProperties();     onDismiss() }
             }
         }
     }
@@ -4254,9 +4257,9 @@ fun SmartNewItemDialog(
             )
         },
         confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name.trim()) }) { Text("Create") }
+            Button(onClick = { if (name.isNotBlank()) onConfirm(name.trim()) }) { Text(stringResource(R.string.create)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } }
     )
 }
 
@@ -4285,19 +4288,19 @@ private fun Windows11ShortcutDialog(
         containerColor = bg,
         shape = bluebirdMenuCorner,
         title = {
-            Text("Create Shortcut", color = tc, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.create_shortcut), color = tc, fontSize = 18.sp, fontWeight = FontWeight.Medium)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Type the location of the item, or browse for a file or folder.",
+                    stringResource(R.string.type_the_location_of_the_item_or),
                     color = dim, fontSize = 13.sp
                 )
                 OutlinedTextField(
                     value = target,
                     onValueChange = { target = it },
-                    label = { Text("Location") },
-                    placeholder = { Text("/storage/emulated/0/Documents") },
+                    label = { Text(stringResource(R.string.location)) },
+                    placeholder = { Text(stringResource(R.string.storage_emulated_0_documents)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp)
@@ -4313,7 +4316,7 @@ private fun Windows11ShortcutDialog(
                     ) {
                         Icon(FluentIcon.Document, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Browse file")
+                        Text(stringResource(R.string.browse_file))
                     }
                     OutlinedButton(
                         onClick = { isFolder = true; onBrowseFolder() },
@@ -4322,13 +4325,13 @@ private fun Windows11ShortcutDialog(
                     ) {
                         Icon(FluentIcon.Folder, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Browse folder")
+                        Text(stringResource(R.string.browse_folder))
                     }
                 }
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("Shortcut name") },
+                    label = { Text(stringResource(R.string.shortcut_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp)
@@ -4340,10 +4343,10 @@ private fun Windows11ShortcutDialog(
                 onClick = { onConfirm(target, label, isFolder) },
                 enabled = target.isNotBlank() && label.isNotBlank(),
                 shape = RoundedCornerShape(4.dp)
-            ) { Text("Next") }
+            ) { Text(stringResource(R.string.next)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
     )
 }
@@ -4388,14 +4391,14 @@ fun AppPickerDialog(
         containerColor   = bg,
         shape            = bluebirdMenuCorner,
         title = {
-            Text("Add App Shortcut", color = tc, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.add_app_shortcut), color = tc, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         },
         text = {
             // BUG 10 FIX: fixed 360.dp height breaks LazyColumn weight; use fillMaxHeight fraction instead
             Column(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 360.dp)) {
                 OutlinedTextField(
                     value = searchQuery, onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search apps…") }, singleLine = true,
+                    placeholder = { Text(stringResource(R.string.search_apps)) }, singleLine = true,
                     leadingIcon = { Icon(imageVector = FluentIcon.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     shape = RoundedCornerShape(6.dp)
@@ -4425,7 +4428,7 @@ fun AppPickerDialog(
                         ).filter { it.first.contains(searchQuery, true) }
                     }
                     if (builtIns.isNotEmpty()) {
-                        Text("Bluebird apps", color = tc.copy(alpha = 0.6f), fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
+                        Text(stringResource(R.string.bluebird_apps), color = tc.copy(alpha = 0.6f), fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
                         builtIns.forEach { (label, screen) ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
@@ -4435,7 +4438,7 @@ fun AppPickerDialog(
                             ) {
                                 Icon(imageVector = FluentIcon.Apps, contentDescription = null, tint = DS.accentStart, modifier = Modifier.size(22.dp))
                                 Spacer(Modifier.width(10.dp))
-                                Text(label, color = tc, fontSize = 12.sp)
+                                Text(localizedAppName(label), color = tc, fontSize = 12.sp)
                             }
                         }
                     }
@@ -4448,7 +4451,7 @@ fun AppPickerDialog(
                     }
                     if (filtered.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No apps found", color = tc.copy(0.5f), fontSize = 13.sp)
+                            Text(stringResource(R.string.no_apps_found), color = tc.copy(0.5f), fontSize = 13.sp)
                         }
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f)) {
@@ -4476,7 +4479,7 @@ fun AppPickerDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = DS.accentStart) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = DS.accentStart) } }
     )
 }
 
@@ -4535,28 +4538,28 @@ fun PropertiesDialog(item: DesktopFileInfo, isDark: Boolean, onDismiss: () -> Un
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PngIcon(res = fileIconRes(item.file), modifier = Modifier.size(22.dp))
-                Text("Properties", color = tc, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(stringResource(R.string.properties), color = tc, fontWeight = FontWeight.Medium, fontSize = 14.sp)
             }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(
                     "Name"     to item.name,
-                    "Type"     to if (item.file.isDirectory) "Folder"
-                    else item.file.extension.uppercase().ifBlank { "File" },
+                    "Type"     to if (item.file.isDirectory) stringResource(R.string.folder)
+                    else item.file.extension.uppercase().ifBlank { stringResource(R.string.file) },
                     "Size"     to formatFileSize(fileSize),
                     "Location" to (item.file.parent ?: "/"),
                     "Modified" to SimpleDateFormat("yyyy-MM-dd  HH:mm:ss", Locale.getDefault())
                         .format(Date(item.file.lastModified()))
                 ).forEach { (k, v) ->
                     Row(Modifier.fillMaxWidth()) {
-                        Text(k, color = tcm, fontSize = 11.5.sp, modifier = Modifier.width(72.dp))
+                        Text(ui(k), color = tcm, fontSize = 11.5.sp, modifier = Modifier.width(72.dp))
                         Text(v, color = tc,  fontSize = 11.5.sp,
                             modifier = Modifier.weight(1f), maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         },
-        confirmButton = { Button(onClick = onDismiss) { Text("OK") } }
+        confirmButton = { Button(onClick = onDismiss) { Text(stringResource(R.string.ok)) } }
     )
 }

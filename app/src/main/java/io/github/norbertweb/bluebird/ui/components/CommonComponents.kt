@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -197,9 +199,9 @@ fun WindowTitleBar(
 
         // Window controls
         listOf(
-            Triple(FluentIcon.Minimize, "Minimize", onMinimize),
-            Triple(FluentIcon.CropSquare, "Maximize", onMaximize),
-            Triple(FluentIcon.Close, "Close", onClose)
+            Triple(FluentIcon.Minimize, stringResource(R.string.minimize), onMinimize),
+            Triple(FluentIcon.CropSquare, stringResource(R.string.maximize), onMaximize),
+            Triple(FluentIcon.Close, stringResource(R.string.close), onClose)
         ).forEachIndexed { index, (icon, desc, action) ->
             var hovered by remember { mutableStateOf(false) }
             Box(

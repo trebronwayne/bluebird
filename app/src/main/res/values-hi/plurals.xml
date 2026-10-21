@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="one">%1$d आइटम</item>
+        <item quantity="other">%1$d आइटम</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="one">%1$d ट्रैक</item>
+        <item quantity="other">%1$d ट्रैक</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="one">%1$d वीडियो</item>
+        <item quantity="other">%1$d वीडियो</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="one">%1$d फ़ोटो</item>
+        <item quantity="other">%1$d फ़ोटो</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="one">निजी ऐप सैंडबॉक्स • %1$d फ़ाइल</item>
+        <item quantity="other">निजी ऐप सैंडबॉक्स • %1$d फ़ाइल</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="one">%1$d वर्ण</item>
+        <item quantity="other">%1$d वर्ण</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="one">%1$d फ़ोटो हटाएँ?</item>
+        <item quantity="other">%1$d फ़ोटो हटाएँ?</item>
+    </plurals>
+</resources>

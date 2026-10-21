@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -283,7 +285,7 @@ private fun bluebirdToast(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    val primaryLabel = toast.actionLabel ?: if (toast.packageName != null) "Open" else null
+                    val primaryLabel = toast.actionLabel ?: if (toast.packageName != null) stringResource(R.string.open) else null
                     if (primaryLabel != null) {
                         Spacer(modifier = Modifier.height(6.dp))
                         val actionInteraction = remember { MutableInteractionSource() }
@@ -337,7 +339,7 @@ private fun bluebirdToast(
                 ) {
                     Icon(
                         imageVector = FluentIcon.Dismiss,
-                        contentDescription = "Dismiss",
+                        contentDescription = stringResource(R.string.common_dismiss),
                         tint     = textColor.copy(alpha = 0.4f),
                         modifier = Modifier.size(13.dp)
                     )

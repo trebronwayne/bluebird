@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- pending translation (English fallback) -->
+    <plurals name="plural_items">
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="other">%1$d tracks</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="other">%1$d videos</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="other">%1$d photos</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="other">Private app sandbox • %1$d files</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="other">%1$d characters</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="other">Delete %1$d photos?</item>
+    </plurals>
+</resources>

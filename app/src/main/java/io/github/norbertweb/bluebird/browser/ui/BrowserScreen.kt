@@ -13,9 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.browser.data.BrowserRepository
 import io.github.norbertweb.bluebird.browser.model.*
 import io.github.norbertweb.bluebird.browser.ui.components.FluentIcon
@@ -113,28 +115,28 @@ fun BrowserScreen(isDark1: Boolean) {
             items(tabs, key={it.id}) { tab ->
                 Surface(color=if(tab.id==activeTab.id) surface else Color.Transparent, shape=RoundedCornerShape(7.dp), modifier=Modifier.padding(2.dp).clickable { activeId=tab.id; panel=BrowserPanel.NONE }) {
                     Row(Modifier.widthIn(min=90.dp,max=170.dp).height(30.dp).padding(horizontal=8.dp), verticalAlignment=Alignment.CenterVertically) {
-                        Text(tab.title.ifBlank { "New Tab" }, color=text, fontSize=10.sp, maxLines=1, overflow=TextOverflow.Ellipsis, modifier=Modifier.weight(1f))
-                        IconButton(onClick={closeTab(tab)}, modifier=Modifier.size(22.dp)) { FluentIcon(FluentIcons.Close,"Close tab",tint=muted,modifier=Modifier.size(13.dp)) }
+                        Text(tab.title.ifBlank { stringResource(R.string.new_tab_2) }, color=text, fontSize=10.sp, maxLines=1, overflow=TextOverflow.Ellipsis, modifier=Modifier.weight(1f))
+                        IconButton(onClick={closeTab(tab)}, modifier=Modifier.size(22.dp)) { FluentIcon(FluentIcons.Close,stringResource(R.string.close_tab),tint=muted,modifier=Modifier.size(13.dp)) }
                     }
                 }
             }
-            item { IconButton(onClick={::newTab}, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.Add,"New tab",tint=text,modifier=Modifier.size(17.dp)) } }
+            item { IconButton(onClick={::newTab}, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.Add,stringResource(R.string.new_tab),tint=text,modifier=Modifier.size(17.dp)) } }
         }
 
         Row(Modifier.fillMaxWidth().height(48.dp).background(bar).padding(horizontal=7.dp), verticalAlignment=Alignment.CenterVertically) {
-            NavBtn(FluentIcons.ArrowBack, enabled=webView?.canGoBack()==true, tint=text, contentDescription="Back") { webView?.goBack() }
-            NavBtn(FluentIcons.ArrowForward, enabled=webView?.canGoForward()==true, tint=text, contentDescription="Forward") { webView?.goForward() }
-            NavBtn(if(activeTab.isLoading) FluentIcons.Close else FluentIcons.Refresh, tint=text, contentDescription="Reload") { if(activeTab.isLoading) webView?.stopLoading() else webView?.reload() }
-            BrowserTextField(value=address, onValueChange={address=it}, placeholder="Search or enter web address", textColor=text, modifier=Modifier.weight(1f).padding(horizontal=7.dp), onFocusRequest={}, onImeGo={navigate(address)}, fontSize=12.sp)
-            IconButton(onClick={::toggleBookmark}, modifier=Modifier.size(30.dp)) { FluentIcon(if(bookmarks.any{it.url==activeTab.url}) FluentIcons.Star else FluentIcons.StarBorder,"Bookmark",tint=text,modifier=Modifier.size(17.dp)) }
-            IconButton(onClick={::newTab}, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.Add,"New tab",tint=text,modifier=Modifier.size(17.dp)) }
+            NavBtn(FluentIcons.ArrowBack, enabled=webView?.canGoBack()==true, tint=text, contentDescription=stringResource(R.string.setup_back)) { webView?.goBack() }
+            NavBtn(FluentIcons.ArrowForward, enabled=webView?.canGoForward()==true, tint=text, contentDescription=stringResource(R.string.forward)) { webView?.goForward() }
+            NavBtn(if(activeTab.isLoading) FluentIcons.Close else FluentIcons.Refresh, tint=text, contentDescription=stringResource(R.string.reload)) { if(activeTab.isLoading) webView?.stopLoading() else webView?.reload() }
+            BrowserTextField(value=address, onValueChange={address=it}, placeholder=stringResource(R.string.search_or_enter_web_address), textColor=text, modifier=Modifier.weight(1f).padding(horizontal=7.dp), onFocusRequest={}, onImeGo={navigate(address)}, fontSize=12.sp)
+            IconButton(onClick={::toggleBookmark}, modifier=Modifier.size(30.dp)) { FluentIcon(if(bookmarks.any{it.url==activeTab.url}) FluentIcons.Star else FluentIcons.StarBorder,stringResource(R.string.bookmark),tint=text,modifier=Modifier.size(17.dp)) }
+            IconButton(onClick={::newTab}, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.Add,stringResource(R.string.new_tab),tint=text,modifier=Modifier.size(17.dp)) }
             Box {
-                IconButton(onClick={ menuExpanded=true }, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.MoreVert,"More",tint=text,modifier=Modifier.size(17.dp)) }
+                IconButton(onClick={ menuExpanded=true }, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.MoreVert,stringResource(R.string.more),tint=text,modifier=Modifier.size(17.dp)) }
                 DropdownMenu(expanded=menuExpanded, onDismissRequest={menuExpanded=false}) {
-                    DropdownMenuItem(text={Text("Bookmarks")}, leadingIcon={FluentIcon(FluentIcons.Star,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.BOOKMARKS})
-                    DropdownMenuItem(text={Text("History")}, leadingIcon={FluentIcon(FluentIcons.History,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.HISTORY})
-                    DropdownMenuItem(text={Text("Downloads")}, leadingIcon={FluentIcon(FluentIcons.Download,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.DOWNLOADS})
-                    DropdownMenuItem(text={Text("Settings")}, leadingIcon={FluentIcon(FluentIcons.Settings,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.SETTINGS})
+                    DropdownMenuItem(text={Text(stringResource(R.string.browser_bookmarks))}, leadingIcon={FluentIcon(FluentIcons.Star,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.BOOKMARKS})
+                    DropdownMenuItem(text={Text(stringResource(R.string.browser_history))}, leadingIcon={FluentIcon(FluentIcons.History,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.HISTORY})
+                    DropdownMenuItem(text={Text(stringResource(R.string.browser_downloads))}, leadingIcon={FluentIcon(FluentIcons.Download,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.DOWNLOADS})
+                    DropdownMenuItem(text={Text(stringResource(R.string.browser_settings))}, leadingIcon={FluentIcon(FluentIcons.Settings,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.SETTINGS})
                 }
             }
         }
@@ -175,7 +177,7 @@ fun BrowserScreen(isDark1: Boolean) {
                 )
             }
             errorMessage?.let { msg ->
-                Surface(Modifier.align(Alignment.Center).padding(24.dp), color=bar, shape=RoundedCornerShape(10.dp), tonalElevation=4.dp) { Column(Modifier.padding(18.dp), horizontalAlignment=Alignment.CenterHorizontally) { FluentIcon(FluentIcons.Warning,"Error",tint=text,modifier=Modifier.size(28.dp)); Spacer(Modifier.height(8.dp)); Text(msg,color=text,fontSize=12.sp); TextButton(onClick={errorMessage=null}){Text("Dismiss")} } }
+                Surface(Modifier.align(Alignment.Center).padding(24.dp), color=bar, shape=RoundedCornerShape(10.dp), tonalElevation=4.dp) { Column(Modifier.padding(18.dp), horizontalAlignment=Alignment.CenterHorizontally) { FluentIcon(FluentIcons.Warning,"Error",tint=text,modifier=Modifier.size(28.dp)); Spacer(Modifier.height(8.dp)); Text(msg,color=text,fontSize=12.sp); TextButton(onClick={errorMessage=null}){Text(stringResource(R.string.common_dismiss))} } }
             }
             if(panel!=BrowserPanel.NONE) {
                 Surface(Modifier.align(Alignment.CenterEnd).fillMaxHeight().widthIn(max=330.dp), color=surface, shadowElevation=8.dp) {

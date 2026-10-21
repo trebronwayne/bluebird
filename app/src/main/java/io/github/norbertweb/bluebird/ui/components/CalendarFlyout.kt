@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -133,7 +135,7 @@ fun CalendarFlyout(
                             .padding(horizontal = 9.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            "Jump to today",
+                            stringResource(R.string.jump_to_today),
                             color = bluebirdColors.AccentBlue,
                             fontSize = (8.5f * textScale).sp,
                             fontWeight = FontWeight.Bold
@@ -237,9 +239,9 @@ private fun MonthNavRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        MonthNavArrow(icon = FluentIcon.ChevronLeft, contentDescription = "Previous month", textColor = textColor, onClick = onPrev)
+        MonthNavArrow(icon = FluentIcon.ChevronLeft, contentDescription = stringResource(R.string.previous_month), textColor = textColor, onClick = onPrev)
         Text(monthYear, color = textColor, fontSize = (11f * textScale).sp, fontWeight = FontWeight.Bold)
-        MonthNavArrow(icon = FluentIcon.ChevronRight, contentDescription = "Next month", textColor = textColor, onClick = onNext)
+        MonthNavArrow(icon = FluentIcon.ChevronRight, contentDescription = stringResource(R.string.next_month), textColor = textColor, onClick = onNext)
     }
 }
 

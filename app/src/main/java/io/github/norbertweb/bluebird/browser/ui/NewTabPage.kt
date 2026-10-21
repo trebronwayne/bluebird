@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.browser.ui
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,10 +22,10 @@ fun NewTabPage(
     val text = if (isDark) Color(0xFFF3F3F3) else Color(0xFF202020)
     val muted = text.copy(alpha = .58f)
     Column(modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        FluentIcon(FluentIcons.Language, "Browser", tint = text, modifier = Modifier.size(48.dp))
+        FluentIcon(FluentIcons.Language, stringResource(R.string.browser), tint = text, modifier = Modifier.size(48.dp))
         Spacer(Modifier.height(14.dp))
-        Text("Bluebird Browser", color = text, fontSize = 22.sp)
+        Text(stringResource(R.string.bluebird_browser), color = text, fontSize = 22.sp)
         Spacer(Modifier.height(6.dp))
-        Text("A simple browser built into Bluebird OS", color = muted, fontSize = 13.sp)
+        Text(stringResource(R.string.a_simple_browser_built_into_bluebird), color = muted, fontSize = 13.sp)
     }
 }

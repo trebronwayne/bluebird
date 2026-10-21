@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -86,10 +88,10 @@ fun ProgramManagerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Program Manager", color = text, fontSize = 20.sp)
-                Text("Installed applications", color = sub, fontSize = 12.sp)
+                Text(stringResource(R.string.program_manager), color = text, fontSize = 20.sp)
+                Text(stringResource(R.string.program_installed_apps), color = sub, fontSize = 12.sp)
             }
-            Text("${apps.size} installed", color = sub, fontSize = 12.sp)
+            Text(stringResource(R.string.program_installed_count, apps.size), color = sub, fontSize = 12.sp)
         }
         HorizontalDivider()
 
@@ -97,8 +99,8 @@ fun ProgramManagerScreen(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(FluentIcon.Apps, null, tint = sub, modifier = Modifier.size(42.dp))
-                    Text("No packaged applications installed", color = text)
-                    Text("Install a .bpk package to see it here.", color = sub, fontSize = 12.sp)
+                    Text(stringResource(R.string.program_none_installed), color = text)
+                    Text(stringResource(R.string.program_install_bpk_hint), color = sub, fontSize = 12.sp)
                 }
             }
         } else {
@@ -138,18 +140,18 @@ fun ProgramManagerScreen(
                                         scope.launch {
                                             runCatching { viewModel.reinstallBpkApplicationAndWait(app.id) }
                                                 .onSuccess { refresh() }
-                                                .onFailure { message = it.message ?: "Reinstall failed" }
+                                                .onFailure { message = it.message ?: context.getString(R.string.program_reinstall_failed) }
                                             busyId = null
                                         }
-                                    } else message = "${app.name} does not have a cached package for reinstall."
+                                    } else message = context.getString(R.string.program_no_cached_package, app.name)
                                 }) { Icon(FluentIcon.Refresh, null, tint = text) }
                                 IconButton(onClick = { uninstallTarget = app }) { Icon(FluentIcon.Delete, null, tint = text) }
                             }
                         }
                         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { permissionsTarget = app }) { Text("Permissions") }
-                            TextButton(onClick = { logsTarget = app; logsText = BpkAppLogger(context).read(app.id) }) { Text("View logs") }
-                            TextButton(onClick = { dataTarget = app }) { Text("Private data") }
+                            TextButton(onClick = { permissionsTarget = app }) { Text(stringResource(R.string.program_permissions)) }
+                            TextButton(onClick = { logsTarget = app; logsText = BpkAppLogger(context).read(app.id) }) { Text(stringResource(R.string.program_view_logs)) }
+                            TextButton(onClick = { dataTarget = app }) { Text(stringResource(R.string.program_private_data)) }
                         }
                     }
                 }
@@ -175,10 +177,10 @@ fun ProgramManagerScreen(
         val granted = manager.granted(app.id)
         AlertDialog(
             onDismissRequest = { permissionsTarget = null },
-            title = { Text("${app.name} permissions") },
+            title = { Text(context.getString(R.string.program_permissions) + ": " + app.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Only capabilities granted here are available through Bluebird's BPK API.", fontSize = 12.sp)
+                    Text(stringResource(R.string.only_capabilities_granted_here_are), fontSize = 12.sp)
                     BpkCapability.all.forEach { capability ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.Checkbox(
@@ -190,26 +192,26 @@ fun ProgramManagerScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { permissionsTarget = null }) { Text("Done") } },
-            dismissButton = { TextButton(onClick = { manager.reset(app.id); permissionRefresh++; permissionsTarget = null }) { Text("Reset") } }
+            confirmButton = { TextButton(onClick = { permissionsTarget = null }) { Text(stringResource(R.string.program_done)) } },
+            dismissButton = { TextButton(onClick = { manager.reset(app.id); permissionRefresh++; permissionsTarget = null }) { Text(stringResource(R.string.program_reset)) } }
         )
     }
 
     logsTarget?.let { app ->
         AlertDialog(
             onDismissRequest = { logsTarget = null },
-            title = { Text("${app.name} logs") },
+            title = { Text(context.getString(R.string.program_view_logs) + ": " + app.name) },
             text = { Text(logsText, fontSize = 11.sp, maxLines = 24) },
-            confirmButton = { TextButton(onClick = { logsText = BpkAppLogger(context).read(app.id) }) { Text("Refresh") } },
-            dismissButton = { TextButton(onClick = { BpkAppLogger(context).clear(app.id); logsText = "Logs cleared." }) { Text("Clear logs") } }
+            confirmButton = { TextButton(onClick = { logsText = BpkAppLogger(context).read(app.id) }) { Text(stringResource(R.string.program_refresh)) } },
+            dismissButton = { TextButton(onClick = { BpkAppLogger(context).clear(app.id); logsText = context.getString(R.string.program_logs_cleared) }) { Text(stringResource(R.string.program_clear_logs)) } }
         )
     }
 
     uninstallTarget?.let { app ->
         AlertDialog(
             onDismissRequest = { uninstallTarget = null },
-            title = { Text("Uninstall ${app.name}?") },
-            text = { Text("This removes the installed application files. Private app data and logs are retained so you can recover them; delete them separately from Program Manager or File Explorer.") },
+            title = { Text(stringResource(R.string.program_uninstall_title, app.name)) },
+            text = { Text(stringResource(R.string.program_uninstall_message)) },
             confirmButton = {
                 Button(onClick = {
                     uninstallTarget = null
@@ -220,13 +222,13 @@ fun ProgramManagerScreen(
                             .onFailure { message = it.message ?: "Uninstall failed" }
                         busyId = null
                     }
-                }) { Text("Uninstall") }
+                }) { Text(stringResource(R.string.program_uninstall)) }
             },
-            dismissButton = { TextButton(onClick = { uninstallTarget = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { uninstallTarget = null }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 
     message?.let { msg ->
-        AlertDialog(onDismissRequest = { message = null }, text = { Text(msg) }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } })
+        AlertDialog(onDismissRequest = { message = null }, text = { Text(msg) }, confirmButton = { TextButton(onClick = { message = null }) { Text(stringResource(R.string.program_ok)) } })
     }
 }

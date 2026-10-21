@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -74,7 +76,7 @@ fun PowerMenuButton(
         ) {
             Icon(
                 imageVector = FluentIcon.Power,
-                contentDescription = "Power options",
+                contentDescription = stringResource(R.string.power_options),
                 tint = if (showPowerMenu) DS.accentStart else textPrimary.copy(alpha = 0.7f),
                 modifier = Modifier.size(16.dp)
             )
@@ -92,11 +94,11 @@ fun PowerMenuButton(
                 .background(panelBackground, panelShape)
                 .border(1.dp, panelBorder, panelShape)
         ) {
-            PowerMenuItem(label = "Restart", icon = FluentIcon.ArrowSync, isDark = isDark) {
+            PowerMenuItem(label = stringResource(R.string.restart), icon = FluentIcon.ArrowSync, isDark = isDark) {
                 showPowerMenu = false
                 restartBluebird(context)
             }
-            PowerMenuItem(label = "Shut Down", icon = FluentIcon.Power, isDark = isDark) {
+            PowerMenuItem(label = stringResource(R.string.shut_down), icon = FluentIcon.Power, isDark = isDark) {
                 showPowerMenu = false
                 shutDownBluebird(context)
             }

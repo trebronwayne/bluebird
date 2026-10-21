@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -90,14 +92,14 @@ fun ActionCenter(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "Quick Settings",
+                    stringResource(R.string.quick_settings),
                     color = textColor,
                     fontSize = (13f * textScale).sp,
                     fontWeight = FontWeight.Bold
                 )
                 SmallActionIcon(
                     icon = FluentIcon.Settings,
-                    contentDescription = "Settings",
+                    contentDescription = stringResource(R.string.media_settings),
                     isDark = isDark,
                     onClick = { viewModel.openWindow(LauncherScreen.SETTINGS) }
                 )
@@ -160,7 +162,7 @@ fun ActionCenter(
                     uiState.volume < 0.5f -> FluentIcon.Speaker1
                     else -> FluentIcon.Speaker2
                 },
-                label = "Volume",
+                label = stringResource(R.string.media_volume),
                 value = uiState.volume,
                 isDark = isDark,
                 textColor = textColor,
@@ -170,7 +172,7 @@ fun ActionCenter(
             Spacer(Modifier.height(4.dp))
             CompactSliderSection(
                 icon = FluentIcon.BrightnessHigh,
-                label = "Brightness",
+                label = stringResource(R.string.brightness),
                 value = uiState.brightness,
                 isDark = isDark,
                 textColor = textColor,
@@ -394,7 +396,7 @@ private fun BatterySection(
                         level > 20 -> FluentIcon.Battery3
                         else       -> FluentIcon.Battery0
                     },
-            contentDescription = "Battery",
+            contentDescription = stringResource(R.string.battery),
             tint     = batteryColor,
             modifier = Modifier.size(22.dp)
         )
@@ -404,7 +406,7 @@ private fun BatterySection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "$level% — ${if (charging) "Charging" else "On Battery"}",
+                    text = stringResource(if (charging) R.string.battery_level_charging else R.string.battery_level_on_battery, level),
                     color = textColor,
                     fontSize = (12 * textScale).sp,
                     fontWeight = FontWeight.Medium

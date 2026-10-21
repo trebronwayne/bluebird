@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.R
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,6 +16,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -129,7 +132,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 modifier = Modifier.size(20.dp)
             )
             Text(
-                "Recycle Bin",
+                stringResource(R.string.recycle_bin),
                 color = textColor,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
@@ -139,7 +142,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
             Box {
                 var showSortMenu by remember { mutableStateOf(false) }
                 IconButton(onClick = { showSortMenu = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(FluentIcon.SortByAlpha, contentDescription = "Sort", tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                    Icon(FluentIcon.SortByAlpha, contentDescription = stringResource(R.string.sort), tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                 }
                 DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                     listOf("name", "date", "size", "type").forEach { sort ->
@@ -176,7 +179,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 ) {
                     Icon(FluentIcon.Restore, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Restore all", fontSize = 12.sp)
+                    Text(stringResource(R.string.restore_all), fontSize = 12.sp)
                 }
             }
 
@@ -190,7 +193,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 ) {
                     Icon(FluentIcon.DeleteForever, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Empty Bin", fontSize = 12.sp)
+                    Text(stringResource(R.string.empty_bin), fontSize = 12.sp)
                 }
             }
         }
@@ -206,7 +209,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "${selectedIds.size} selected",
+                    stringResource(R.string.selected, selectedIds.size),
                     color = textColor,
                     fontSize = 12.sp
                 )
@@ -216,7 +219,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 }) {
                     Icon(FluentIcon.Restore, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Restore", fontSize = 12.sp)
+                    Text(stringResource(R.string.restore), fontSize = 12.sp)
                 }
                 TextButton(onClick = {
                     selectedIds.forEach { viewModel.permanentlyDelete(it) }
@@ -224,7 +227,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 }) {
                     Icon(FluentIcon.DeleteForever, null, tint = bluebirdColors.DangerRed, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Delete permanently", color = bluebirdColors.DangerRed, fontSize = 12.sp)
+                    Text(stringResource(R.string.delete_permanently), color = bluebirdColors.DangerRed, fontSize = 12.sp)
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = { selectedIds = emptySet() }, modifier = Modifier.size(20.dp)) {
@@ -241,10 +244,10 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Name", color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.weight(1f))
-            Text("Original Location", color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(180.dp))
-            Text("Date Deleted", color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(120.dp))
-            Text("Size", color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(60.dp))
+            Text(stringResource(R.string.name), color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.original_location), color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(180.dp))
+            Text(stringResource(R.string.date_deleted), color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(120.dp))
+            Text(stringResource(R.string.size), color = textColor.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.width(60.dp))
         }
 
         // ── Item list ──
@@ -264,12 +267,12 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         modifier = Modifier.size(80.dp)
                     )
                     Text(
-                        "Recycle Bin is empty",
+                        stringResource(R.string.recycle_bin_empty),
                         color = textColor.copy(alpha = 0.4f),
                         fontSize = 16.sp
                     )
                     Text(
-                        "Items you delete in bluebird will appear here",
+                        stringResource(R.string.recycle_bin_description),
                         color = textColor.copy(alpha = 0.3f),
                         fontSize = 13.sp
                     )
@@ -301,8 +304,8 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
     if (showEmptyDialog) {
         AlertDialog(
             onDismissRequest = { showEmptyDialog = false },
-            title = { Text("Empty Recycle Bin") },
-            text = { Text("Permanently delete all ${items.size} items? This cannot be undone.") },
+            title = { Text(stringResource(R.string.empty_recycle_bin_title)) },
+            text = { Text(stringResource(R.string.empty_bin_confirm, items.size)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -310,10 +313,10 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         showEmptyDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = bluebirdColors.DangerRed)
-                ) { Text("Empty") }
+                ) { Text(stringResource(R.string.empty_bin)) }
             },
             dismissButton = {
-                TextButton(onClick = { showEmptyDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showEmptyDialog = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -366,7 +369,7 @@ private fun RecycleBinItemRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "From: ${item.originalPath.substringBeforeLast("/")}",
+                stringResource(R.string.recycle_from, item.originalPath.substringBeforeLast("/")),
                 color = textColor.copy(alpha = 0.4f),
                 fontSize = 10.sp,
                 maxLines = 1,
@@ -413,7 +416,7 @@ private fun RecycleBinItemRow(
                 onDismissRequest = { showContextMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Restore") },
+                    text = { Text(stringResource(R.string.restore)) },
                     onClick = {
                         showContextMenu = false
                         onRestore()
@@ -428,7 +431,7 @@ private fun RecycleBinItemRow(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Delete permanently", color = bluebirdColors.DangerRed) },
+                    text = { Text(stringResource(R.string.delete_permanently), color = bluebirdColors.DangerRed) },
                     onClick = {
                         showContextMenu = false
                         onPermanentDelete()

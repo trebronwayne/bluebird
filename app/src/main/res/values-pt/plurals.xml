@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="one">%1$d item</item>
+        <item quantity="many">%1$d de itens</item>
+        <item quantity="other">%1$d itens</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="one">%1$d faixa</item>
+        <item quantity="many">%1$d de faixas</item>
+        <item quantity="other">%1$d faixas</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="one">%1$d vídeo</item>
+        <item quantity="many">%1$d de vídeos</item>
+        <item quantity="other">%1$d vídeos</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="one">%1$d foto</item>
+        <item quantity="many">%1$d de fotos</item>
+        <item quantity="other">%1$d fotos</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="one">Sandbox privada do aplicativo • %1$d arquivo</item>
+        <item quantity="many">Sandbox privada do aplicativo • %1$d de arquivos</item>
+        <item quantity="other">Sandbox privada do aplicativo • %1$d arquivos</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="one">%1$d caractere</item>
+        <item quantity="many">%1$d de caracteres</item>
+        <item quantity="other">%1$d caracteres</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="one">Excluir %1$d foto?</item>
+        <item quantity="many">Excluir %1$d de fotos?</item>
+        <item quantity="other">Excluir %1$d fotos?</item>
+    </plurals>
+</resources>

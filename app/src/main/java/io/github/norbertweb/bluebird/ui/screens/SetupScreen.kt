@@ -44,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -66,6 +67,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -105,6 +108,9 @@ import fluent.ui.system.icons.regular.WeatherMoon
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.ui.components.DS
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
+import io.github.norbertweb.bluebird.i18n.BluebirdLanguages
+import io.github.norbertweb.bluebird.i18n.BluebirdLanguage
+import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 
@@ -161,13 +167,14 @@ private data class PermissionItem(
     val isManageAllFiles: Boolean = false
 )
 
-private data class StepMeta(val icon: ImageVector, val label: String, val subtitle: String)
+private data class StepMeta(val icon: ImageVector, val labelRes: Int, val subtitleRes: Int)
 
 private val stepMeta = listOf(
-    StepMeta(SetupFI.Home, "Welcome", "Meet Bluebird"),
-    StepMeta(SetupFI.Lock, "Access", "Permissions & storage"),
-    StepMeta(SetupFI.Person, "Profile", "Your identity"),
-    StepMeta(SetupFI.Image, "Finish", "Make it yours")
+    StepMeta(SetupFI.Settings, R.string.setup_step_language, R.string.setup_step_language_subtitle),
+    StepMeta(SetupFI.Home, R.string.setup_step_welcome, R.string.setup_step_welcome_subtitle),
+    StepMeta(SetupFI.Lock, R.string.setup_step_access, R.string.setup_step_access_subtitle),
+    StepMeta(SetupFI.Person, R.string.setup_step_profile, R.string.setup_step_profile_subtitle),
+    StepMeta(SetupFI.Image, R.string.setup_step_finish, R.string.setup_step_finish_subtitle)
 )
 
 private enum class StepState { DONE, ACTIVE, UPCOMING }
@@ -189,7 +196,7 @@ fun SetupScreen(
     viewModel: LauncherViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val step = uiState.setupStep.coerceIn(0, 3)
+    val step = uiState.setupStep.coerceIn(0, 4)
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val isTablet = configuration.smallestScreenWidthDp >= 600
@@ -197,8 +204,16 @@ fun SetupScreen(
     var setupCompleted by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf<PermissionItem?>(null) }
 
+    // Resolve localized permission copy in composition before constructing the permission list.
+    val mediaTitle = stringResource(R.string.setup_permission_media_title)
+    val mediaDescription = stringResource(R.string.setup_permission_media_desc)
+    val notificationsTitle = stringResource(R.string.setup_permission_notifications_title)
+    val notificationsDescription = stringResource(R.string.setup_permission_notifications_desc)
+    val filesTitle = stringResource(R.string.setup_permission_files_title)
+    val filesDescription = stringResource(R.string.setup_permission_files_desc)
+
     // Only permissions used by real Bluebird functionality are presented here.
-    val permissionItems = remember {
+    val permissionItems = remember(mediaTitle, mediaDescription, notificationsTitle, notificationsDescription, filesTitle, filesDescription) {
         val mediaPerms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             listOf(
                 Manifest.permission.READ_MEDIA_IMAGES,
@@ -212,8 +227,8 @@ fun SetupScreen(
         buildList {
             add(
                 PermissionItem(
-                    title = "Photos, videos & audio",
-                    description = "Lets Bluebird apps browse media when you choose to use those features.",
+                    title = mediaTitle,
+                    description = mediaDescription,
                     icon = SetupFI.FolderOpen,
                     permissions = mediaPerms,
                     optional = true
@@ -222,8 +237,8 @@ fun SetupScreen(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(
                     PermissionItem(
-                        title = "Notifications",
-                        description = "Only used to show media playback controls and track updates in the notification shade while you're using the media player.",
+                        title = notificationsTitle,
+                        description = notificationsDescription,
                         icon = SetupFI.Notifications,
                         permissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
                         optional = true
@@ -233,8 +248,8 @@ fun SetupScreen(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 add(
                     PermissionItem(
-                        title = "All files access",
-                        description = "Optional advanced storage access for desktop-style file management and local file operations.",
+                        title = filesTitle,
+                        description = filesDescription,
                         icon = SetupFI.Storage,
                         permissions = emptyList(),
                         optional = true,
@@ -434,13 +449,13 @@ fun SetupScreen(
             AlertDialog(
                 onDismissRequest = { showPermissionRationale = null },
                 icon = { Icon(item.icon, contentDescription = null, tint = primary) },
-                title = { Text("${item.title} permission needed") },
+                title = { Text(stringResource(R.string.setup_permission_needed, item.title)) },
                 text = {
                     Text(
                         if (item.optional)
-                            "This permission is optional. Without it, some features related to ${item.title.lowercase()} will not be available. You can grant it later in Android Settings."
+                            stringResource(R.string.setup_optional_permission_desc, item.title.lowercase())
                         else
-                            "${item.title} access is required for core features. Please grant it in Android Settings to continue.",
+                            stringResource(R.string.setup_required_permission_desc, item.title),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -450,10 +465,10 @@ fun SetupScreen(
                         context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                             data = Uri.parse("package:${context.packageName}")
                         })
-                    }) { Text("Open Settings") }
+                    }) { Text(stringResource(R.string.setup_open_settings)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showPermissionRationale = null }) { Text("Dismiss") }
+                    TextButton(onClick = { showPermissionRationale = null }) { Text(stringResource(R.string.setup_dismiss)) }
                 }
             )
         }
@@ -483,8 +498,15 @@ private fun StepContent(
     // slide+fade transition, out of step with the rest of the app having
     // its motion removed everywhere else.
     when (step) {
-        0 -> WelcomeStep(onNext = { viewModel.advanceSetupStep() })
-        1 -> PermissionsStep(
+        // Language is intentionally the first-run screen so users can read setup
+        // in their preferred language before reaching the welcome and permission steps.
+        0 -> LanguageSelectionStep(
+            onNext = { viewModel.advanceSetupStep() },
+            onBack = onBack,
+            showBack = false
+        )
+        1 -> WelcomeStep(onNext = { viewModel.advanceSetupStep() })
+        2 -> PermissionsStep(
             permissionItems = permissionItems,
             grantedStates = grantedStates,
             autoRequestingItem = autoRequestingItem,
@@ -492,13 +514,13 @@ private fun StepContent(
             onNext = { viewModel.advanceSetupStep() },
             onBack = onBack
         )
-        2 -> UsernameStep(
+        3 -> UsernameStep(
             currentName = uiState.userProfile.userName,
             onNameChange = { viewModel.setUserName(it) },
             onNext = { viewModel.advanceSetupStep() },
             onBack = onBack
         )
-        3 -> AvatarStep(
+        4 -> AvatarStep(
             context = context,
             onAvatarPicked = { viewModel.setProfilePicture(context, it) },
             onNext = { onSetupCompleted() },
@@ -540,8 +562,8 @@ private fun TopStepBar(currentStep: Int, total: Int) {
                     Icon(SetupFI.Home, null, tint = primary, modifier = Modifier.size(18.dp))
                 }
                 Column {
-                    Text("Bluebird setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                    Text(stepMeta[currentStep].label, style = MaterialTheme.typography.labelSmall, color = textSecondary)
+                    Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                    Text(stringResource(stepMeta[currentStep].labelRes), style = MaterialTheme.typography.labelSmall, color = textSecondary)
                 }
             }
             Text("${currentStep + 1} / $total", style = MaterialTheme.typography.labelMedium, color = textSecondary)
@@ -581,8 +603,8 @@ private fun LeftSidebar(currentStep: Int, modifier: Modifier = Modifier) {
                     Icon(SetupFI.Home, null, tint = primary, modifier = Modifier.size(24.dp))
                 }
                 Column {
-                    Text("Bluebird", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                    Text("Setup", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                    Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.labelSmall, color = textSecondary)
                 }
             }
             Spacer(Modifier.height(28.dp))
@@ -594,8 +616,8 @@ private fun LeftSidebar(currentStep: Int, modifier: Modifier = Modifier) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             HorizontalDivider(color = border, thickness = 0.5.dp, modifier = Modifier.padding(bottom = 10.dp))
-            Text("Bluebird ", style = MaterialTheme.typography.labelSmall, color = textPrimary)
-            Text("A desktop launcher experience for Android", style = MaterialTheme.typography.labelSmall, color = textSecondary)
+            Text(stringResource(R.string.bluebird), style = MaterialTheme.typography.labelSmall, color = textPrimary)
+            Text(stringResource(R.string.setup_brand_subtitle), style = MaterialTheme.typography.labelSmall, color = textSecondary)
         }
     }
 }
@@ -623,8 +645,8 @@ private fun SidebarStepItem(index: Int, meta: StepMeta, state: StepState) {
             else Text("${index + 1}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = if (state == StepState.UPCOMING) textSecondary else primary)
         }
         Column(Modifier.weight(1f)) {
-            Text(meta.label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = if (state == StepState.UPCOMING) textSecondary else textPrimary)
-            Text(meta.subtitle, style = MaterialTheme.typography.labelSmall, color = textSecondary)
+            Text(stringResource(meta.labelRes), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = if (state == StepState.UPCOMING) textSecondary else textPrimary)
+            Text(stringResource(meta.subtitleRes), style = MaterialTheme.typography.labelSmall, color = textSecondary)
         }
         if (state == StepState.ACTIVE) Icon(SetupFI.ChevronRight, null, tint = primary, modifier = Modifier.size(16.dp))
     }
@@ -678,6 +700,131 @@ private fun StepContainer(
 // ─────────────────────────────────────────────────────────
 
 @Composable
+private fun LanguageSelectionStep(onNext: () -> Unit, onBack: () -> Unit, showBack: Boolean = true) {
+    val context = LocalContext.current
+    val dark = isSystemInDarkTheme()
+    val textPrimary = setupTextPrimary(dark)
+    val textSecondary = setupTextSecondary(dark)
+    val panel = setupPanel(dark)
+    val border = setupBorder(dark)
+    val savedTag = BluebirdLanguages.selectedTag(context)
+    var selectedTag by remember(savedTag) { mutableStateOf(savedTag ?: "system") }
+    var query by remember { mutableStateOf("") }
+    val filteredLanguages = remember(query) {
+        BluebirdLanguages.all.filter { language ->
+            language.nativeName.contains(query, ignoreCase = true) ||
+                language.englishName.contains(query, ignoreCase = true) ||
+                language.tag.contains(query, ignoreCase = true)
+        }
+    }
+    val systemLocale = Locale.getDefault()
+    val systemLanguageName = systemLocale.getDisplayName(systemLocale).replaceFirstChar { it.uppercase(systemLocale) }
+
+    StepContainer(
+        title = stringResource(R.string.setup_language_title),
+        subtitle = stringResource(R.string.setup_language_subtitle),
+        icon = SetupFI.Settings
+    ) {
+        Text(
+            stringResource(R.string.setup_language_system_hint, systemLanguageName),
+            style = MaterialTheme.typography.bodyMedium,
+            color = textSecondary
+        )
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text(stringResource(R.string.setup_language_search)) }
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LanguageSetupOption(
+                title = stringResource(R.string.language_system_default),
+                subtitle = stringResource(R.string.setup_language_system_auto, systemLanguageName),
+                selected = selectedTag == "system",
+                panel = panel,
+                border = border,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                onClick = { selectedTag = "system" }
+            )
+            filteredLanguages.forEach { language ->
+                LanguageSetupOption(
+                    title = language.nativeName,
+                    subtitle = language.englishName,
+                    selected = selectedTag == language.tag,
+                    panel = panel,
+                    border = border,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary,
+                    onClick = { selectedTag = language.tag }
+                )
+            }
+            if (filteredLanguages.isEmpty()) {
+                Text(
+                    stringResource(R.string.language_no_results),
+                    modifier = Modifier.padding(12.dp),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (showBack) {
+                TextButton(onClick = onBack, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.setup_back))
+                }
+            }
+            PrimaryButton(
+                text = stringResource(R.string.setup_language_continue),
+                icon = SetupFI.ArrowForward,
+                onClick = {
+                    BluebirdLanguages.saveSelection(context, selectedTag.takeUnless { it == "system" })
+                    onNext()
+                    context.findSetupActivity()?.recreate()
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageSetupOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    panel: Color,
+    border: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(if (selected) setupPrimary().copy(alpha = 0.10f) else panel)
+            .border(if (selected) 1.dp else 0.7.dp, if (selected) setupPrimary().copy(alpha = 0.65f) else border, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = textPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+            Text(subtitle, color = textSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+        RadioButton(selected = selected, onClick = onClick)
+    }
+}
+
+private tailrec fun android.content.Context.findSetupActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findSetupActivity()
+    else -> null
+}
+
+@Composable
 private fun WelcomeStep(onNext: () -> Unit) {
     val dark = isSystemInDarkTheme()
     val panel = setupPanel(dark)
@@ -685,19 +832,19 @@ private fun WelcomeStep(onNext: () -> Unit) {
     val textPrimary = setupTextPrimary(dark)
     val textSecondary = setupTextSecondary(dark)
     StepContainer(
-        title = "Welcome to Bluebird",
-        subtitle = "A modern desktop-style launcher experience for Android, tuned for a clean and responsive first run.",
+        title = stringResource(R.string.setup_welcome_title),
+        subtitle = stringResource(R.string.setup_welcome_subtitle),
         icon = SetupFI.Home
     ) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(panel).border(1.dp,border,RoundedCornerShape(14.dp)).padding(18.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("A few things to get ready", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                Text("Bluebird will guide you through access and profile settings. You stay in control of every permission.", style = MaterialTheme.typography.bodySmall, color = textSecondary, lineHeight = 19.sp)
+                Text(stringResource(R.string.setup_get_ready), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                Text(stringResource(R.string.setup_control_permissions), style = MaterialTheme.typography.bodySmall, color = textSecondary, lineHeight = 19.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        SetupFI.Dashboard to "Desktop styled UI",
-                        SetupFI.FolderOpen to "Real file and media access",
-                        SetupFI.Person to "A personal Bluebird profile"
+                        SetupFI.Dashboard to stringResource(R.string.setup_feature_desktop),
+                        SetupFI.FolderOpen to stringResource(R.string.setup_feature_media),
+                        SetupFI.Person to stringResource(R.string.setup_feature_profile)
                     ).forEach { (icon, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(icon, null, tint = setupPrimary(), modifier = Modifier.size(18.dp))
@@ -707,7 +854,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
                 }
             }
         }
-        PrimaryButton("Get started", SetupFI.ArrowForward, onClick = onNext)
+        PrimaryButton(stringResource(R.string.setup_get_started), SetupFI.ArrowForward, onClick = onNext)
     }
 }
 
@@ -785,7 +932,7 @@ private fun PermissionCard(
 
             if (isRequesting) {
                 Text(
-                    text = "Requesting…",
+                    text = stringResource(R.string.setup_requesting),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = primary,
@@ -793,7 +940,7 @@ private fun PermissionCard(
                 )
             } else if (isOptional) {
                 Text(
-                    text = "Optional",
+                    text = stringResource(R.string.setup_optional),
                     style = MaterialTheme.typography.labelSmall,
                     color = textSecondary
                 )
@@ -803,7 +950,7 @@ private fun PermissionCard(
         if (isGranted) {
             Icon(
                 imageVector = SetupFI.CheckCircle,
-                contentDescription = "Granted",
+                contentDescription = stringResource(R.string.setup_granted),
                 tint = primary,
                 modifier = Modifier.size(22.dp)
             )
@@ -841,8 +988,8 @@ private fun PermissionsStep(
     onBack: () -> Unit
 ) {
     StepContainer(
-        title = "Give Bluebird the access it needs",
-        subtitle = "Bluebird will ask for each permission in turn — just respond to the system prompt as it appears. Optional access can be skipped and enabled later from Android Settings.",
+        title = stringResource(R.string.setup_access_title),
+        subtitle = stringResource(R.string.setup_access_subtitle),
         icon = SetupFI.Lock
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -855,9 +1002,9 @@ private fun PermissionsStep(
                     isOptional = item.optional,
                     isRequesting = autoRequestingItem?.title == item.title,
                     grantLabel = when {
-                        grantedStates[item.title] == true -> "Granted"
-                        item.isManageAllFiles -> "Open settings"
-                        else -> "Allow"
+                        grantedStates[item.title] == true -> stringResource(R.string.setup_granted)
+                        item.isManageAllFiles -> stringResource(R.string.setup_open_settings_short)
+                        else -> stringResource(R.string.setup_allow)
                     },
                     onGrant = {
                         // While the auto-sequence is driving requests, block manual
@@ -872,8 +1019,8 @@ private fun PermissionsStep(
                 )
             }
         }
-        PrimaryButton("Continue", SetupFI.ArrowForward, onClick = onNext)
-        SecondaryButton("Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
+        PrimaryButton(stringResource(R.string.setup_continue), SetupFI.ArrowForward, onClick = onNext)
+        SecondaryButton(stringResource(R.string.setup_back), onClick = onBack, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -895,13 +1042,13 @@ private fun UsernameStep(
     val colorScheme = MaterialTheme.colorScheme
 
     StepContainer(
-        title = "What's your name?",
-        subtitle = "This appears on your lock screen and home screen greeting. You can change it later in Settings.",
+        title = stringResource(R.string.setup_name_title),
+        subtitle = stringResource(R.string.setup_name_subtitle),
         icon = SetupFI.Person
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                "Display name",
+                stringResource(R.string.setup_display_name),
                 style = MaterialTheme.typography.labelMedium,
                 color = colorScheme.onSurface
             )
@@ -933,7 +1080,7 @@ private fun UsernameStep(
                         unfocusedContainerColor = Color.Transparent,
                     ),
                     placeholder = {
-                        Text("e.g. Mirembe Comfort", color = colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.setup_name_example), color = colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     },
                     singleLine = true,
                     leadingIcon = {
@@ -941,14 +1088,14 @@ private fun UsernameStep(
                     },
                     trailingIcon = {
                         if (name.isNotEmpty()) {
-                            Icon(SetupFI.CheckCircle, contentDescription = "Name entered", tint = colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Icon(SetupFI.CheckCircle, contentDescription = stringResource(R.string.setup_name_entered), tint = colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                     }
                 )
             }
 
             Text(
-                "Can be changed later in Settings",
+                stringResource(R.string.setup_name_later),
                 style = MaterialTheme.typography.labelSmall,
                 color = colorScheme.onSurfaceVariant
             )
@@ -957,7 +1104,7 @@ private fun UsernameStep(
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PrimaryButton(
-                text = "Continue",
+                text = stringResource(R.string.setup_continue),
                 icon = SetupFI.ArrowForward,
                 enabled = name.isNotBlank(),
                 onClick = {
@@ -965,7 +1112,7 @@ private fun UsernameStep(
                     onNext()
                 }
             )
-            SecondaryButton("Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
+            SecondaryButton(stringResource(R.string.setup_back), onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -994,8 +1141,8 @@ private fun AvatarStep(
     }
 
     StepContainer(
-        title = "Add a profile photo",
-        subtitle = "Choose an image from your gallery. Bluebird does not need camera access for your profile picture.",
+        title = stringResource(R.string.setup_photo_title),
+        subtitle = stringResource(R.string.setup_photo_subtitle),
         icon = SetupFI.Image
     ) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1007,11 +1154,11 @@ private fun AvatarStep(
                 contentAlignment = Alignment.Center
             ) {
                 if (selectedUri != null) {
-                    AsyncImage(model = selectedUri, contentDescription = "Selected profile photo", modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                    AsyncImage(model = selectedUri, contentDescription = stringResource(R.string.setup_photo_selected), modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(SetupFI.PhotoLibrary, null, tint = setupPrimary(), modifier = Modifier.size(28.dp))
-                        Text("Choose image", style = MaterialTheme.typography.labelSmall, color = setupPrimary())
+                        Text(stringResource(R.string.setup_choose_image), style = MaterialTheme.typography.labelSmall, color = setupPrimary())
                     }
                 }
             }
@@ -1024,13 +1171,13 @@ private fun AvatarStep(
             .padding(vertical = 13.dp), contentAlignment = Alignment.Center) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(SetupFI.PhotoLibrary, null, tint = colorScheme.primary, modifier = Modifier.size(19.dp))
-                Text("Choose from gallery", style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
+                Text(stringResource(R.string.setup_choose_gallery), style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
             }
         }
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(text = if (selectedUri != null) "Continue" else "Skip for now", icon = if (selectedUri != null) SetupFI.Check else SetupFI.SkipNext, onClick = onNext)
-            SecondaryButton("Back", onClick = onBack, modifier = Modifier.fillMaxWidth())
+            PrimaryButton(text = if (selectedUri != null) stringResource(R.string.setup_continue) else stringResource(R.string.setup_skip_now), icon = if (selectedUri != null) SetupFI.Check else SetupFI.SkipNext, onClick = onNext)
+            SecondaryButton(stringResource(R.string.setup_back), onClick = onBack, modifier = Modifier.fillMaxWidth())
         }
     }
 }

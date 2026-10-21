@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
 
     // Context wrapper — handles Views and XML inflation outside Compose
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(DesktopModeHelper.buildDesktopContext(base))
+        val desktopContext = DesktopModeHelper.buildDesktopContext(base)
+        super.attachBaseContext(io.github.norbertweb.bluebird.i18n.BluebirdLanguages.wrapContext(desktopContext))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,9 +75,13 @@ class MainActivity : ComponentActivity() {
                 viewModel.checkForUpdateTip(updateTipText = null)
             }
 
-            LaunchedEffect(uiState.brightness) {
+            // Apply the brightness override ONLY while the user has moved the Action Center
+            // slider; otherwise follow the system. The override lives in memory only, so an
+            // app restart always returns to the system's brightness.
+            LaunchedEffect(uiState.brightness, uiState.brightnessOverridden) {
                 window?.attributes = window?.attributes?.apply {
-                    screenBrightness = uiState.brightness
+                    screenBrightness = if (uiState.brightnessOverridden) uiState.brightness
+                    else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                 }
             }
 
@@ -152,8 +157,11 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideSystemBars()
 
+        viewModel.syncBrightnessFromSystem(this)
+        val state = viewModel.uiState.value
         window?.attributes = window?.attributes?.apply {
-            screenBrightness = viewModel.uiState.value.brightness
+            screenBrightness = if (state.brightnessOverridden) state.brightness
+            else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
     }
 

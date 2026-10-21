@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="zero">%1$d عنصر</item>
+        <item quantity="one">عنصر واحد</item>
+        <item quantity="two">عنصران</item>
+        <item quantity="few">%1$d عناصر</item>
+        <item quantity="many">%1$d عنصرًا</item>
+        <item quantity="other">%1$d عنصر</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="zero">%1$d مقطع</item>
+        <item quantity="one">مقطع واحد</item>
+        <item quantity="two">مقطعان</item>
+        <item quantity="few">%1$d مقاطع</item>
+        <item quantity="many">%1$d مقطعًا</item>
+        <item quantity="other">%1$d مقطع</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="zero">%1$d فيديو</item>
+        <item quantity="one">فيديو واحد</item>
+        <item quantity="two">فيديوهان</item>
+        <item quantity="few">%1$d فيديوهات</item>
+        <item quantity="many">%1$d فيديو</item>
+        <item quantity="other">%1$d فيديو</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="zero">%1$d صورة</item>
+        <item quantity="one">صورة واحدة</item>
+        <item quantity="two">صورتان</item>
+        <item quantity="few">%1$d صور</item>
+        <item quantity="many">%1$d صورة</item>
+        <item quantity="other">%1$d صورة</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="zero">صندوق حماية خاص بالتطبيق • %1$d ملف</item>
+        <item quantity="one">صندوق حماية خاص بالتطبيق • ملف واحد</item>
+        <item quantity="two">صندوق حماية خاص بالتطبيق • ملفان</item>
+        <item quantity="few">صندوق حماية خاص بالتطبيق • %1$d ملفات</item>
+        <item quantity="many">صندوق حماية خاص بالتطبيق • %1$d ملفًا</item>
+        <item quantity="other">صندوق حماية خاص بالتطبيق • %1$d ملف</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="zero">%1$d حرف</item>
+        <item quantity="one">حرف واحد</item>
+        <item quantity="two">حرفان</item>
+        <item quantity="few">%1$d أحرف</item>
+        <item quantity="many">%1$d حرفًا</item>
+        <item quantity="other">%1$d حرف</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="zero">حذف %1$d صورة؟</item>
+        <item quantity="one">حذف صورة واحدة؟</item>
+        <item quantity="two">حذف الصورتين؟</item>
+        <item quantity="few">حذف %1$d صور؟</item>
+        <item quantity="many">حذف %1$d صورة؟</item>
+        <item quantity="other">حذف %1$d صورة؟</item>
+    </plurals>
+</resources>

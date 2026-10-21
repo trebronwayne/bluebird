@@ -4,6 +4,10 @@ package io.github.norbertweb.bluebird.ui.components
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
 //     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
+import io.github.norbertweb.bluebird.i18n.pluralText
+import io.github.norbertweb.bluebird.i18n.localizedAppName
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -201,6 +205,9 @@ fun WindowManager(
     activeWindowId: String?,
     isDark: Boolean, // kept for source compatibility with existing call sites; ignored — see below
     viewModel: LauncherViewModel,
+    /** Haze state whose ONLY source is the desktop wallpaper — used for per-window Mica. */
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
+    accent: Color = DS.accentStart,
     modifier: Modifier = Modifier
 ) {
     // Single source of truth for light/dark (see Theme.kt / LocalIsDarkTheme)
@@ -238,6 +245,8 @@ fun WindowManager(
                             isActive    = window.id == activeWindowId,
                             isDark      = effectiveIsDark,
                             viewModel   = viewModel,
+                            hazeState   = hazeState,
+                            accent      = accent,
                             onClose     = { viewModel.closeWindow(window.id) },
                             onMinimize  = { viewModel.minimizeWindow(window.id) },
                             onMaximize  = { viewModel.maximizeWindow(window.id) },
@@ -264,7 +273,9 @@ fun FloatingWindow(
     onClose: () -> Unit,
     onMinimize: () -> Unit,
     onMaximize: () -> Unit,
-    onFocus: () -> Unit
+    onFocus: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
+    accent: Color = DS.accentStart
 ) {
     val density = LocalDensity.current
 
@@ -323,6 +334,9 @@ fun FloatingWindow(
 
     val elevation = if (isActive) 24.dp else 8.dp
     val windowBg = if (isDark) DS.surfaceDark else DS.surfaceLight
+    // Windows 11: the focused window shows live Mica (wallpaper-sampled); inactive windows fall
+    // back to a flat colour. Only apps that are Mica-aware opt in (see screenUsesMica).
+    val micaOn = hazeState != null && isActive && screenUsesMica(windowState.screen)
     val borderColor = if (isActive)
         bluebirdColors.AccentBlue.copy(alpha = if (isSnapping) 0.9f else 0.45f)
     else
@@ -372,7 +386,10 @@ fun FloatingWindow(
                 .graphicsLayer { alpha = windowOpacity }
                 .shadow(elevation, RoundedCornerShape(animCorner))
                 .clip(RoundedCornerShape(animCorner))
-                .background(windowBg, RoundedCornerShape(animCorner))
+                .then(
+                    if (micaOn) Modifier.windowMicaBackdrop(hazeState!!, accent, isDark, RoundedCornerShape(animCorner))
+                    else Modifier.background(windowBg, RoundedCornerShape(animCorner))
+                )
                 .border(borderWidth, borderColor, RoundedCornerShape(animCorner))
                 .pointerInput(Unit) {
                     detectTapGestures(onPress = { onFocus() })
@@ -432,7 +449,8 @@ fun FloatingWindow(
                     LocalWindowRuntime provides WindowRuntimeState(
                         isMinimized = windowState.isMinimized,
                         isActive = isActive
-                    )
+                    ),
+                    LocalMicaBackdrop provides micaOn
                 ) {
                     WindowContent(
                         windowState     = windowState,
@@ -607,7 +625,7 @@ private fun SnapLayoutPicker(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text       = "Snap Layout",
+                text       = stringResource(R.string.snap_layout),
                 color      = if (isDark) bluebirdColors.TextPrimary.copy(0.7f) else bluebirdColors.TextPrimaryLight,
                 fontSize   = 11.sp,
                 fontWeight = FontWeight.Medium,
@@ -616,10 +634,10 @@ private fun SnapLayoutPicker(
 
             // Row 1 — halves
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                SnapCell(label = "Left ½",   color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.LEFT_HALF) })
-                SnapCell(label = "Right ½",  color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.RIGHT_HALF) })
-                SnapCell(label = "Top ½",    color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.TOP_HALF) })
-                SnapCell(label = "Bottom ½", color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.BOTTOM_HALF) })
+                SnapCell(label = stringResource(R.string.left),   color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.LEFT_HALF) })
+                SnapCell(label = stringResource(R.string.right),  color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.RIGHT_HALF) })
+                SnapCell(label = stringResource(R.string.top),    color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.TOP_HALF) })
+                SnapCell(label = stringResource(R.string.bottom), color = cell, hover = hover, onClick = { onLayoutSelected(SnapLayout.BOTTOM_HALF) })
             }
             // Row 2 — quarters
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -630,7 +648,7 @@ private fun SnapLayoutPicker(
             }
             // Row 3 — center wide
             Row {
-                SnapCell(label = "Center ⅔", color = cell, hover = hover,
+                SnapCell(label = stringResource(R.string.center), color = cell, hover = hover,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { onLayoutSelected(SnapLayout.CENTER_TWO_THIRDS) })
             }
@@ -708,19 +726,19 @@ private fun WindowContextMenu(
             .pointerInput(Unit) { detectTapGestures { /* absorb */ } }
     ) {
         Column {
-            ContextMenuItem("Minimize",       itemCol, onClick = onMinimize)
-            if (canMaximize) ContextMenuItem("Maximize / Restore", itemCol, onClick = onMaximize)
-            ContextMenuItem("Picture-in-Picture 📌", itemCol, onClick = onPip)
+            ContextMenuItem(stringResource(R.string.minimize),       itemCol, onClick = onMinimize)
+            if (canMaximize) ContextMenuItem(stringResource(R.string.maximize_restore), itemCol, onClick = onMaximize)
+            ContextMenuItem(stringResource(R.string.picture_in_picture), itemCol, onClick = onPip)
             Box(Modifier.fillMaxWidth().height(1.dp).background(divider).padding(vertical = 2.dp))
             ContextMenuItem(
-                label   = if (alwaysOnTop) "✓ Always on Top" else "Always on Top",
+                label   = if (alwaysOnTop) "✓ Always on Top" else stringResource(R.string.always_on_top),
                 color   = itemCol,
                 onClick = onToggleAlwaysOnTop
             )
             Box(Modifier.fillMaxWidth().height(1.dp).background(divider).padding(vertical = 2.dp))
             // Opacity slider
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Text("Opacity: ${(windowOpacity * 100).toInt()}%",
+                Text(stringResource(R.string.opacity, (windowOpacity * 100).toInt()),
                     color = itemCol.copy(alpha = 0.7f), fontSize = 11.sp)
                 // Simple tap-based opacity steps (full slider requires Material3 Slider)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
@@ -741,7 +759,7 @@ private fun WindowContextMenu(
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(divider).padding(vertical = 2.dp))
-            ContextMenuItem("Close",          DS.badgeRed, onClick = onClose)
+            ContextMenuItem(stringResource(R.string.close),          DS.badgeRed, onClick = onClose)
         }
     }
 }
@@ -801,7 +819,7 @@ private fun PipThumbnail(
             // falling back to iconForKey()'s Fluent glyph.
             PngIcon(res = windowIconRes(windowState.iconKey), modifier = Modifier.size(28.dp))
             Spacer(Modifier.height(4.dp))
-            Text(windowState.title, fontSize = 10.sp,
+            Text(localizedAppName(windowState.title), fontSize = 10.sp,
                 color = if (isDark) bluebirdColors.TextPrimary.copy(0.6f) else bluebirdColors.TextPrimaryLight.copy(0.6f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(6.dp))
@@ -812,7 +830,7 @@ private fun PipThumbnail(
                     .padding(horizontal = 10.dp, vertical = 4.dp)
                     .pointerInput(Unit) { detectTapGestures { onExpand() } }
             ) {
-                Text("Expand", fontSize = 9.sp, color = Color.White)
+                Text(stringResource(R.string.expand), fontSize = 9.sp, color = Color.White)
             }
         }
     }
@@ -1083,7 +1101,8 @@ fun WindowTitleBar(
     onSnapPickerToggle: () -> Unit,
     onClose: () -> Unit
 ) {
-    val barBg   = if (isDark) DS.surfaceDark else DS.surfaceLight
+    // Transparent over a live Mica backdrop (Windows 11 title bars are part of the Mica surface).
+    val barBg   = micaOr(if (isDark) DS.surfaceDark else DS.surfaceLight)
     val textCol = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val bmpIcon = rememberWindowBitmapIcon(customIconPath)
 
@@ -1260,14 +1279,13 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
     ) {
         if (jobs.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No file operations in progress", color = tcDim, fontSize = 13.sp)
+                Text(stringResource(R.string.no_file_operations_in_progress), color = tcDim, fontSize = 13.sp)
             }
             return@Column
         }
         jobs.forEach { job ->
             key(job.id) {
-                val verb = if (job.operation == CopyOpType.MOVE) "Moving" else "Copying"
-                val destName = File(job.destDir).name.ifBlank { "Desktop" }
+                val destName = File(job.destDir).name.ifBlank { stringResource(R.string.desktop) }
                 val rawProgress = if (job.totalBytes > 0) (job.copiedBytes.toFloat() / job.totalBytes).coerceIn(0f, 1f) else 0f
                 val progress by animateFloatAsState(
                     targetValue = rawProgress,
@@ -1287,11 +1305,11 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = when (job.status) {
-                                    CopyJobStatus.SCANNING  -> "Preparing to ${verb.lowercase()}…"
-                                    CopyJobStatus.RUNNING   -> "$verb ${job.sourceNames.size} item${if (job.sourceNames.size != 1) "s" else ""} to $destName"
-                                    CopyJobStatus.DONE      -> "${if (job.operation == CopyOpType.MOVE) "Moved" else "Copied"} to $destName"
-                                    CopyJobStatus.CANCELLED -> "Cancelled"
-                                    CopyJobStatus.ERROR     -> "Couldn't complete — ${job.error ?: "error"}"
+                                    CopyJobStatus.SCANNING  -> stringResource(if (job.operation == CopyOpType.MOVE) R.string.copy_preparing_move else R.string.copy_preparing_copy)
+                                    CopyJobStatus.RUNNING   -> stringResource(if (job.operation == CopyOpType.MOVE) R.string.copy_running_move else R.string.copy_running_copy, pluralText(R.plurals.plural_items, job.sourceNames.size), destName)
+                                    CopyJobStatus.DONE      -> stringResource(if (job.operation == CopyOpType.MOVE) R.string.copy_done_move else R.string.copy_done_copy, destName)
+                                    CopyJobStatus.CANCELLED -> stringResource(R.string.cancelled)
+                                    CopyJobStatus.ERROR     -> stringResource(R.string.copy_error, job.error ?: "error")
                                 },
                                 color = tc, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -1305,11 +1323,11 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                         }
                         if (job.status == CopyJobStatus.RUNNING || job.status == CopyJobStatus.SCANNING) {
                             IconButton(onClick = { viewModel.cancelCopyJob(job.id) }, modifier = Modifier.size(28.dp)) {
-                                Icon(imageVector = FluentIcon.Dismiss, contentDescription = "Cancel", tint = tcDim, modifier = Modifier.size(16.dp))
+                                Icon(imageVector = FluentIcon.Dismiss, contentDescription = stringResource(R.string.cancel), tint = tcDim, modifier = Modifier.size(16.dp))
                             }
                         } else {
                             IconButton(onClick = { viewModel.dismissCopyJob(job.id) }, modifier = Modifier.size(28.dp)) {
-                                Icon(imageVector = FluentIcon.Dismiss, contentDescription = "Dismiss", tint = tcDim, modifier = Modifier.size(16.dp))
+                                Icon(imageVector = FluentIcon.Dismiss, contentDescription = stringResource(R.string.common_dismiss), tint = tcDim, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -1378,7 +1396,7 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        "Throughput", color = tcDim, fontSize = 9.sp
+                                        stringResource(R.string.throughput), color = tcDim, fontSize = 9.sp
                                     )
                                     Text(
                                         "${formatBytesShort(job.speedBytesPerSec)}/s", color = DS.accentStart, fontSize = 9.sp
@@ -1391,8 +1409,7 @@ fun CopyProgressScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    "${formatBytesShort(job.copiedBytes)} of ${formatBytesShort(job.totalBytes)} " +
-                                        "(${job.filesDone}/${job.totalFiles} items)",
+                                    stringResource(R.string.copy_progress_detail, formatBytesShort(job.copiedBytes), formatBytesShort(job.totalBytes), job.filesDone, job.totalFiles),
                                     color = tcDim, fontSize = 10.sp
                                 )
                                 Text(

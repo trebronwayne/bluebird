@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -124,7 +126,7 @@ fun MobileHomeView(
         }
 
         if (pinnedApps.isNotEmpty() || pinnedBuiltInApps.isNotEmpty()) {
-            item { MobileSectionHeader("Pinned", isDark) }
+            item { MobileSectionHeader(stringResource(R.string.pinned), isDark) }
             items(pinnedApps.chunked(4), key = { "pinned_row_" + it.joinToString { a -> a.packageName } }) { row ->
                 MobileAppRow(row, isDark, onClick = { openApp(it) })
             }
@@ -136,13 +138,13 @@ fun MobileHomeView(
             item { Spacer(Modifier.height(10.dp)) }
         }
 
-        item { MobileSectionHeader("System", isDark) }
+        item { MobileSectionHeader(stringResource(R.string.system), isDark) }
         items(builtInApps.chunked(4), key = { "sys_row_" + it.joinToString { s -> s.first } }) { row ->
             MobileBuiltInAppRow(row, isDark, onClick = { viewModel.openWindow(it) })
         }
         item { Spacer(Modifier.height(10.dp)) }
 
-        item { MobileSectionHeader("All Apps", isDark) }
+        item { MobileSectionHeader(stringResource(R.string.all_apps_2), isDark) }
         grouped.forEach { (letter, apps) ->
             item(key = "letter_$letter") {
                 Text(
@@ -178,7 +180,7 @@ private fun MobileRecentBar(apps: List<AppInfo>, isDark: Boolean, onClick: (AppI
             .padding(vertical = 10.dp, horizontal = 4.dp)
     ) {
         Text(
-            "Recent",
+            stringResource(R.string.recent),
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = textPrimary.copy(alpha = 0.7f),

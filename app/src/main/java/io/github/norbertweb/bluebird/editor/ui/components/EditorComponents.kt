@@ -1,5 +1,8 @@
 package io.github.norbertweb.bluebird.editor.ui.components
 
+import io.github.norbertweb.bluebird.ui.components.micaOr
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +45,7 @@ import io.github.norbertweb.bluebird.ui.components.FluentIcon
 @Composable
 fun NotepadTabBar(s: PremiumEditorState, c: EditorColors, onNew: () -> Unit, onClose: (Int) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(44.dp).background(c.chrome),
+        Modifier.fillMaxWidth().height(44.dp).background(micaOr(c.chrome)),
         verticalAlignment = Alignment.Bottom
     ) {
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.Bottom) {
@@ -50,7 +53,7 @@ fun NotepadTabBar(s: PremiumEditorState, c: EditorColors, onNew: () -> Unit, onC
                 val active = index == s.activeTabIndex
                 Row(
                     Modifier.widthIn(min = 132.dp, max = 230.dp).height(40.dp)
-                        .background(if (active) c.activeTab else c.chrome, RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp))
+                        .background(if (active) c.activeTab else micaOr(c.chrome), RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp))
                         .clickable { s.selectTab(index) }
                         .padding(start = 12.dp, end = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -64,11 +67,11 @@ fun NotepadTabBar(s: PremiumEditorState, c: EditorColors, onNew: () -> Unit, onC
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
-                    Icon(FluentIcon.Close, "Close", tint = c.secondaryText, modifier = Modifier.size(16.dp).clickable { onClose(index) }.padding(2.dp))
+                    Icon(FluentIcon.Close, stringResource(R.string.close), tint = c.secondaryText, modifier = Modifier.size(16.dp).clickable { onClose(index) }.padding(2.dp))
                 }
             }
         }
-        Icon(FluentIcon.Add, "New tab", tint = c.text, modifier = Modifier.size(40.dp).padding(11.dp).clickable { onNew() })
+        Icon(FluentIcon.Add, stringResource(R.string.new_tab), tint = c.text, modifier = Modifier.size(40.dp).padding(11.dp).clickable { onNew() })
     }
 }
 
@@ -86,34 +89,34 @@ fun NotepadMenuBar(
     onCut: () -> Unit,
     onPaste: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().height(42.dp).background(c.chrome), verticalAlignment = Alignment.CenterVertically) {
-        Menu("File", c) {
-            MenuItem("New tab", FluentIcon.Add, onNew)
-            MenuItem("Open", FluentIcon.FolderOpen, onOpen)
-            MenuItem("Save", FluentIcon.Save, onSave)
-            MenuItem("Save as", FluentIcon.SaveAs, onSaveAs)
-            MenuItem("Close tab", FluentIcon.Close, onClose)
-            MenuItem("Exit", null, onExit)
+    Row(Modifier.fillMaxWidth().height(42.dp).background(micaOr(c.chrome)), verticalAlignment = Alignment.CenterVertically) {
+        Menu(stringResource(R.string.file), c) {
+            MenuItem(stringResource(R.string.new_tab), FluentIcon.Add, onNew)
+            MenuItem(stringResource(R.string.open), FluentIcon.FolderOpen, onOpen)
+            MenuItem(stringResource(R.string.save), FluentIcon.Save, onSave)
+            MenuItem(stringResource(R.string.save_as), FluentIcon.SaveAs, onSaveAs)
+            MenuItem(stringResource(R.string.close_tab), FluentIcon.Close, onClose)
+            MenuItem(stringResource(R.string.exit), null, onExit)
         }
-        Menu("Edit", c) {
-            MenuItem("Undo", FluentIcon.Undo, s::undo)
-            MenuItem("Redo", FluentIcon.Redo, s::redo)
-            MenuItem("Cut", FluentIcon.ContentCut, onCut)
-            MenuItem("Copy", FluentIcon.ContentCopy, onCopy)
-            MenuItem("Paste", FluentIcon.ContentPaste, onPaste)
-            MenuItem("Find", FluentIcon.Search) { s.findVisible = true }
-            MenuItem("Replace", FluentIcon.FindReplace) { s.findVisible = true }
-            MenuItem("Select all", FluentIcon.SelectAll, s::selectAll)
+        Menu(stringResource(R.string.edit), c) {
+            MenuItem(stringResource(R.string.undo), FluentIcon.Undo, s::undo)
+            MenuItem(stringResource(R.string.redo), FluentIcon.Redo, s::redo)
+            MenuItem(stringResource(R.string.cut), FluentIcon.ContentCut, onCut)
+            MenuItem(stringResource(R.string.copy), FluentIcon.ContentCopy, onCopy)
+            MenuItem(stringResource(R.string.paste), FluentIcon.ContentPaste, onPaste)
+            MenuItem(stringResource(R.string.find), FluentIcon.Search) { s.findVisible = true }
+            MenuItem(stringResource(R.string.replace), FluentIcon.FindReplace) { s.findVisible = true }
+            MenuItem(stringResource(R.string.select_all), FluentIcon.SelectAll, s::selectAll)
         }
-        Menu("View", c) {
-            MenuCheckItem("Word wrap", s.settings.wordWrap, c) { s.updateSettings { copy(wordWrap = !wordWrap) } }
-            MenuCheckItem("Status bar", s.settings.showStatusBar, c) { s.updateSettings { copy(showStatusBar = !showStatusBar) } }
-            MenuItem("Zoom in", FluentIcon.ZoomIn) { s.updateSettings { copy(fontSize = (fontSize + 1f).coerceAtMost(32f)) } }
-            MenuItem("Zoom out", FluentIcon.ZoomOut) { s.updateSettings { copy(fontSize = (fontSize - 1f).coerceAtLeast(9f)) } }
-            MenuItem("Reset zoom", FluentIcon.Restore) { s.updateSettings { copy(fontSize = 14f) } }
+        Menu(stringResource(R.string.view), c) {
+            MenuCheckItem(stringResource(R.string.word_wrap), s.settings.wordWrap, c) { s.updateSettings { copy(wordWrap = !wordWrap) } }
+            MenuCheckItem(stringResource(R.string.status_bar), s.settings.showStatusBar, c) { s.updateSettings { copy(showStatusBar = !showStatusBar) } }
+            MenuItem(stringResource(R.string.zoom_in), FluentIcon.ZoomIn) { s.updateSettings { copy(fontSize = (fontSize + 1f).coerceAtMost(32f)) } }
+            MenuItem(stringResource(R.string.zoom_out), FluentIcon.ZoomOut) { s.updateSettings { copy(fontSize = (fontSize - 1f).coerceAtLeast(9f)) } }
+            MenuItem(stringResource(R.string.reset_zoom), FluentIcon.Restore) { s.updateSettings { copy(fontSize = 14f) } }
         }
         Spacer(Modifier.weight(1f))
-        Icon(FluentIcon.Settings, "Settings", tint = c.text, modifier = Modifier.size(40.dp).padding(11.dp).clickable { s.showSettings = true })
+        Icon(FluentIcon.Settings, stringResource(R.string.media_settings), tint = c.text, modifier = Modifier.size(40.dp).padding(11.dp).clickable { s.showSettings = true })
     }
 }
 
@@ -160,7 +163,7 @@ fun FindBar(s: PremiumEditorState, c: EditorColors, onDismiss: () -> Unit) {
             value = s.findQuery,
             onValueChange = { s.findQuery = it },
             singleLine = true,
-            placeholder = { Text("Find") },
+            placeholder = { Text(stringResource(R.string.find)) },
             modifier = Modifier.widthIn(min = 170.dp, max = 300.dp).weight(1f)
         )
         Spacer(Modifier.width(6.dp))
@@ -168,21 +171,21 @@ fun FindBar(s: PremiumEditorState, c: EditorColors, onDismiss: () -> Unit) {
             value = s.replaceQuery,
             onValueChange = { s.replaceQuery = it },
             singleLine = true,
-            placeholder = { Text("Replace") },
+            placeholder = { Text(stringResource(R.string.replace)) },
             modifier = Modifier.widthIn(min = 150.dp, max = 260.dp).weight(1f)
         )
-        Icon(FluentIcon.NavigateBefore, "Previous", tint = c.text, modifier = Modifier.size(36.dp).padding(8.dp).clickable { s.findPrevious() })
-        Icon(FluentIcon.NavigateNext, "Next", tint = c.text, modifier = Modifier.size(36.dp).padding(8.dp).clickable { s.findNext() })
-        TextButton(onClick = s::replaceAll) { Text("Replace all", fontSize = 12.sp) }
-        Icon(FluentIcon.Close, "Close", tint = c.text, modifier = Modifier.size(36.dp).padding(9.dp).clickable(onClick = onDismiss))
+        Icon(FluentIcon.NavigateBefore, stringResource(R.string.previous), tint = c.text, modifier = Modifier.size(36.dp).padding(8.dp).clickable { s.findPrevious() })
+        Icon(FluentIcon.NavigateNext, stringResource(R.string.next), tint = c.text, modifier = Modifier.size(36.dp).padding(8.dp).clickable { s.findNext() })
+        TextButton(onClick = s::replaceAll) { Text(stringResource(R.string.replace_all), fontSize = 12.sp) }
+        Icon(FluentIcon.Close, stringResource(R.string.close), tint = c.text, modifier = Modifier.size(36.dp).padding(9.dp).clickable(onClick = onDismiss))
     }
 }
 
 @Composable
 fun NotepadStatusBar(s: PremiumEditorState, c: EditorColors) {
     if (!s.settings.showStatusBar) return
-    Row(Modifier.fillMaxWidth().height(32.dp).background(c.status).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Ln ${s.currentLine}, Col ${s.currentColumn}", color = c.secondaryText, fontSize = 11.sp)
+    Row(Modifier.fillMaxWidth().height(32.dp).background(micaOr(c.status)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.ln_col, s.currentLine, s.currentColumn), color = c.secondaryText, fontSize = 11.sp)
         Spacer(Modifier.weight(1f))
         Text("${s.settings.fontSize.toInt()}%", color = c.secondaryText, fontSize = 11.sp)
         Spacer(Modifier.width(18.dp))
@@ -197,17 +200,17 @@ fun SettingsDialog(s: PremiumEditorState, c: EditorColors) {
     if (!s.showSettings) return
     AlertDialog(
         onDismissRequest = { s.showSettings = false },
-        title = { Text("Notepad settings", fontWeight = FontWeight.SemiBold) },
+        title = { Text(stringResource(R.string.notepad_settings), fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Font size", fontSize = 13.sp)
+                Text(stringResource(R.string.font_size), fontSize = 13.sp)
                 Slider(value = s.settings.fontSize, onValueChange = { s.updateSettings { copy(fontSize = it) } }, valueRange = 9f..32f, steps = 22)
                 Text("${s.settings.fontSize.toInt()} sp", fontSize = 12.sp)
-                TextButton(onClick = { s.updateSettings { copy(wordWrap = !wordWrap) } }) { Text("Word wrap: ${if (s.settings.wordWrap) "On" else "Off"}") }
-                TextButton(onClick = { s.updateSettings { copy(showStatusBar = !showStatusBar) } }) { Text("Status bar: ${if (s.settings.showStatusBar) "On" else "Off"}") }
+                TextButton(onClick = { s.updateSettings { copy(wordWrap = !wordWrap) } }) { Text(stringResource(R.string.word_wrap_state, stringResource(if (s.settings.wordWrap) R.string.state_on else R.string.state_off))) }
+                TextButton(onClick = { s.updateSettings { copy(showStatusBar = !showStatusBar) } }) { Text(stringResource(R.string.status_bar_state, stringResource(if (s.settings.showStatusBar) R.string.state_on else R.string.state_off))) }
             }
         },
-        confirmButton = { TextButton(onClick = { s.showSettings = false }) { Text("Done") } }
+        confirmButton = { TextButton(onClick = { s.showSettings = false }) { Text(stringResource(R.string.program_done)) } }
     )
 }
 
@@ -216,9 +219,9 @@ fun UnsavedChangesDialog(s: PremiumEditorState, onSave: () -> Unit, onDiscard: (
     if (!s.showUnsavedDialog) return
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Save changes?") },
-        text = { Text("Your changes to ${s.activeTab.fileName} haven't been saved.") },
-        confirmButton = { TextButton(onClick = onSave) { Text("Save") } },
-        dismissButton = { Row { TextButton(onClick = onDiscard) { Text("Don't save") }; TextButton(onClick = onCancel) { Text("Cancel") } } }
+        title = { Text(stringResource(R.string.save_changes)) },
+        text = { Text(stringResource(R.string.your_changes_to_havent_been_saved, s.activeTab.fileName)) },
+        confirmButton = { TextButton(onClick = onSave) { Text(stringResource(R.string.save)) } },
+        dismissButton = { Row { TextButton(onClick = onDiscard) { Text(stringResource(R.string.dont_save)) }; TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) } } }
     )
 }

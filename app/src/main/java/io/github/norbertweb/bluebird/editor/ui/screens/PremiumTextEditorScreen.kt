@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.editor.ui.screens
 
+import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
+import io.github.norbertweb.bluebird.ui.components.LocalMicaBackdrop
+import io.github.norbertweb.bluebird.ui.components.micaLayerOr
+import io.github.norbertweb.bluebird.ui.components.micaOr
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -87,7 +91,11 @@ fun PremiumTextEditorScreen(
             }
         }
     }
-    val c = EdThemes.system(state.isDark)
+    // Over a live Mica backdrop the editor must follow the WINDOW theme, otherwise a light editor
+    // theme could put dark text on a dark Mica (or vice-versa).
+    val micaBackdrop = LocalMicaBackdrop.current
+    val windowDark = LocalIsDarkTheme.current
+    val c = EdThemes.system(if (micaBackdrop) windowDark else state.isDark)
     val scroll = rememberScrollState()
 
     val saveAsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
@@ -160,7 +168,7 @@ fun PremiumTextEditorScreen(
         else onBack()
     }
 
-    Column(Modifier.fillMaxSize().background(c.window)) {
+    Column(Modifier.fillMaxSize().background(micaOr(c.window))) {
         NotepadTabBar(state, c, onNew = { state.newTab() }, onClose = ::closeTab)
         NotepadMenuBar(
             s = state, c = c,
@@ -177,7 +185,7 @@ fun PremiumTextEditorScreen(
         if (state.findVisible) FindBar(state, c) { state.findVisible = false }
 
         Box(
-            Modifier.weight(1f).fillMaxWidth().background(c.editor).verticalScroll(scroll)
+            Modifier.weight(1f).fillMaxWidth().background(micaLayerOr(c.editor, c.isDark)).verticalScroll(scroll)
                 .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             BasicTextField(

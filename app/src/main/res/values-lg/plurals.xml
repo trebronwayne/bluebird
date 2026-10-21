@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="plural_items">
+        <item quantity="one">Ekintu %1$d</item>
+        <item quantity="other">Ebintu %1$d</item>
+    </plurals>
+    <plurals name="plural_tracks">
+        <item quantity="one">Oluyimba %1$d</item>
+        <item quantity="other">Ennyimba %1$d</item>
+    </plurals>
+    <plurals name="plural_videos">
+        <item quantity="one">Vidiyo %1$d</item>
+        <item quantity="other">Vidiyo %1$d</item>
+    </plurals>
+    <plurals name="plural_photos">
+        <item quantity="one">Ekifaananyi %1$d</item>
+        <item quantity="other">Ebifaananyi %1$d</item>
+    </plurals>
+    <plurals name="plural_files">
+        <item quantity="one">Ekifo kya app eky’ekyama • fayiro %1$d</item>
+        <item quantity="other">Ekifo kya app eky’ekyama • fayiro %1$d</item>
+    </plurals>
+    <plurals name="plural_characters">
+        <item quantity="one">Ennukuta %1$d</item>
+        <item quantity="other">Ennukuta %1$d</item>
+    </plurals>
+    <plurals name="plural_delete_photos">
+        <item quantity="one">Okusangula ekifaananyi %1$d?</item>
+        <item quantity="other">Okusangula ebifaananyi %1$d?</item>
+    </plurals>
+</resources>

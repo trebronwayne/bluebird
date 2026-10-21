@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import io.github.norbertweb.bluebird.R
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -120,14 +122,14 @@ fun DefaultLauncherPrompt(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    "You're all set up",
+                    stringResource(R.string.youre_all_set_up),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = textPrimary,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    "Make Bluebird your default launcher so the Home button always brings you here.",
+                    stringResource(R.string.make_bluebird_your_default_launcher_so),
                     style = MaterialTheme.typography.bodyMedium,
                     color = textSecondary,
                     textAlign = TextAlign.Center,
@@ -145,14 +147,14 @@ fun DefaultLauncherPrompt(onDismiss: () -> Unit) {
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = primary)
                 ) {
-                    Text("Set as default", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.set_as_default), fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Maybe later")
+                    Text(stringResource(R.string.maybe_later))
                 }
             }
         }
