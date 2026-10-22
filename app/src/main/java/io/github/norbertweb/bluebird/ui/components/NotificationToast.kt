@@ -160,14 +160,17 @@ private fun bluebirdToast(
 
     // Countdown that drives the auto-dismiss + the progress strip. Pauses
     // while the user is dragging the toast.
+    // Toasts that carry an action (e.g. the "Share Bluebird" tip) stay twice as long so the
+    // button can actually be read and tapped.
+    val effectiveDismissMillis = if (toast.actionLabel != null) autoDismissMillis * 2 else autoDismissMillis
     LaunchedEffect(toast.id) {
         val tick = 50L
         var elapsedMs = 0L
-        while (isActive && elapsedMs < autoDismissMillis && !exiting) {
+        while (isActive && elapsedMs < effectiveDismissMillis && !exiting) {
             delay(tick)
             if (!isPaused) {
                 elapsedMs += tick
-                remainingFraction = (1f - elapsedMs.toFloat() / autoDismissMillis).coerceIn(0f, 1f)
+                remainingFraction = (1f - elapsedMs.toFloat() / effectiveDismissMillis).coerceIn(0f, 1f)
             }
         }
         startExit()

@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird
 
+import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -67,13 +68,9 @@ class MainActivity : ComponentActivity() {
             // time — maybeShowScheduledTip() only actually posts a toast once
             // every ~6h, and checkForUpdateTip() only posts once per version
             // bump — so it's safe to call on every launch/recomposition.
-            LaunchedEffect(Unit) {
-                viewModel.maybeShowScheduledTip()
-                // Pass a real "what's new" string here if/when you want the
-                // one-time post-update nudge; null just tracks the version
-                // silently without ever posting a tip for it.
-                viewModel.checkForUpdateTip(updateTipText = null)
-            }
+            // NOTE: tips are NOT scheduled here any more. The toast host lives in DesktopScreen, which
+            // is not composed during first-run setup, so tips raised from here were lost. See
+            // DesktopScreen (LaunchedEffect after the desktop appears).
 
             // Apply the brightness override ONLY while the user has moved the Action Center
             // slider; otherwise follow the system. The override lives in memory only, so an
@@ -107,7 +104,10 @@ class MainActivity : ComponentActivity() {
             // but works entirely within the app, no root or ADB needed.
             // ─────────────────────────────────────────────────────────────────────
             DesktopDensityOverride(context = context) {
-                CompositionLocalProvider(LocalTextScale provides uiState.textScale) {
+                CompositionLocalProvider(
+                    LocalTextScale provides uiState.textScale,
+                    LocalTransparencyEnabled provides uiState.transparencyEffects
+                ) {
                     // Always follows the Android system's own light/dark setting now —
                     // see Theme.kt. uiState.isDarkTheme is kept in LauncherUiState only
                     // for other screens that still read it as an approximation (e.g. to

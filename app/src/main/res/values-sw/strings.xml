@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">Faili lenye jina hilo tayari lipo</string>
     <string name="rename_failed">Kubadilisha jina kumeshindwa</string>
     <string name="no_app_can_open">Hakuna programu inayoweza kufungua %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">Kidokezo</string>
+    <string name="tip_double_click">Bofya mara mbili faili ili kuifungua.</string>
+    <string name="tip_snap_window">Buruta dirisha hadi ukingo wa skrini ili kulibana.</string>
+    <string name="tip_right_click_desktop">Bofya kulia eneo-kazi kwa chaguo zaidi.</string>
+    <string name="tip_share_bluebird">Unafurahia Bluebird? Mshirikishe rafiki.</string>
+    <string name="tip_unpin_taskbar">Bonyeza kwa muda aikoni ya upau wa kazi ili kuiondoa.</string>
+    <string name="tip_open_calendar">Gusa saa ili kufungua kalenda yako.</string>
+    <string name="tip_support_github">Bluebird ni chanzo huria. Nyota kwenye GitHub husaidia sana.</string>
+    <string name="tip_action_share">Shiriki</string>
+    <string name="tip_action_github">Tazama kwenye GitHub</string>
+    <string name="effects_and_performance">Athari na utendaji</string>
+    <string name="transparency_effects">Athari za uwazi</string>
+    <string name="transparency_effects_desc">Mandharinyuma yenye ukungu ya mandhari kwenye madirisha, menyu na upau wa kazi. Zima kwa utendaji bora.</string>
+    <string name="default_launcher">Kizindua chaguo-msingi</string>
+    <string name="default_launcher_active">Bluebird ni kizindua chako chaguo-msingi</string>
+    <string name="default_launcher_active_desc">Kitufe cha Mwanzo hufungua Bluebird.</string>
+    <string name="default_launcher_inactive">Bluebird si kizindua chako chaguo-msingi</string>
+    <string name="default_launcher_inactive_desc">Kifanye chaguo-msingi ili kitufe cha Mwanzo kikurudishe hapa kila wakati.</string>
+    <string name="set_default_launcher">Weka Bluebird kama kizindua chaguo-msingi</string>
+    <string name="set_default_launcher_desc">Android itakuomba uthibitishe</string>
+    <string name="change_default_launcher">Badilisha kizindua chaguo-msingi</string>
+    <string name="change_default_launcher_desc">Chagua kizindua ambacho kitufe cha Mwanzo hufungua</string>
+    <string name="support_bluebird">Saidia Bluebird</string>
+    <string name="share_bluebird">Shiriki Bluebird</string>
+    <string name="share_bluebird_desc">Mtumie rafiki tovuti ya Bluebird</string>
+    <string name="open_source_repo">Hazina ya chanzo huria</string>
+    <string name="open_source_repo_desc">Tazama msimbo na upe Bluebird nyota kwenye GitHub</string>
+    <string name="show_a_tip">Onyesha kidokezo</string>
+    <string name="show_a_tip_desc">Ona kidokezo chenye msaada sasa hivi</string>
 </resources>

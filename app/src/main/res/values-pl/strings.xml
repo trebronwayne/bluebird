@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">A file with that name already exists</string>
     <string name="rename_failed">Rename failed</string>
     <string name="no_app_can_open">No app can open %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">Tip</string>
+    <string name="tip_double_click">Double-click a file to open it.</string>
+    <string name="tip_snap_window">Drag a window to the screen edge to snap it.</string>
+    <string name="tip_right_click_desktop">Right-click the desktop for more options.</string>
+    <string name="tip_share_bluebird">Enjoying Bluebird? Share it with a friend.</string>
+    <string name="tip_unpin_taskbar">Long-press a taskbar icon to unpin it.</string>
+    <string name="tip_open_calendar">Tap the clock to open your calendar.</string>
+    <string name="tip_support_github">Bluebird is open source. A star on GitHub helps a lot.</string>
+    <string name="tip_action_share">Share</string>
+    <string name="tip_action_github">View on GitHub</string>
+    <string name="effects_and_performance">Effects &amp; performance</string>
+    <string name="transparency_effects">Transparency effects</string>
+    <string name="transparency_effects_desc">Blurred wallpaper backdrops on windows, menus and the taskbar. Turn off for the best performance.</string>
+    <string name="default_launcher">Default launcher</string>
+    <string name="default_launcher_active">Bluebird is your default launcher</string>
+    <string name="default_launcher_active_desc">The Home button opens Bluebird.</string>
+    <string name="default_launcher_inactive">Bluebird is not your default launcher</string>
+    <string name="default_launcher_inactive_desc">Make it the default so the Home button always brings you here.</string>
+    <string name="set_default_launcher">Set Bluebird as default launcher</string>
+    <string name="set_default_launcher_desc">Android will ask you to confirm</string>
+    <string name="change_default_launcher">Change default launcher</string>
+    <string name="change_default_launcher_desc">Choose which launcher the Home button opens</string>
+    <string name="support_bluebird">Support Bluebird</string>
+    <string name="share_bluebird">Share Bluebird</string>
+    <string name="share_bluebird_desc">Send the Bluebird website to a friend</string>
+    <string name="open_source_repo">Open-source repository</string>
+    <string name="open_source_repo_desc">View the code and star Bluebird on GitHub</string>
+    <string name="show_a_tip">Show a tip</string>
+    <string name="show_a_tip_desc">See a helpful tip right now</string>
 </resources>

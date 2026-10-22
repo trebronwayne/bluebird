@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">इस नाम की फ़ाइल पहले से मौजूद है</string>
     <string name="rename_failed">नाम बदलना विफल रहा</string>
     <string name="no_app_can_open">%1$s को कोई ऐप नहीं खोल सकता</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">सुझाव</string>
+    <string name="tip_double_click">किसी फ़ाइल को खोलने के लिए उस पर डबल-क्लिक करें।</string>
+    <string name="tip_snap_window">किसी विंडो को स्नैप करने के लिए उसे स्क्रीन के किनारे तक खींचें।</string>
+    <string name="tip_right_click_desktop">अधिक विकल्पों के लिए डेस्कटॉप पर राइट-क्लिक करें।</string>
+    <string name="tip_share_bluebird">Bluebird पसंद आ रहा है? इसे किसी दोस्त के साथ साझा करें।</string>
+    <string name="tip_unpin_taskbar">किसी टास्कबार आइकन का पिन हटाने के लिए उसे देर तक दबाएँ।</string>
+    <string name="tip_open_calendar">अपना कैलेंडर खोलने के लिए घड़ी पर टैप करें।</string>
+    <string name="tip_support_github">Bluebird ओपन सोर्स है। GitHub पर एक स्टार बहुत मदद करता है।</string>
+    <string name="tip_action_share">साझा करें</string>
+    <string name="tip_action_github">GitHub पर देखें</string>
+    <string name="effects_and_performance">प्रभाव और प्रदर्शन</string>
+    <string name="transparency_effects">पारदर्शिता प्रभाव</string>
+    <string name="transparency_effects_desc">विंडो, मेनू और टास्कबार पर वॉलपेपर के धुंधले बैकड्रॉप। बेहतर प्रदर्शन के लिए इसे बंद करें।</string>
+    <string name="default_launcher">डिफ़ॉल्ट लॉन्चर</string>
+    <string name="default_launcher_active">Bluebird आपका डिफ़ॉल्ट लॉन्चर है</string>
+    <string name="default_launcher_active_desc">होम बटन Bluebird खोलता है।</string>
+    <string name="default_launcher_inactive">Bluebird आपका डिफ़ॉल्ट लॉन्चर नहीं है</string>
+    <string name="default_launcher_inactive_desc">इसे डिफ़ॉल्ट बनाएँ ताकि होम बटन हमेशा आपको यहीं लाए।</string>
+    <string name="set_default_launcher">Bluebird को डिफ़ॉल्ट लॉन्चर बनाएँ</string>
+    <string name="set_default_launcher_desc">Android आपसे पुष्टि करने को कहेगा</string>
+    <string name="change_default_launcher">डिफ़ॉल्ट लॉन्चर बदलें</string>
+    <string name="change_default_launcher_desc">चुनें कि होम बटन कौन-सा लॉन्चर खोले</string>
+    <string name="support_bluebird">Bluebird का समर्थन करें</string>
+    <string name="share_bluebird">Bluebird साझा करें</string>
+    <string name="share_bluebird_desc">किसी दोस्त को Bluebird की वेबसाइट भेजें</string>
+    <string name="open_source_repo">ओपन-सोर्स रिपॉज़िटरी</string>
+    <string name="open_source_repo_desc">कोड देखें और GitHub पर Bluebird को स्टार दें</string>
+    <string name="show_a_tip">सुझाव दिखाएँ</string>
+    <string name="show_a_tip_desc">अभी एक उपयोगी सुझाव देखें</string>
 </resources>

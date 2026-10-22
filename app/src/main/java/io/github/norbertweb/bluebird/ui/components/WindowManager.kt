@@ -336,7 +336,7 @@ fun FloatingWindow(
     val windowBg = if (isDark) DS.surfaceDark else DS.surfaceLight
     // Windows 11: the focused window shows live Mica (wallpaper-sampled); inactive windows fall
     // back to a flat colour. Only apps that are Mica-aware opt in (see screenUsesMica).
-    val micaOn = hazeState != null && isActive && screenUsesMica(windowState.screen)
+    val micaOn = LocalTransparencyEnabled.current && hazeState != null && isActive && screenUsesMica(windowState.screen)
     val borderColor = if (isActive)
         bluebirdColors.AccentBlue.copy(alpha = if (isSnapping) 0.9f else 0.45f)
     else

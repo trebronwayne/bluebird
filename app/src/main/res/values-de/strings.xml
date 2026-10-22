@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">A file with that name already exists</string>
     <string name="rename_failed">Rename failed</string>
     <string name="no_app_can_open">No app can open %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">Tipp</string>
+    <string name="tip_double_click">Doppelklicken Sie auf eine Datei, um sie zu öffnen.</string>
+    <string name="tip_snap_window">Ziehen Sie ein Fenster an den Bildschirmrand, um es einzurasten.</string>
+    <string name="tip_right_click_desktop">Klicken Sie mit der rechten Maustaste auf den Desktop für weitere Optionen.</string>
+    <string name="tip_share_bluebird">Gefällt Ihnen Bluebird? Teilen Sie es mit einem Freund.</string>
+    <string name="tip_unpin_taskbar">Halten Sie ein Taskleistensymbol gedrückt, um es zu lösen.</string>
+    <string name="tip_open_calendar">Tippen Sie auf die Uhr, um Ihren Kalender zu öffnen.</string>
+    <string name="tip_support_github">Bluebird ist Open Source. Ein Stern auf GitHub hilft sehr.</string>
+    <string name="tip_action_share">Teilen</string>
+    <string name="tip_action_github">Auf GitHub ansehen</string>
+    <string name="effects_and_performance">Effekte und Leistung</string>
+    <string name="transparency_effects">Transparenzeffekte</string>
+    <string name="transparency_effects_desc">Unscharfe Hintergrundbild-Hintergründe auf Fenstern, Menüs und der Taskleiste. Für die beste Leistung ausschalten.</string>
+    <string name="default_launcher">Standard-Launcher</string>
+    <string name="default_launcher_active">Bluebird ist Ihr Standard-Launcher</string>
+    <string name="default_launcher_active_desc">Die Home-Taste öffnet Bluebird.</string>
+    <string name="default_launcher_inactive">Bluebird ist nicht Ihr Standard-Launcher</string>
+    <string name="default_launcher_inactive_desc">Legen Sie ihn als Standard fest, damit die Home-Taste Sie immer hierher bringt.</string>
+    <string name="set_default_launcher">Bluebird als Standard-Launcher festlegen</string>
+    <string name="set_default_launcher_desc">Android bittet Sie um Bestätigung</string>
+    <string name="change_default_launcher">Standard-Launcher ändern</string>
+    <string name="change_default_launcher_desc">Wählen Sie, welchen Launcher die Home-Taste öffnet</string>
+    <string name="support_bluebird">Bluebird unterstützen</string>
+    <string name="share_bluebird">Bluebird teilen</string>
+    <string name="share_bluebird_desc">Die Bluebird-Website an einen Freund senden</string>
+    <string name="open_source_repo">Open-Source-Repository</string>
+    <string name="open_source_repo_desc">Code ansehen und Bluebird auf GitHub einen Stern geben</string>
+    <string name="show_a_tip">Einen Tipp anzeigen</string>
+    <string name="show_a_tip_desc">Jetzt einen hilfreichen Tipp sehen</string>
 </resources>

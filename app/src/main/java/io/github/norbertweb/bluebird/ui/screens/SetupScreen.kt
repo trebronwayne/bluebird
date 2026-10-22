@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -169,6 +170,12 @@ private data class PermissionItem(
 
 private data class StepMeta(val icon: ImageVector, val labelRes: Int, val subtitleRes: Int)
 
+// Setup step indices: 0 Language · 1 Welcome · 2 Permissions · 3 Name · 4 Photo.
+// BUG FIX: the auto-request guard used a hard-coded `1` from before the Language step was added,
+// so system permission dialogs started firing on the WELCOME screen, before the user ever
+// reached the permissions screen. Always compare against this constant.
+private const val PERMISSIONS_STEP = 2
+
 private val stepMeta = listOf(
     StepMeta(SetupFI.Settings, R.string.setup_step_language, R.string.setup_step_language_subtitle),
     StepMeta(SetupFI.Home, R.string.setup_step_welcome, R.string.setup_step_welcome_subtitle),
@@ -196,7 +203,7 @@ fun SetupScreen(
     viewModel: LauncherViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val step = uiState.setupStep.coerceIn(0, 4)
+    val step = uiState.setupStep.coerceIn(0, LauncherViewModel.SETUP_LAST_STEP)
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val isTablet = configuration.smallestScreenWidthDp >= 600
@@ -278,9 +285,9 @@ fun SetupScreen(
     // ContextCompat.checkSelfPermission — it never calls permLauncher.launch() or
     // otherwise triggers a system permission dialog. Permissions are only ever
     // requested below, either by the auto-request sequence once the user reaches
-    // PermissionsStep (step 1), or by an explicit tap on a PermissionCard — and
-    // step 1 itself is only reachable after tapping "Get started" on WelcomeStep
-    // (step 0). So no permission prompt can appear before that tap.
+    // PermissionsStep (PERMISSIONS_STEP), or by an explicit tap on a PermissionCard — and
+    // that step is only reachable after Language (0) and Welcome (1). So no permission prompt
+    // can appear before the user has actually landed on the permissions screen.
     LaunchedEffect(permissionItems) {
         permissionItems.forEach(::refreshPermissionState)
     }
@@ -325,11 +332,11 @@ fun SetupScreen(
 
     // Auto-drives the permission requests one at a time, the way most onboarding
     // flows do, instead of making the user tap "Allow" on every card individually.
-    // Only runs while the user is actually on PermissionsStep (step 1) — never
+    // Only runs while the user is actually on PermissionsStep (PERMISSIONS_STEP) — never
     // earlier. "All files access" is deliberately excluded: it opens a Settings
     // page rather than a runtime dialog, so it stays a manual, explicit tap.
     LaunchedEffect(step, permissionItems) {
-        if (step != 1) {
+        if (step != PERMISSIONS_STEP) {
             autoRequestingItem = null
             return@LaunchedEffect
         }
@@ -709,7 +716,19 @@ private fun LanguageSelectionStep(onNext: () -> Unit, onBack: () -> Unit, showBa
     val border = setupBorder(dark)
     val savedTag = BluebirdLanguages.selectedTag(context)
     var selectedTag by remember(savedTag) { mutableStateOf(savedTag ?: "system") }
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+
+    // Apply the language IMMEDIATELY on tap instead of waiting for "Continue": persist it and
+    // recreate the activity so the whole wizard re-renders in the chosen language right now.
+    // The ViewModel survives recreation, so the user stays on this step. No-op if unchanged.
+    fun applyLanguage(tag: String) {
+        selectedTag = tag
+        val newTag = tag.takeUnless { it == "system" }
+        if (newTag != BluebirdLanguages.selectedTag(context)) {
+            BluebirdLanguages.saveSelection(context, newTag)
+            context.findSetupActivity()?.recreate()
+        }
+    }
     val filteredLanguages = remember(query) {
         BluebirdLanguages.all.filter { language ->
             language.nativeName.contains(query, ignoreCase = true) ||
@@ -749,7 +768,7 @@ private fun LanguageSelectionStep(onNext: () -> Unit, onBack: () -> Unit, showBa
                 border = border,
                 textPrimary = textPrimary,
                 textSecondary = textSecondary,
-                onClick = { selectedTag = "system" }
+                onClick = { applyLanguage("system") }
             )
             filteredLanguages.forEach { language ->
                 LanguageSetupOption(
@@ -760,7 +779,7 @@ private fun LanguageSelectionStep(onNext: () -> Unit, onBack: () -> Unit, showBa
                     border = border,
                     textPrimary = textPrimary,
                     textSecondary = textSecondary,
-                    onClick = { selectedTag = language.tag }
+                    onClick = { applyLanguage(language.tag) }
                 )
             }
             if (filteredLanguages.isEmpty()) {
@@ -782,9 +801,9 @@ private fun LanguageSelectionStep(onNext: () -> Unit, onBack: () -> Unit, showBa
                 text = stringResource(R.string.setup_language_continue),
                 icon = SetupFI.ArrowForward,
                 onClick = {
+                    // Already applied on tap; Continue just moves on.
                     BluebirdLanguages.saveSelection(context, selectedTag.takeUnless { it == "system" })
                     onNext()
-                    context.findSetupActivity()?.recreate()
                 },
                 modifier = Modifier.weight(1f)
             )

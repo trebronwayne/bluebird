@@ -31,6 +31,12 @@ import io.github.norbertweb.bluebird.ui.components.ToastNotifData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
+import androidx.annotation.StringRes
+import io.github.norbertweb.bluebird.i18n.BluebirdLanguages
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -855,9 +861,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // ─── OOBE ────────────────────────────────────────────────────────────────
     fun advanceSetupStep() {
         val current = _uiState.value.setupStep
-        if (current >= 4) completeSetup()
+        if (current >= SETUP_LAST_STEP) completeSetup()
         else _uiState.value = _uiState.value.copy(setupStep = current + 1)
     }
+
+    /** Index of the final setup step: 0 Language · 1 Welcome · 2 Permissions · 3 Name · 4 Photo. */
+    companion object { const val SETUP_LAST_STEP = 4 }
+
 
     fun decrementSetupStep() {
         val current = _uiState.value.setupStep
@@ -913,7 +923,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun completeSetup() {
         _uiState.value = _uiState.value.copy(
             hasCompletedSetup = true,
-            setupStep = 4,
+            setupStep = SETUP_LAST_STEP,
             showDefaultLauncherPrompt = true
         )
         saveAll()
@@ -1384,8 +1394,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // remote Bluebird announcements — both removed. The ONLY thing allowed
     // to emit on this flow now is postSystemNotification() (used sparingly,
     // e.g. battery-low alerts) and the tip scheduler below.
-    private val _toastEvents = MutableSharedFlow<ToastNotifData>(extraBufferCapacity = 8)
-    val toastEvents: SharedFlow<ToastNotifData> = _toastEvents.asSharedFlow()
+    // A buffered Channel (NOT a replay-less SharedFlow): toasts raised before the host is
+    // composed — e.g. while the setup wizard is still on screen — wait in the buffer and are
+    // delivered exactly once when DesktopScreen starts collecting. The old SharedFlow dropped
+    // them silently, which is why tips never appeared.
+    private val _toastChannel = Channel<ToastNotifData>(capacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val toastEvents: Flow<ToastNotifData> = _toastChannel.receiveAsFlow()
 
     /**
      * Generic toast-posting utility. Used internally for real system-status
@@ -1406,7 +1420,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(accentColor))
         } catch (e: Exception) { androidx.compose.ui.graphics.Color(0xFF0078D4) }
 
-        _toastEvents.tryEmit(
+        _toastChannel.trySend(
             ToastNotifData(
                 id          = id,
                 appLabel    = appLabel,
@@ -1425,13 +1439,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // nudge right after an app version bump. Nothing else should call
     // postTip() directly — add new tips to tipLibrary instead.
 
-    private val tipLibrary = listOf(
-        "Double-click a file to open it.",
-        "Drag a window to the screen edge to snap it.",
-        "Right-click the desktop for more options.",
-        "Long-press a taskbar icon to unpin it.",
-        "Tap the clock to open your calendar."
+    /** A tip is localized text plus an optional action (a URL, or [AppLinks.ACTION_SHARE_APP]). */
+    private data class Tip(
+        @StringRes val text: Int,
+        @StringRes val actionLabel: Int? = null,
+        val actionUrl: String? = null
     )
+
+    private val tipLibrary = listOf(
+        Tip(R.string.tip_double_click),
+        Tip(R.string.tip_snap_window),
+        Tip(R.string.tip_right_click_desktop),
+        Tip(R.string.tip_share_bluebird, R.string.tip_action_share, AppLinks.ACTION_SHARE_APP),
+        Tip(R.string.tip_unpin_taskbar),
+        Tip(R.string.tip_open_calendar),
+        Tip(R.string.tip_support_github, R.string.tip_action_github, AppLinks.REPO_URL)
+    )
+
+    /** Context carrying the user's chosen app language (the Application context does not). */
+    private fun localizedContext(): Context = BluebirdLanguages.wrapContext(getApplication<Application>())
+
     private val tipMinIntervalMs = 6L * 60 * 60 * 1000L // 6 hours
 
     private var lastTipShownAt: Long
@@ -1444,13 +1471,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         get() = prefs.getInt("last_seen_tip_version_code", -1)
         set(value) { prefs.edit().putInt("last_seen_tip_version_code", value).apply() }
 
-    fun postTip(text: String) {
+    fun postTip(text: String, actionLabel: String? = null, actionUrl: String? = null) {
+        val tipTitle = localizedContext().getString(R.string.tip_title)
         postSystemNotification(
-            id       = "tip_${System.currentTimeMillis()}",
-            title    = "Tip",
-            body     = text,
-            appLabel = "Tip"
+            id          = "tip_${System.currentTimeMillis()}",
+            title       = tipTitle,
+            body        = text,
+            appLabel    = tipTitle,
+            actionLabel = actionLabel,
+            actionUrl   = actionUrl
         )
+    }
+
+    /** Shows the next tip immediately, ignoring the schedule (Settings → "Show a tip"). */
+    fun showTipNow() {
+        val next = (lastTipIndex + 1) % tipLibrary.size
+        lastTipIndex = next
+        postTipFromLibrary(tipLibrary[next])
+    }
+
+    private fun postTipFromLibrary(tip: Tip) {
+        val ctx = localizedContext()
+        postTip(ctx.getString(tip.text), tip.actionLabel?.let { ctx.getString(it) }, tip.actionUrl)
     }
 
     /**
@@ -1464,7 +1506,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val next = (lastTipIndex + 1) % tipLibrary.size
         lastTipIndex = next
         lastTipShownAt = now
-        postTip(tipLibrary[next])
+        postTipFromLibrary(tipLibrary[next])
     }
 
     /**

@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">Já existe um arquivo com esse nome</string>
     <string name="rename_failed">Falha ao renomear</string>
     <string name="no_app_can_open">Nenhum aplicativo pode abrir %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">Dica</string>
+    <string name="tip_double_click">Clique duas vezes em um arquivo para abri-lo.</string>
+    <string name="tip_snap_window">Arraste uma janela até a borda da tela para encaixá-la.</string>
+    <string name="tip_right_click_desktop">Clique com o botão direito na área de trabalho para ver mais opções.</string>
+    <string name="tip_share_bluebird">Gostando do Bluebird? Compartilhe com um amigo.</string>
+    <string name="tip_unpin_taskbar">Mantenha pressionado um ícone da barra de tarefas para desafixá-lo.</string>
+    <string name="tip_open_calendar">Toque no relógio para abrir seu calendário.</string>
+    <string name="tip_support_github">O Bluebird é de código aberto. Uma estrela no GitHub ajuda muito.</string>
+    <string name="tip_action_share">Compartilhar</string>
+    <string name="tip_action_github">Ver no GitHub</string>
+    <string name="effects_and_performance">Efeitos e desempenho</string>
+    <string name="transparency_effects">Efeitos de transparência</string>
+    <string name="transparency_effects_desc">Fundos desfocados do papel de parede em janelas, menus e na barra de tarefas. Desative para obter o melhor desempenho.</string>
+    <string name="default_launcher">Launcher padrão</string>
+    <string name="default_launcher_active">O Bluebird é seu launcher padrão</string>
+    <string name="default_launcher_active_desc">O botão Início abre o Bluebird.</string>
+    <string name="default_launcher_inactive">O Bluebird não é seu launcher padrão</string>
+    <string name="default_launcher_inactive_desc">Defina-o como padrão para que o botão Início sempre leve você até aqui.</string>
+    <string name="set_default_launcher">Definir o Bluebird como launcher padrão</string>
+    <string name="set_default_launcher_desc">O Android pedirá que você confirme</string>
+    <string name="change_default_launcher">Alterar o launcher padrão</string>
+    <string name="change_default_launcher_desc">Escolha qual launcher o botão Início abre</string>
+    <string name="support_bluebird">Apoiar o Bluebird</string>
+    <string name="share_bluebird">Compartilhar o Bluebird</string>
+    <string name="share_bluebird_desc">Envie o site do Bluebird para um amigo</string>
+    <string name="open_source_repo">Repositório de código aberto</string>
+    <string name="open_source_repo_desc">Veja o código e dê uma estrela ao Bluebird no GitHub</string>
+    <string name="show_a_tip">Mostrar uma dica</string>
+    <string name="show_a_tip_desc">Veja uma dica útil agora mesmo</string>
 </resources>

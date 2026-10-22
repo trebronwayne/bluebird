@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">A file with that name already exists</string>
     <string name="rename_failed">Rename failed</string>
     <string name="no_app_can_open">No app can open %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">نصيحة</string>
+    <string name="tip_double_click">انقر نقرًا مزدوجًا على ملف لفتحه.</string>
+    <string name="tip_snap_window">اسحب نافذة إلى حافة الشاشة لتثبيتها.</string>
+    <string name="tip_right_click_desktop">انقر بزر الماوس الأيمن على سطح المكتب لمزيد من الخيارات.</string>
+    <string name="tip_share_bluebird">هل يعجبك Bluebird؟ شاركه مع صديق.</string>
+    <string name="tip_unpin_taskbar">اضغط مطولًا على أيقونة في شريط المهام لإلغاء تثبيتها.</string>
+    <string name="tip_open_calendar">اضغط على الساعة لفتح التقويم.</string>
+    <string name="tip_support_github">Bluebird مفتوح المصدر. نجمة على GitHub تساعد كثيرًا.</string>
+    <string name="tip_action_share">مشاركة</string>
+    <string name="tip_action_github">عرض على GitHub</string>
+    <string name="effects_and_performance">التأثيرات والأداء</string>
+    <string name="transparency_effects">تأثيرات الشفافية</string>
+    <string name="transparency_effects_desc">خلفيات ضبابية مأخوذة من الخلفية على النوافذ والقوائم وشريط المهام. أوقفها للحصول على أفضل أداء.</string>
+    <string name="default_launcher">المشغّل الافتراضي</string>
+    <string name="default_launcher_active">Bluebird هو مشغّلك الافتراضي</string>
+    <string name="default_launcher_active_desc">يفتح زر الرئيسية تطبيق Bluebird.</string>
+    <string name="default_launcher_inactive">Bluebird ليس مشغّلك الافتراضي</string>
+    <string name="default_launcher_inactive_desc">اجعله الافتراضي ليعيدك زر الرئيسية إلى هنا دائمًا.</string>
+    <string name="set_default_launcher">تعيين Bluebird كمشغّل افتراضي</string>
+    <string name="set_default_launcher_desc">سيطلب منك Android التأكيد</string>
+    <string name="change_default_launcher">تغيير المشغّل الافتراضي</string>
+    <string name="change_default_launcher_desc">اختر المشغّل الذي يفتحه زر الرئيسية</string>
+    <string name="support_bluebird">ادعم Bluebird</string>
+    <string name="share_bluebird">مشاركة Bluebird</string>
+    <string name="share_bluebird_desc">أرسل موقع Bluebird إلى صديق</string>
+    <string name="open_source_repo">مستودع المصدر المفتوح</string>
+    <string name="open_source_repo_desc">اطّلع على الشيفرة وامنح Bluebird نجمة على GitHub</string>
+    <string name="show_a_tip">عرض نصيحة</string>
+    <string name="show_a_tip_desc">شاهد نصيحة مفيدة الآن</string>
 </resources>

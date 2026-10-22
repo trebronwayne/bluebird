@@ -81,6 +81,14 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
     // Defer PackageManager/app-icon discovery until the first desktop composition has
     // rendered. This keeps expensive launcher enumeration out of the critical startup frame.
     LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
+    // Tips are scheduled from HERE (not MainActivity): this is where the toast host that listens
+    // for them actually lives, and during first-run setup DesktopScreen isn't on screen yet. The
+    // short delay lets the desktop settle so the tip is actually seen.
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2500)
+        viewModel.maybeShowScheduledTip()
+        viewModel.checkForUpdateTip(updateTipText = null)
+    }
     LaunchedEffect(Unit) {
         viewModel.toastEvents.collect { toast -> activeToasts.add(toast) }
     }
@@ -129,8 +137,11 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             viewModel = viewModel,
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState)
-                .hazeSource(state = windowHazeState),
+                .then(
+                    if (uiState.transparencyEffects)
+                        Modifier.hazeSource(state = hazeState).hazeSource(state = windowHazeState)
+                    else Modifier
+                ),
             bottomSafeAreaPx = if (uiState.isTaskbarVisible) taskbarHeightPx else 0f,
             onWallpaperAccent = { wallpaperAccent = it }
         )
@@ -148,7 +159,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp)
-                .hazeSource(state = hazeState)
+                .then(if (uiState.transparencyEffects) Modifier.hazeSource(state = hazeState) else Modifier)
         )
 
         // ── 3. Scrim ──
@@ -354,7 +365,10 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                 }
             },
             onAction  = { url ->
-                try {
+                if (url == io.github.norbertweb.bluebird.AppLinks.ACTION_SHARE_APP) {
+                    // "Share Bluebird" tip → Android share sheet carrying the website URL
+                    io.github.norbertweb.bluebird.AppLinks.shareApp(context, context.getString(R.string.share_bluebird))
+                } else try {
                     context.startActivity(
                         Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )

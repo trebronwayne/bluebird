@@ -763,4 +763,34 @@
     <string name="a_file_with_that_name_already_exists">A file with that name already exists</string>
     <string name="rename_failed">Rename failed</string>
     <string name="no_app_can_open">No app can open %1$s</string>
+    <!-- pending translation (English fallback) -->
+    <string name="tip_title">Amagezi</string>
+    <string name="tip_double_click">Kuba emirundi ebiri ku fayiro okugiggulawo.</string>
+    <string name="tip_snap_window">Tambuza zzaabu ku nsonda y’olupapula okugiteeka mu kifo.</string>
+    <string name="tip_right_click_desktop">Kuba ku ddyo ku desktop olabe ebisingawo.</string>
+    <string name="tip_share_bluebird">Obadde osanyuse ku Bluebird? Gabana ne mukwano gwo.</string>
+    <string name="tip_unpin_taskbar">Kwata ku kifaananyi kya taskbar okiggyeko.</string>
+    <string name="tip_open_calendar">Kuba ku ssaawa okuggulawo kalenda yo.</string>
+    <string name="tip_support_github">Bluebird ya open source. Emmunyeenye ku GitHub eyamba nnyo.</string>
+    <string name="tip_action_share">Gabana</string>
+    <string name="tip_action_github">Laba ku GitHub</string>
+    <string name="effects_and_performance">Ebikolwa n’embiro</string>
+    <string name="transparency_effects">Ebikolwa eby’okutangaala</string>
+    <string name="transparency_effects_desc">Ebifaananyi eby’emabega ebitaliiko bulungi ku madirisa, menyu ne taskbar. Kiggyeko olw’embiro ezisinga obulungi.</string>
+    <string name="default_launcher">Launcher ey’obulijjo</string>
+    <string name="default_launcher_active">Bluebird ye launcher yo ey’obulijjo</string>
+    <string name="default_launcher_active_desc">Bbaatuuni ya Home eggulawo Bluebird.</string>
+    <string name="default_launcher_inactive">Bluebird si launcher yo ey’obulijjo</string>
+    <string name="default_launcher_inactive_desc">Kifuule ekya bulijjo bbaatuuni ya Home etuddeyo wano buli kiseera.</string>
+    <string name="set_default_launcher">Teeka Bluebird nga launcher ey’obulijjo</string>
+    <string name="set_default_launcher_desc">Android egenda kukusaba okukakasa</string>
+    <string name="change_default_launcher">Kyusa launcher ey’obulijjo</string>
+    <string name="change_default_launcher_desc">Londa launcher bbaatuuni ya Home gy’eggulawo</string>
+    <string name="support_bluebird">Wagira Bluebird</string>
+    <string name="share_bluebird">Gabana Bluebird</string>
+    <string name="share_bluebird_desc">Weereza omukwano gwo omukutu gwa Bluebird</string>
+    <string name="open_source_repo">Ekifo kya open source</string>
+    <string name="open_source_repo_desc">Laba koodi era wa Bluebird emmunyeenye ku GitHub</string>
+    <string name="show_a_tip">Laga amagezi</string>
+    <string name="show_a_tip_desc">Laba amagezi agayamba kati</string>
 </resources>

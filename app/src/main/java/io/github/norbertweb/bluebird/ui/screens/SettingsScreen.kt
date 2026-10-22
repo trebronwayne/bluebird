@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.AppLinks
 import io.github.norbertweb.bluebird.ui.components.micaLayerOr
 import io.github.norbertweb.bluebird.ui.components.micaOr
 import io.github.norbertweb.bluebird.i18n.ui
@@ -178,6 +179,7 @@ private fun CategoryIconView(icon: CategoryIcon, modifier: Modifier = Modifier, 
 private enum class SettingsCategory(val label: String, val icon: CategoryIcon) {
     LANGUAGE        ("Language",             CategoryIcon.Png(R.drawable.ic_about)),
     APPEARANCE      ("Appearance",          CategoryIcon.Png(R.drawable.ic_appearance)),
+    SYSTEM          ("System",              CategoryIcon.Vector(FluentIcons.Regular.Apps)),
     ACCOUNTS        ("Accounts",            CategoryIcon.Png(R.drawable.ic_user)),
     PRIVACY_SECURITY("Privacy & security",  CategoryIcon.Png(R.drawable.ic_privacy)),
     FEEDBACK_UPDATES("Feedback & updates",  CategoryIcon.Png(R.drawable.ic_feedback)),
@@ -472,6 +474,7 @@ fun SettingsScreen(
             when (selectedCategoryState.value) {
                 SettingsCategory.LANGUAGE            -> LanguageSettings(args)
                 SettingsCategory.APPEARANCE       -> AppearanceSettings(args)
+                SettingsCategory.SYSTEM           -> SystemSettings(args)
                 SettingsCategory.ACCOUNTS         -> AccountsSettings(args)
                 SettingsCategory.PRIVACY_SECURITY -> PrivacySecuritySettings(args)
                 SettingsCategory.FEEDBACK_UPDATES -> FeedbackUpdatesSettings(args)
@@ -1235,6 +1238,20 @@ private fun PersonalizationSection(a: ScreenArgs) {
 @Composable
 private fun AppearanceSettings(a: ScreenArgs) {
 
+    // ── Effects & performance ───────────────────────────────────────────────
+    // Global switch for every Acrylic/Mica blur (windows, taskbar, Start, flyouts). Off = flat,
+    // opaque surfaces and no blur sampling at all — the fastest option on slower devices.
+    SettingsGroup(stringResource(R.string.effects_and_performance), a) {
+        val transparencyOn = a.uiState?.transparencyEffects ?: true
+        SToggle(
+            icon = FluentIcons.Regular.TopSpeed,
+            label = stringResource(R.string.transparency_effects),
+            sub = stringResource(R.string.transparency_effects_desc),
+            a = a,
+            checked = transparencyOn
+        ) { a.vm?.setTransparencyEffects(!transparencyOn) }
+    }
+
     // ── Personalization ─────────────────────────────────────────────────────
     // Everything that used to live in Desktop.kt's own right-click "Personalise"
     // dialog (WallpaperPersonalisePanel) now lives here instead, laid out as a
@@ -1972,9 +1989,84 @@ TEST CHECKLIST
 // ABOUT
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM — default launcher
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SystemSettings(a: ScreenArgs) {
+    val ctx = a.ctx
+    var isDefault by remember { mutableStateOf(AppLinks.isDefaultLauncher(ctx)) }
+
+    // Re-check whenever we come back from the system role dialog / Home settings.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) isDefault = AppLinks.isDefaultLauncher(ctx)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val roleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isDefault = AppLinks.isDefaultLauncher(ctx)
+    }
+
+    SettingsGroup(stringResource(R.string.default_launcher), a) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                if (isDefault) FluentIcons.Regular.ShieldCheckmark else FluentIcons.Regular.Info, null,
+                tint = if (isDefault) Color(0xFF3FB950) else a.textColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(18.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(if (isDefault) R.string.default_launcher_active else R.string.default_launcher_inactive),
+                    color = a.textColor, fontSize = (14 * a.scale).sp, fontWeight = FontWeight.Medium
+                )
+                Text(
+                    stringResource(if (isDefault) R.string.default_launcher_active_desc else R.string.default_launcher_inactive_desc),
+                    color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * a.scale).sp
+                )
+            }
+        }
+        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        if (!isDefault) {
+            SNav(FluentIcons.Regular.Apps, stringResource(R.string.set_default_launcher), stringResource(R.string.set_default_launcher_desc), a = a) {
+                try { roleLauncher.launch(AppLinks.defaultLauncherIntent(ctx, forceChooser = false)) }
+                catch (e: Exception) { AppLinks.openDefaultLauncherSettings(ctx) }
+            }
+            Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        }
+        SNav(FluentIcons.Regular.Open, stringResource(R.string.change_default_launcher), stringResource(R.string.change_default_launcher_desc), a = a) {
+            AppLinks.openDefaultLauncherSettings(ctx, forceChooser = true)
+        }
+    }
+}
+
 @Composable
 private fun AboutSettings(a: ScreenArgs) {
     val scale   = a.scale
+
+    // ── Support Bluebird: share the website, view the open-source repo ──────
+    val shareTitle = stringResource(R.string.share_bluebird)
+    SettingsGroup(stringResource(R.string.support_bluebird), a) {
+        SNav(FluentIcons.Regular.CloudArrowUp, shareTitle, stringResource(R.string.share_bluebird_desc), a = a) {
+            AppLinks.shareApp(a.ctx, shareTitle)
+        }
+        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        SNav(FluentIcons.Regular.Code, stringResource(R.string.open_source_repo), stringResource(R.string.open_source_repo_desc), a = a) {
+            AppLinks.openRepo(a.ctx)
+        }
+        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        SNav(FluentIcons.Regular.Info, stringResource(R.string.show_a_tip), stringResource(R.string.show_a_tip_desc), a = a) {
+            a.vm?.showTipNow()
+        }
+    }
+
     val pm      = a.ctx.packageManager
     // PERF FIX: getPackageInfo() is a Binder IPC call to a system service. It was
     // previously run directly in the composable body, so every single recomposition

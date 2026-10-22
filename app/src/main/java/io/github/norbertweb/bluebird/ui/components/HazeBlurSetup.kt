@@ -72,6 +72,18 @@ import dev.chrisbanes.haze.materials.FluentMaterials
 @Composable
 fun rememberBluebirdHazeState(): HazeState = remember { HazeState() }
 
+/**
+ * Global "Transparency effects" switch (Settings → Appearance). When false every Acrylic/Mica
+ * style becomes a flat, fully opaque fill with no blur: nothing is sampled or blurred, which is
+ * the performance-friendly mode (also chosen by the setup "Smooth" preset).
+ */
+val LocalTransparencyEnabled = androidx.compose.runtime.compositionLocalOf { true }
+
+private fun opaqueFallbackStyle(base: Color): HazeStyle {
+    val solid = base.copy(alpha = 1f)
+    return HazeStyle(blurRadius = 0.dp, noiseFactor = 0f, backgroundColor = solid, tints = emptyList(), fallbackTint = HazeTint(solid))
+}
+
 /** Blends [accent] into the current theme's own neutral surface color at a
  *  low, fixed fraction — see the file doc above for why this exists. Mica
  *  gets a slightly stronger hint than Acrylic (12% vs 9%) since Mica is a
@@ -89,6 +101,7 @@ private fun subtleAccent(accent: Color, isDark: Boolean, strength: Float): Color
 @ReadOnlyComposable
 fun windowsMica(accent: Color, isDark: Boolean): HazeStyle {
     val containerColor = subtleAccent(accent, isDark, strength = 0.12f)
+    if (!LocalTransparencyEnabled.current) return opaqueFallbackStyle(containerColor)
     // Same opacities Haze's own hazeMicaMaterial() uses (WinUI 3 Figma spec)
     // — only the input color is dynamic here, not the recipe.
     val tintOpacity = if (isDark) 0.8f else 0.5f
@@ -111,11 +124,13 @@ fun windowsMica(accent: Color, isDark: Boolean): HazeStyle {
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 @ReadOnlyComposable
-fun windowsAcrylic(accent: Color, isDark: Boolean): HazeStyle =
-    FluentMaterials.accentAcrylicDefault(
+fun windowsAcrylic(accent: Color, isDark: Boolean): HazeStyle {
+    if (!LocalTransparencyEnabled.current) return opaqueFallbackStyle(subtleAccent(accent, isDark, strength = 0.09f))
+    return FluentMaterials.accentAcrylicDefault(
         accentColor = subtleAccent(accent, isDark, strength = 0.09f),
         isDark = isDark
     )
+}
 
 
 /**
