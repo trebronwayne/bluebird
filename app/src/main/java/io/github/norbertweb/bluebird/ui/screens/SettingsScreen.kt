@@ -1,27 +1,29 @@
 package io.github.norbertweb.bluebird.ui.screens
 
-import io.github.norbertweb.bluebird.AppLinks
-import io.github.norbertweb.bluebird.ui.components.micaLayerOr
-import io.github.norbertweb.bluebird.ui.components.micaOr
-import io.github.norbertweb.bluebird.i18n.ui
-import androidx.annotation.DrawableRes
-import io.github.norbertweb.bluebird.R
+// FluentIcons.Regular.X is written in code (see usage throughout this file), but — same
+// pattern as androidx.compose.material.icons.extended — each icon is a separate
+// tree-shakeable extension property that needs its OWN import; a single blanket
+// `import ...FluentIcons` is not enough. Package root and per-icon import path below
+// per confirmed working example from another file in this project.
+
+// WallpaperTarget import removed with the dead "Home screen"/"Lock screen"
+// buttons — see PersonalizationSection for why they were removed.
+// Personalization (Background + Effects) now lives in this file instead of its
+// own dialog in Desktop.kt — these are the same symbols that file already used,
+// exposed here so PersonalizationSection can render identical UI/behavior.
 import android.content.Context
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.lerp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,8 +35,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,31 +43,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-// FluentIcons.Regular.X is written in code (see usage throughout this file), but — same
-// pattern as androidx.compose.material.icons.extended — each icon is a separate
-// tree-shakeable extension property that needs its OWN import; a single blanket
-// `import ...FluentIcons` is not enough. Package root and per-icon import path below
-// per confirmed working example from another file in this project.
-import fluent.ui.system.icons.FluentIcons
-import fluent.ui.system.icons.regular.Add
-import fluent.ui.system.icons.regular.ArrowClockwise
-import fluent.ui.system.icons.regular.ArrowDownload
-import fluent.ui.system.icons.regular.Bug
-import fluent.ui.system.icons.regular.CameraAdd
-import fluent.ui.system.icons.regular.Checkmark
-import fluent.ui.system.icons.regular.ChevronDown
-import fluent.ui.system.icons.regular.ChevronRight
-import fluent.ui.system.icons.regular.Code
-import fluent.ui.system.icons.regular.DataTrending
-import fluent.ui.system.icons.regular.Dismiss
-import fluent.ui.system.icons.regular.Edit
-import fluent.ui.system.icons.regular.Shield
-
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,62 +81,83 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.remoteconfig.ktx.remoteConfig
+import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
+import fluent.ui.system.icons.FluentIcons
+import fluent.ui.system.icons.regular.Add
+import fluent.ui.system.icons.regular.Apps
+import fluent.ui.system.icons.regular.ArrowClockwise
+import fluent.ui.system.icons.regular.ArrowDownload
+import fluent.ui.system.icons.regular.Bug
+import fluent.ui.system.icons.regular.CameraAdd
+import fluent.ui.system.icons.regular.Checkmark
+import fluent.ui.system.icons.regular.ChevronDown
+import fluent.ui.system.icons.regular.ChevronRight
+import fluent.ui.system.icons.regular.Cloud
+import fluent.ui.system.icons.regular.Code
+import fluent.ui.system.icons.regular.DataTrending
+import fluent.ui.system.icons.regular.Dismiss
+import fluent.ui.system.icons.regular.Edit
+import fluent.ui.system.icons.regular.Info
+import fluent.ui.system.icons.regular.Open
+import fluent.ui.system.icons.regular.Shield
+import fluent.ui.system.icons.regular.ShieldCheckmark
+import fluent.ui.system.icons.regular.Timer
+import io.github.norbertweb.bluebird.AppLinks
+import io.github.norbertweb.bluebird.BackgroundEffectsState
 import io.github.norbertweb.bluebird.BgAnimationType
 import io.github.norbertweb.bluebird.LauncherUiState
 import io.github.norbertweb.bluebird.LauncherViewModel
 import io.github.norbertweb.bluebird.LiveWallpaperType
-import io.github.norbertweb.bluebird.BackgroundEffectsState
-// WallpaperTarget import removed with the dead "Home screen"/"Lock screen"
-// buttons — see PersonalizationSection for why they were removed.
-// Personalization (Background + Effects) now lives in this file instead of its
-// own dialog in Desktop.kt — these are the same symbols that file already used,
-// exposed here so PersonalizationSection can render identical UI/behavior.
-import io.github.norbertweb.bluebird.ui.components.DS
+import io.github.norbertweb.bluebird.R
+import io.github.norbertweb.bluebird.i18n.ui
+import io.github.norbertweb.bluebird.ui.components.DEFAULT_WALLPAPERS
 import io.github.norbertweb.bluebird.ui.components.DesktopPreferences
 import io.github.norbertweb.bluebird.ui.components.DesktopWallpaperMode
-import io.github.norbertweb.bluebird.ui.components.DEFAULT_WALLPAPERS
 import io.github.norbertweb.bluebird.ui.components.LiveWallpaperRenderer
 import io.github.norbertweb.bluebird.ui.components.bgAnimationEmoji
 import io.github.norbertweb.bluebird.ui.components.bgAnimationLabel
+import io.github.norbertweb.bluebird.ui.components.micaLayerOr
+import io.github.norbertweb.bluebird.ui.components.micaOr
 import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
-import com.google.accompanist.drawablepainter.DrawablePainter
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.ktx.Firebase
-import com.google.firebase.remoteconfig.ktx.remoteConfig
-import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CATEGORY ENUM — replaces raw strings to prevent silent routing bugs
@@ -1244,7 +1248,7 @@ private fun AppearanceSettings(a: ScreenArgs) {
     SettingsGroup(stringResource(R.string.effects_and_performance), a) {
         val transparencyOn = a.uiState?.transparencyEffects ?: true
         SToggle(
-            icon = FluentIcons.Regular.TopSpeed,
+            icon = FluentIcons.Regular.Timer,
             label = stringResource(R.string.transparency_effects),
             sub = stringResource(R.string.transparency_effects_desc),
             a = a,
@@ -2054,7 +2058,7 @@ private fun AboutSettings(a: ScreenArgs) {
     // ── Support Bluebird: share the website, view the open-source repo ──────
     val shareTitle = stringResource(R.string.share_bluebird)
     SettingsGroup(stringResource(R.string.support_bluebird), a) {
-        SNav(FluentIcons.Regular.CloudArrowUp, shareTitle, stringResource(R.string.share_bluebird_desc), a = a) {
+        SNav(FluentIcons.Regular.Cloud, shareTitle, stringResource(R.string.share_bluebird_desc), a = a) {
             AppLinks.shareApp(a.ctx, shareTitle)
         }
         Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
