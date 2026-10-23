@@ -1404,7 +1404,7 @@ private fun WidgetCard(
     val border = if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
     val shape = RoundedCornerShape(7.dp)
     val density = LocalWidgetDensity.current
-    val surfaceColor = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
+    val surfaceColor = if (isDark) ShellCardDark else ShellCardLight
 
     Box(
         modifier = modifier

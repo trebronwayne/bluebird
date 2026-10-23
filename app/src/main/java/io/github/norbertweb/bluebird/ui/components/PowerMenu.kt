@@ -59,8 +59,8 @@ fun PowerMenuButton(
     // border color/alpha and corner radius, plus the same soft shadow -
     // so this reads as the same surface as Start rather than a generic
     // Material dropdown.
-    val panelBackground = if (isDark) androidx.compose.ui.graphics.Color(0xE61F1F1F)
-        else androidx.compose.ui.graphics.Color(0xE6F8F8F8)
+    val panelBackground = if (isDark) ShellScrimDark
+        else ShellScrimLight
     val panelBorder = if (isDark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.09f)
         else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f)
     val panelShape = RoundedCornerShape(12.dp)

@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.PopupWindowBlur
+import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
 import io.github.norbertweb.bluebird.ui.components.micaLayerOr
 import io.github.norbertweb.bluebird.ui.components.micaOr
 import io.github.norbertweb.bluebird.i18n.ui
@@ -3286,12 +3288,13 @@ private fun ExplorerContextPopup(
         // Fluent flyout: layered Mica-style surface with a soft border and shadow,
         // matching Windows 11's context-menu chrome rather than a flat card.
         val bg = if (isDark) Color(0xFA2C2C2C) else Color(0xFCFCFCFC)
+        // Popups are separate windows, so Haze can't sample the wallpaper from here. Ask the
+        // compositor to blur whatever is behind this popup window instead (Android 12+).
+        PopupWindowBlur()
         Surface(
-            // Popups are separate windows: a Haze effect cannot sample the wallpaper from here (it
-            // rendered as an invisible menu). Use the opaque acrylic-style fallback instead.
             modifier = Modifier.width(212.dp),
             shape = RoundedCornerShape(9.dp),
-            color = bg,
+            color = if (LocalTransparencyEnabled.current) bg.copy(alpha = 0.72f) else bg,
             shadowElevation = 18.dp,
             border = null
         ) {

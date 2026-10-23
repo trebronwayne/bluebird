@@ -1,46 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- pending translation (English fallback) -->
     <plurals name="plural_items">
-        <item quantity="one">%1$d item</item>
-        <item quantity="few">%1$d items</item>
-        <item quantity="many">%1$d items</item>
-        <item quantity="other">%1$d items</item>
+        <item quantity="one">%1$d element</item>
+        <item quantity="few">%1$d elementy</item>
+        <item quantity="many">%1$d elementów</item>
+        <item quantity="other">%1$d elementu</item>
     </plurals>
     <plurals name="plural_tracks">
-        <item quantity="one">%1$d track</item>
-        <item quantity="few">%1$d tracks</item>
-        <item quantity="many">%1$d tracks</item>
-        <item quantity="other">%1$d tracks</item>
+        <item quantity="one">%1$d utwór</item>
+        <item quantity="few">%1$d utwory</item>
+        <item quantity="many">%1$d utworów</item>
+        <item quantity="other">%1$d utworu</item>
     </plurals>
     <plurals name="plural_videos">
-        <item quantity="one">%1$d video</item>
-        <item quantity="few">%1$d videos</item>
-        <item quantity="many">%1$d videos</item>
-        <item quantity="other">%1$d videos</item>
+        <item quantity="one">%1$d film</item>
+        <item quantity="few">%1$d filmy</item>
+        <item quantity="many">%1$d filmów</item>
+        <item quantity="other">%1$d filmu</item>
     </plurals>
     <plurals name="plural_photos">
-        <item quantity="one">%1$d photo</item>
-        <item quantity="few">%1$d photos</item>
-        <item quantity="many">%1$d photos</item>
-        <item quantity="other">%1$d photos</item>
+        <item quantity="one">%1$d zdjęcie</item>
+        <item quantity="few">%1$d zdjęcia</item>
+        <item quantity="many">%1$d zdjęć</item>
+        <item quantity="other">%1$d zdjęcia</item>
     </plurals>
     <plurals name="plural_files">
-        <item quantity="one">Private app sandbox • %1$d file</item>
-        <item quantity="few">Private app sandbox • %1$d files</item>
-        <item quantity="many">Private app sandbox • %1$d files</item>
-        <item quantity="other">Private app sandbox • %1$d files</item>
+        <item quantity="one">Prywatna piaskownica aplikacji • %1$d plik</item>
+        <item quantity="few">Prywatna piaskownica aplikacji • %1$d pliki</item>
+        <item quantity="many">Prywatna piaskownica aplikacji • %1$d plików</item>
+        <item quantity="other">Prywatna piaskownica aplikacji • %1$d pliku</item>
     </plurals>
     <plurals name="plural_characters">
-        <item quantity="one">%1$d character</item>
-        <item quantity="few">%1$d characters</item>
-        <item quantity="many">%1$d characters</item>
-        <item quantity="other">%1$d characters</item>
+        <item quantity="one">%1$d znak</item>
+        <item quantity="few">%1$d znaki</item>
+        <item quantity="many">%1$d znaków</item>
+        <item quantity="other">%1$d znaku</item>
     </plurals>
     <plurals name="plural_delete_photos">
-        <item quantity="one">Delete %1$d photo?</item>
-        <item quantity="few">Delete %1$d photos?</item>
-        <item quantity="many">Delete %1$d photos?</item>
-        <item quantity="other">Delete %1$d photos?</item>
+        <item quantity="one">Usunąć %1$d zdjęcie?</item>
+        <item quantity="few">Usunąć %1$d zdjęcia?</item>
+        <item quantity="many">Usunąć %1$d zdjęć?</item>
+        <item quantity="other">Usunąć %1$d zdjęcia?</item>
     </plurals>
 </resources>

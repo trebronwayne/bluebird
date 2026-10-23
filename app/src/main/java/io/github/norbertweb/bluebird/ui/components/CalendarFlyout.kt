@@ -81,7 +81,7 @@ fun CalendarFlyout(
     // it look glassy and cheap next to the others. Now the whole card is
     // one solid surface, and hairline dividers do the section separation
     // instead of swinging opacity up and down.
-    val panelBg = if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8)
+    val panelBg = if (isDark) ShellScrimDark else ShellScrimLight
     val dividerColor = if (isDark) DS.borderDark else DS.borderLight
     val headerTint = accent.copy(alpha = if (isDark) 0.10f else 0.06f)
 

@@ -82,7 +82,7 @@ fun ActionCenter(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .background(if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8), RoundedCornerShape(12.dp))
+                .background(if (isDark) ShellScrimDark else ShellScrimLight, RoundedCornerShape(12.dp))
                 .padding(horizontal = 10.dp, vertical = 9.dp)
         ) {
             // ── Compact header ───────────────────────────────────────────────

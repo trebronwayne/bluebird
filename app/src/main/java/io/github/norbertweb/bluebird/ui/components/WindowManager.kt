@@ -4,6 +4,9 @@ package io.github.norbertweb.bluebird.ui.components
 // the io.github.niyajali:fluentui-system-icons Compose Multiplatform library.
 // Dependency (module build.gradle.kts):
 //     implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
+import io.github.norbertweb.bluebird.windowGeometryKey
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import io.github.norbertweb.bluebird.i18n.pluralText
 import io.github.norbertweb.bluebird.i18n.localizedAppName
 import androidx.compose.ui.res.stringResource
@@ -280,23 +283,40 @@ fun FloatingWindow(
     val density = LocalDensity.current
 
     // ── Restore last geometry if available, else use defaults ─────────────────
-    val savedGeometry = remember(windowState.id) {
-        viewModel.getWindowGeometry(windowState.id)
-    }
     val isFixedBpkInstaller = windowState.screen == LauncherScreen.PROGRAM_MANAGER &&
         !windowState.extras["bpkPath"].isNullOrBlank()
+    // Stable identity (NOT the per-window UUID) so a window reopens exactly where it was closed.
+    val geoKey = remember(windowState.screen, windowState.extras["bpkAppId"]) {
+        windowGeometryKey(windowState.screen, windowState.extras)
+    }
+    // Another window of the same app already open? Then this is a secondary instance: it
+    // cascades from the remembered spot and does not overwrite the primary's saved position.
+    val siblingCount = remember(windowState.id) {
+        viewModel.uiState.value.openWindows.count {
+            it.id != windowState.id && !(it.screen == LauncherScreen.PROGRAM_MANAGER && !it.extras["bpkPath"].isNullOrBlank()) && windowGeometryKey(it.screen, it.extras) == geoKey
+        }
+    }
+    val isPrimaryInstance = siblingCount == 0
+    val savedGeometry = remember(windowState.id) {
+        if (isFixedBpkInstaller) null
+        else viewModel.getWindowGeometry(windowState.id) ?: viewModel.getWindowGeometry(geoKey)
+    }
+    val cascade = siblingCount * 32f
     val (defaultW, defaultH) = remember(windowState.screen, isFixedBpkInstaller) {
         if (isFixedBpkInstaller) 520f to 620f else defaultSizeFor(windowState.screen)
     }
 
-    var offsetX        by remember { mutableStateOf(savedGeometry?.offsetX ?: 80f) }
-    var offsetY        by remember { mutableStateOf(savedGeometry?.offsetY ?: 40f) }
+    var offsetX        by remember { mutableStateOf((savedGeometry?.offsetX ?: 80f) + cascade) }
+    var offsetY        by remember { mutableStateOf((savedGeometry?.offsetY ?: 40f) + cascade) }
     var windowWidthDp  by remember { mutableStateOf(if (isFixedBpkInstaller) defaultW else (savedGeometry?.widthDp ?: defaultW)) }
     var windowHeightDp by remember { mutableStateOf(if (isFixedBpkInstaller) defaultH else (savedGeometry?.heightDp ?: defaultH)) }
 
     // ── Persist geometry after the user pauses, rather than once per drag frame.
     // Dragging can produce dozens of state changes per second; the old keyed
     // LaunchedEffect restarted a coroutine and wrote the geometry for every one.
+    // The primary instance writes the remembered spot (persisted); secondary instances only
+    // keep a per-window entry so they never move the primary's saved position.
+    val saveKey = if (isPrimaryInstance) geoKey else windowState.id
     if (!isFixedBpkInstaller) LaunchedEffect(windowState.id) {
         snapshotFlow {
             WindowGeometry(offsetX, offsetY, windowWidthDp, windowHeightDp)
@@ -304,8 +324,15 @@ fun FloatingWindow(
             .distinctUntilChanged()
             .debounce(150)
             .collect { geometry ->
-                viewModel.saveWindowGeometry(windowState.id, geometry)
+                viewModel.saveWindowGeometry(saveKey, geometry)
             }
+    }
+    // The debounce above would LOSE the final position if the window is closed within 150 ms of
+    // the last drag (the coroutine is cancelled before it fires). Flush the latest geometry when
+    // the window leaves composition so close → reopen is exact.
+    val latestGeometry by rememberUpdatedState(WindowGeometry(offsetX, offsetY, windowWidthDp, windowHeightDp))
+    if (!isFixedBpkInstaller) DisposableEffect(windowState.id) {
+        onDispose { viewModel.saveWindowGeometry(saveKey, latestGeometry) }
     }
 
     // ── Snap layout picker visibility ─────────────────────────────────────────

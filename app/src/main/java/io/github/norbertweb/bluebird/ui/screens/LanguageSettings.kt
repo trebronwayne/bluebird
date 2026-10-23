@@ -45,7 +45,11 @@ internal fun LanguageSettings(a: ScreenArgs) {
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        // NO verticalScroll here: SettingsScreen's content pane is already vertically scrollable.
+        // Nesting a second verticalScroll gives it infinite height constraints and Compose throws
+        // "Vertically scrollable component was measured with an infinity maximum height" - this
+        // was the crash when tapping Language in Settings.
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(

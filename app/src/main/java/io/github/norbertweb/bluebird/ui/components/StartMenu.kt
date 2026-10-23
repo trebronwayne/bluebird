@@ -340,7 +340,7 @@ fun StartMenu(
             )
             .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), panelShape)
             .background(
-                if (isDark) Color(0xE61F1F1F) else Color(0xE6F8F8F8),
+                if (isDark) ShellScrimDark else ShellScrimLight,
                 panelShape
             )
             .border(

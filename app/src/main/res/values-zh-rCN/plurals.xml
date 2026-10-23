@@ -1,25 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- pending translation (English fallback) -->
     <plurals name="plural_items">
-        <item quantity="other">%1$d items</item>
+        <item quantity="other">%1$d 个项目</item>
     </plurals>
     <plurals name="plural_tracks">
-        <item quantity="other">%1$d tracks</item>
+        <item quantity="other">%1$d 首曲目</item>
     </plurals>
     <plurals name="plural_videos">
-        <item quantity="other">%1$d videos</item>
+        <item quantity="other">%1$d 个视频</item>
     </plurals>
     <plurals name="plural_photos">
-        <item quantity="other">%1$d photos</item>
+        <item quantity="other">%1$d 张照片</item>
     </plurals>
     <plurals name="plural_files">
-        <item quantity="other">Private app sandbox • %1$d files</item>
+        <item quantity="other">应用私有沙盒 • %1$d 个文件</item>
     </plurals>
     <plurals name="plural_characters">
-        <item quantity="other">%1$d characters</item>
+        <item quantity="other">%1$d 个字符</item>
     </plurals>
     <plurals name="plural_delete_photos">
-        <item quantity="other">Delete %1$d photos?</item>
+        <item quantity="other">删除 %1$d 张照片？</item>
     </plurals>
 </resources>

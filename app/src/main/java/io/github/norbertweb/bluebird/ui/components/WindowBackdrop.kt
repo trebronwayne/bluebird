@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 
@@ -46,12 +47,62 @@ fun micaOr(solid: Color): Color = if (LocalMicaBackdrop.current) Color.Transpare
 fun micaLayerOr(solid: Color, isDark: Boolean): Color =
     if (LocalMicaBackdrop.current) micaLayerColor(isDark) else solid
 
-/** Screens that opt in to the Mica backdrop (their roots are transparent-aware). */
-fun screenUsesMica(screen: io.github.norbertweb.bluebird.LauncherScreen): Boolean = when (screen) {
-    io.github.norbertweb.bluebird.LauncherScreen.FILE_EXPLORER,
-    io.github.norbertweb.bluebird.LauncherScreen.SETTINGS,
-    io.github.norbertweb.bluebird.LauncherScreen.PremiumTextEditorScreen -> true
-    else -> false
+/**
+ * Every app window gets the Mica frame + Mica title bar (Windows 11 does the same for all apps).
+ * Apps whose content is Mica-aware (Explorer, Settings, Text Editor) also render their chrome
+ * transparently so the backdrop shows through; others keep their own opaque content surface and
+ * simply show Mica in the title bar and window border.
+ */
+@Suppress("UNUSED_PARAMETER")
+fun screenUsesMica(screen: io.github.norbertweb.bluebird.LauncherScreen): Boolean = true
+
+/** Win11 "CardBackground" fill: a faint layer over Mica (light: 70% white, dark: 10% white). */
+@Composable
+fun micaCardOr(solid: Color, isDark: Boolean): Color =
+    if (LocalMicaBackdrop.current) (if (isDark) Color(0x1AFFFFFF) else Color(0xB3FFFFFF)) else solid
+
+/**
+ * Legibility scrim painted over a shell panel's own Acrylic. The panels used to paint a 90%-opaque
+ * fill (0xE6…) over their blur, which hid it completely; a light scrim keeps text readable while
+ * the blurred wallpaper stays clearly visible.
+ */
+val ShellScrimDark = Color(0x331F1F1F)
+val ShellScrimLight = Color(0x33F8F8F8)
+
+/** Semi-translucent fill for individual cards that sit ON an acrylic panel (widgets etc.). */
+val ShellCardDark = Color(0x8C1F1F1F)
+val ShellCardLight = Color(0xB3F8F8F8)
+
+/**
+ * Real backdrop blur for Compose `Popup`s (context menus, flyouts). A Popup is a separate OS
+ * window, so Haze cannot sample the wallpaper across that boundary; instead we ask the system
+ * compositor to blur whatever is behind the popup window (Android 12+, when the device allows
+ * cross-window blur). Call once inside the Popup content and give the menu surface a
+ * translucent fill. No-op below API 31, when blur is disabled, or with Transparency effects off.
+ */
+@Composable
+fun PopupWindowBlur(radius: androidx.compose.ui.unit.Dp = 30.dp) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val enabled = LocalTransparencyEnabled.current
+    val radiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { radius.roundToPx() }
+    androidx.compose.runtime.LaunchedEffect(view, enabled, radiusPx) {
+        if (!enabled || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return@LaunchedEffect
+        // The popup window is attached a frame or two after first composition: wait for it.
+        repeat(8) {
+            val root = view.rootView
+            val lp = root.layoutParams as? android.view.WindowManager.LayoutParams
+            val wm = root.context.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
+            if (root.isAttachedToWindow && lp != null && wm != null) {
+                if (wm.isCrossWindowBlurEnabled) {
+                    lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                    lp.blurBehindRadius = radiusPx
+                    try { wm.updateViewLayout(root, lp) } catch (_: Exception) { }
+                }
+                return@LaunchedEffect
+            }
+            androidx.compose.runtime.withFrameNanos { }
+        }
+    }
 }
 
 /**

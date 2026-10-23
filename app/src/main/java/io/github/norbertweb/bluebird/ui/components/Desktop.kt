@@ -1,4 +1,6 @@
 package io.github.norbertweb.bluebird.ui.components
+import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
+import io.github.norbertweb.bluebird.ui.components.PopupWindowBlur
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.localizedAppName
 import androidx.compose.ui.res.stringResource
@@ -3766,8 +3768,12 @@ private fun LayoutCoordinates.trueScreenPosition(view: android.view.View): Offse
 // `HazeState` Start Menu is given by whatever composable hosts both of them —
 // that composable wasn't part of what was shared here, so this is the closest
 // achievable match without it.
+// Now sits over a REAL blur (PopupWindowBlur) so it can be translucent; with Transparency effects
+// off it becomes opaque (nothing is blurred behind it).
+@Composable
 private fun bluebirdMenuSurfaceColor(isDark: Boolean): Color =
-    if (isDark) Color(0xB01F1F1F) else Color(0xB0F8F8F8)
+    if (!LocalTransparencyEnabled.current) { if (isDark) Color(0xFF202020) else Color(0xFFF8F8F8) }
+    else if (isDark) Color(0xB81F1F1F) else Color(0xB8F8F8F8)
 
 private fun bluebirdMenuBorderColor(isDark: Boolean): Color =
     if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
@@ -3786,6 +3792,7 @@ private fun bluebirdMenuPopup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true)
     ) {
+        PopupWindowBlur()
         content()
     }
 }
@@ -3831,6 +3838,7 @@ private fun bluebirdFlyoutRow(
             onDismissRequest = onCloseFlyout,
             properties = PopupProperties(focusable = false, dismissOnClickOutside = true)
         ) {
+            PopupWindowBlur()
             submenuContent()
         }
     }

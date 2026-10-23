@@ -1732,7 +1732,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             else                         -> ""
         }
 
+        val wasMaximized = !isBpkInstallerWindow(screen, effectiveExtras) &&
+            prefs.getBoolean("win_max_${windowGeometryKey(screen, effectiveExtras)}", false)
         val window  = WindowState(
+            isMaximized = wasMaximized,
             screen = screen, title = resolvedTitle, extras = effectiveExtras,
             iconKey = iconKey,
             appPackageName = effectivePackageName ?: effectiveExtras["appPackageName"] ?: "",
@@ -1745,7 +1748,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun closeWindow(windowId: String) {
         val state = _uiState.value
-        if (state.openWindows.none { it.id == windowId }) return
+        val closing = state.openWindows.find { it.id == windowId } ?: return
+        // Windows 11 reopens an app the way you left it — including maximized.
+        if (!isBpkInstallerWindow(closing.screen, closing.extras)) {
+            prefs.edit().putBoolean("win_max_${windowGeometryKey(closing.screen, closing.extras)}", closing.isMaximized).apply()
+        }
         val current = state.openWindows.filterNot { it.id == windowId }
         _uiState.value = state.copy(
             openWindows    = current,
@@ -3221,12 +3228,38 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Stores each window's last position + size so reopening restores it.
     private val _windowGeometries = mutableMapOf<String, io.github.norbertweb.bluebird.ui.components.WindowGeometry>()
 
-    fun getWindowGeometry(id: String): io.github.norbertweb.bluebird.ui.components.WindowGeometry? =
-        _windowGeometries[id]
+    // BUG FIX: geometry used to be stored under WindowState.id — a fresh random UUID for every
+    // window — so a window that was closed and reopened never found its old position and fell
+    // back to the default. Geometry is now keyed by a STABLE app identity (see
+    // [windowGeometryKey]) and persisted, so it survives closing the window AND restarting the
+    // app. Per-id entries are still used for same-session continuity (e.g. rotation) and for
+    // secondary instances of an app that must not overwrite the primary's remembered spot.
+    fun getWindowGeometry(idOrKey: String): io.github.norbertweb.bluebird.ui.components.WindowGeometry? =
+        _windowGeometries[idOrKey] ?: loadPersistedGeometry(idOrKey)
 
-    fun saveWindowGeometry(id: String, geometry: io.github.norbertweb.bluebird.ui.components.WindowGeometry) {
-        _windowGeometries[id] = geometry
+    private fun loadPersistedGeometry(key: String): io.github.norbertweb.bluebird.ui.components.WindowGeometry? {
+        if (!key.startsWith(WINDOW_KEY_PREFIX)) return null
+        val parts = prefs.getString("win_geo_$key", null)?.split(',') ?: return null
+        if (parts.size != 4) return null
+        return try {
+            io.github.norbertweb.bluebird.ui.components.WindowGeometry(
+                parts[0].toFloat(), parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat()
+            ).also { _windowGeometries[key] = it }
+        } catch (e: NumberFormatException) { null }
     }
+
+    fun saveWindowGeometry(idOrKey: String, geometry: io.github.norbertweb.bluebird.ui.components.WindowGeometry) {
+        _windowGeometries[idOrKey] = geometry
+        if (idOrKey.startsWith(WINDOW_KEY_PREFIX)) {
+            prefs.edit().putString(
+                "win_geo_$idOrKey",
+                "${geometry.offsetX},${geometry.offsetY},${geometry.widthDp},${geometry.heightDp}"
+            ).apply()
+        }
+    }
+
+    private fun isBpkInstallerWindow(screen: LauncherScreen, extras: Map<String, String>) =
+        screen == LauncherScreen.PROGRAM_MANAGER && !extras["bpkPath"].isNullOrBlank()
 
 }
 
@@ -3239,3 +3272,14 @@ internal fun readSystemBrightness(context: Context): Float = try {
     (Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128) / 255f)
         .coerceIn(MIN_WINDOW_BRIGHTNESS, 1f)
 } catch (e: Exception) { 0.5f }
+
+
+internal const val WINDOW_KEY_PREFIX = "app:"
+
+/**
+ * Stable identity used to remember a window's position/size/maximized state across closes.
+ * Installed web apps are remembered per app; everything else per screen type.
+ */
+fun windowGeometryKey(screen: LauncherScreen, extras: Map<String, String>): String =
+    if (screen == LauncherScreen.WEB_APP_VIEWER) "${WINDOW_KEY_PREFIX}web:${extras["bpkAppId"] ?: "unknown"}"
+    else "${WINDOW_KEY_PREFIX}${screen.name}"
