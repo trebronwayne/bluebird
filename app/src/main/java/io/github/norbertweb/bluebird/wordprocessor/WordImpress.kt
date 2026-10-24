@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.wordprocessor
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.pluralText
 import androidx.compose.ui.res.stringResource
@@ -361,7 +362,7 @@ private fun Toolbar(
         ToolIcon("arrow_redo", onRedo, palette)
         Box {
             TextButton(onClick = onStyleMenu, modifier = Modifier.width(108.dp)) { Text(styleLabel, color = palette.text, maxLines = 1) }
-            DropdownMenu(showStyleMenu, onDismissRequest = onStyleMenu) {
+            BluebirdDropdownMenu(showStyleMenu, onDismissRequest = onStyleMenu) {
                 listOf("normal", "title", "subtitle", "heading1", "heading2", "heading3", "quote").forEach { id ->
                     DropdownMenuItem(text = { Text(BuiltInStyles.byId(id).name) }, onClick = { onStyle(id) })
                 }

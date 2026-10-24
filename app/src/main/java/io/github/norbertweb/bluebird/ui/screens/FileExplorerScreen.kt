@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.rememberBlurBehindSupported
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.ui.components.PopupWindowBlur
 import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
 import io.github.norbertweb.bluebird.ui.components.micaLayerOr
@@ -2337,7 +2339,7 @@ private fun SortMenuButton(
                 Icon(FluentIcons.Regular.ChevronDown, null, tint = textColor.copy(alpha = 0.50f), modifier = Modifier.size(13.dp))
             }
         }
-        DropdownMenu(
+        BluebirdDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.width(196.dp)
@@ -3294,7 +3296,7 @@ private fun ExplorerContextPopup(
         Surface(
             modifier = Modifier.width(212.dp),
             shape = RoundedCornerShape(9.dp),
-            color = if (LocalTransparencyEnabled.current) bg.copy(alpha = 0.72f) else bg,
+            color = if (LocalTransparencyEnabled.current && rememberBlurBehindSupported()) bg.copy(alpha = 0.72f) else bg,
             shadowElevation = 18.dp,
             border = null
         ) {

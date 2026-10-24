@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.R
 
 import android.Manifest
@@ -144,7 +145,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                 IconButton(onClick = { showSortMenu = true }, modifier = Modifier.size(32.dp)) {
                     Icon(FluentIcon.SortByAlpha, contentDescription = stringResource(R.string.sort), tint = textColor.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                 }
-                DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                BluebirdDropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                     listOf("name", "date", "size", "type").forEach { sort ->
                         DropdownMenuItem(
                             text = { Text(sort.replaceFirstChar { it.uppercase() }, color = textColor, fontSize = 13.sp) },
@@ -411,7 +412,7 @@ private fun RecycleBinItemRow(
                     modifier = Modifier.size(16.dp)
                 )
             }
-            DropdownMenu(
+            BluebirdDropdownMenu(
                 expanded = showContextMenu,
                 onDismissRequest = { showContextMenu = false }
             ) {

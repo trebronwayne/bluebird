@@ -81,7 +81,7 @@ fun PowerMenuButton(
                 modifier = Modifier.size(16.dp)
             )
         }
-        DropdownMenu(
+        BluebirdDropdownMenu(
             expanded = showPowerMenu,
             onDismissRequest = { showPowerMenu = false },
             modifier = Modifier

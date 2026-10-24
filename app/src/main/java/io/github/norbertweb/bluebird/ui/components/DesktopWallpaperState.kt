@@ -20,8 +20,6 @@ enum class DesktopWallpaperMode { APPARENT, DEFAULT, CUSTOM }
 // list later the same way (each one just needs a matching drawable resource).
 // ─────────────────────────────────────────────────────────────────
 val DEFAULT_WALLPAPERS: List<Int> = listOf(
-    R.drawable.desktop_wp_1,
-    R.drawable.desktop_wp_2,
-    R.drawable.desktop_wp_3
+    R.drawable.desktop_wp_1, R.drawable.desktop_wp_2, R.drawable.desktop_wp_1
 )
 

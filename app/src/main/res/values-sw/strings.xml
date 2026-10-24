@@ -793,4 +793,6 @@
     <string name="open_source_repo_desc">Tazama msimbo na upe Bluebird nyota kwenye GitHub</string>
     <string name="show_a_tip">Onyesha kidokezo</string>
     <string name="show_a_tip_desc">Ona kidokezo chenye msaada sasa hivi</string>
+    <!-- pending translation (English fallback) -->
+    <string name="app_info">App info</string>
 </resources>

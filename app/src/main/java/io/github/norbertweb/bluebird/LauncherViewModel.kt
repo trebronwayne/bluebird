@@ -947,6 +947,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadInstalledApps()
     }
 
+    private var refreshAppsJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Re-scan installed apps (debounced). Called when a package is installed / removed / updated
+     * so an app uninstalled from the Start menu disappears from Start, Taskbar pins and Recent.
+     */
+    fun refreshInstalledApps() {
+        refreshAppsJob?.cancel()
+        refreshAppsJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(400)
+            installedAppsLoadStarted = true
+            loadInstalledApps()
+        }
+    }
+
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm     = getApplication<Application>().packageManager

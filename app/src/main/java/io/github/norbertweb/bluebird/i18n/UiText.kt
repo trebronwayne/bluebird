@@ -66,6 +66,7 @@ object UiText {
         "App" to R.string.app,
         "App Data" to R.string.app_data,
         "App Storage" to R.string.app_storage,
+        "App info" to R.string.app_info,
         "App permissions" to R.string.app_permissions,
         "Apparent" to R.string.apparent,
         "Appearance" to R.string.appearance,

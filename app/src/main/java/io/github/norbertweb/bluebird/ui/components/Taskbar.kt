@@ -545,10 +545,9 @@ private fun TaskbarAppIcon(
                     modifier = Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)))
             }
 
-            DropdownMenu(
+            BluebirdDropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false },
-                modifier = Modifier.background(menuBg)
+                onDismissRequest = { showMenu = false }
             ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.open), color = textColor, fontSize = 12.sp) },
@@ -568,7 +567,9 @@ private fun TaskbarAppIcon(
                     leadingIcon = { Icon(imageVector = FluentIcon.Dismiss, contentDescription = null, tint = DS.badgeRed,
                         modifier = Modifier.size(13.dp)) }
                 )
-            }
+            
+            AppSystemMenuItems(appInfo.packageName, onDismiss = { showMenu = false }, textColor = textColor)
+        }
         }
 
         if (isRunning || isActive) {

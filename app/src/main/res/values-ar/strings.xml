@@ -793,4 +793,6 @@
     <string name="open_source_repo_desc">اطّلع على الشيفرة وامنح Bluebird نجمة على GitHub</string>
     <string name="show_a_tip">عرض نصيحة</string>
     <string name="show_a_tip_desc">شاهد نصيحة مفيدة الآن</string>
+    <!-- pending translation (English fallback) -->
+    <string name="app_info">App info</string>
 </resources>

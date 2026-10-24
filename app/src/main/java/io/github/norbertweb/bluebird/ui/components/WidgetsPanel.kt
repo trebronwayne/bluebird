@@ -2454,7 +2454,7 @@ private fun TodoWidget(isDark: Boolean, context: Context, textScale: Float) {
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        DropdownMenu(expanded = menuForTaskId == task.id, onDismissRequest = { menuForTaskId = null }) {
+                        BluebirdDropdownMenu(expanded = menuForTaskId == task.id, onDismissRequest = { menuForTaskId = null }) {
                             Text(
                                 stringResource(R.string.priority), color = textColor.copy(alpha = 0.4f), fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)

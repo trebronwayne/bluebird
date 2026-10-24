@@ -153,6 +153,34 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
     }
 
+    // Keeps the app list honest after Uninstall (and installs / updates done elsewhere).
+    private val packageChangeReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            // During an update Android sends REMOVED(replacing) then ADDED/REPLACED — wait for the latter.
+            if (intent.action == android.content.Intent.ACTION_PACKAGE_REMOVED &&
+                intent.getBooleanExtra(android.content.Intent.EXTRA_REPLACING, false)) return
+            viewModel.refreshInstalledApps()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_PACKAGE_REMOVED)
+            addAction(android.content.Intent.ACTION_PACKAGE_ADDED)
+            addAction(android.content.Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, packageChangeReceiver, filter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        try { unregisterReceiver(packageChangeReceiver) } catch (_: Exception) { }
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         hideSystemBars()

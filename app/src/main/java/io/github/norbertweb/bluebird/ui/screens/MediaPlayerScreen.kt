@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.pluralText
 import io.github.norbertweb.bluebird.R
@@ -1634,7 +1635,7 @@ private fun LibraryPane(
                                 Box {
                                     Icon(FI.MoreVert, null, tint = tcm,
                                         modifier = Modifier.size(16.dp).clickable { showPlMenu = true })
-                                    DropdownMenu(expanded = showPlMenu, onDismissRequest = { showPlMenu = false },
+                                    BluebirdDropdownMenu(expanded = showPlMenu, onDismissRequest = { showPlMenu = false },
                                         modifier = fluentMenuModifier(isDark)) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.play), color = if (isDark) FTV.Text else FTV.LText, fontSize = 14.sp) },
@@ -1977,7 +1978,7 @@ private fun LibraryRow(
         }
         Box {
             Icon(FI.MoreVert, null, tint = tcm, modifier = Modifier.size(16.dp).clickable { showMenu = true })
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false },
+            BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false },
                 modifier = fluentMenuModifier(isDark)) {
                 val items = buildList {
                     add(Triple(FI.Play, "Play now", onClick))
@@ -2432,7 +2433,7 @@ private fun VolumeControl(state: PlayerState, isDark: Boolean, tc: Color, tcm: C
                    else -> FI.VolumeUp },
             tc
         ) { expanded = !expanded }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentMenuModifier(isDark)) {
+        BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentMenuModifier(isDark)) {
             Column(Modifier.width(160.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Slider(
                     value = if (state.isMuted) 0f else state.volume,
@@ -2457,7 +2458,7 @@ private fun SpeedChip(state: PlayerState, bgTint: Color, tc: Color) {
                 .clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) { Text(speedLabel(state.playbackSpeed), color = tc, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
+        BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             SPEED_STEPS.forEach { s ->
                 val active = state.playbackSpeed == s
                 DropdownMenuItem(
@@ -2486,7 +2487,7 @@ private fun SleepTimerChip(state: PlayerState, bgTint: Color) {
             Icon(FI.Timer, null, tint = bgTint, modifier = Modifier.size(13.dp))
             if (state.sleepTimerActive) Text(formatTimer(state.sleepTimerSeconds), color = bgTint, fontSize = 12.sp)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
+        BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             if (state.sleepTimerActive) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.cancel_timer), color = FTV.DangerRed) },
@@ -2690,7 +2691,7 @@ private fun AspectRatioChip(state: PlayerState, tint: Color) {
                 .clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) { Text(ui(state.aspectRatio.label), color = tint, fontSize = 12.sp) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
+        BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = fluentFlyoutOnScrimModifier()) {
             AspectRatio.entries.forEach { ar ->
                 val active = state.aspectRatio == ar
                 DropdownMenuItem(

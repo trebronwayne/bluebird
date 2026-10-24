@@ -1,5 +1,9 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.foundation.background
+import androidx.compose.ui.composed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
@@ -160,6 +164,18 @@ fun Modifier.hazeMaterial(
     hazeState: HazeState,
     style: HazeStyle,
     shape: Shape = RectangleShape
-): Modifier = this
-    .clip(shape)
-    .hazeEffect(state = hazeState, style = style)
+): Modifier = composed {
+    if (LocalTransparencyEnabled.current) {
+        this.clip(shape).hazeEffect(state = hazeState, style = style)
+    } else {
+        // BUG FIX: with Transparency effects OFF no HazeSource is registered, and a Haze effect
+        // with no sources draws NOTHING — not even its background colour — so the taskbar, Start,
+        // widgets, Action Center, flyouts… became fully transparent. Paint a real opaque fill
+        // instead and never touch Haze. The fill comes from the style's own background colour
+        // (the Acrylic/Mica factories return an opaque style when transparency is off).
+        val dark = LocalIsDarkTheme.current
+        val bg = style.backgroundColor
+        val solid = if (bg.isSpecified) bg.copy(alpha = 1f) else if (dark) Color(0xFF202020) else Color(0xFFF3F3F3)
+        this.clip(shape).background(solid)
+    }
+}

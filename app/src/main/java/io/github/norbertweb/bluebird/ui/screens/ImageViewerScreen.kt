@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.pluralText
 import android.Manifest
@@ -1322,7 +1323,7 @@ private fun PhotosGrid(
                         onClick = { state.showSortMenu = true }
                     )
 
-                    DropdownMenu(
+                    BluebirdDropdownMenu(
                         expanded = state.showSortMenu,
                         onDismissRequest = { state.showSortMenu = false }
                     ) {

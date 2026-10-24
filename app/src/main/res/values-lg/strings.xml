@@ -793,4 +793,6 @@
     <string name="open_source_repo_desc">Laba koodi era wa Bluebird emmunyeenye ku GitHub</string>
     <string name="show_a_tip">Laga amagezi</string>
     <string name="show_a_tip_desc">Laba amagezi agayamba kati</string>
+    <!-- pending translation (English fallback) -->
+    <string name="app_info">App info</string>
 </resources>

@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.editor.ui.components
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.ui.components.micaOr
 import androidx.compose.ui.res.stringResource
 import io.github.norbertweb.bluebird.R
@@ -125,7 +126,7 @@ private fun Menu(label: String, c: EditorColors, content: @Composable () -> Unit
     var expanded by remember { mutableStateOf(false) }
     Box {
         Text(label, color = c.text, fontSize = 13.sp, modifier = Modifier.clickable { expanded = true }.padding(horizontal = 13.dp, vertical = 11.dp))
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             MenuSurface(c) { content() }
         }
     }

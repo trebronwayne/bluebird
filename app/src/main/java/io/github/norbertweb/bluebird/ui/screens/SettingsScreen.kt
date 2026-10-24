@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.ui.components.micaCardOr
 import io.github.norbertweb.bluebird.AppLinks
 import io.github.norbertweb.bluebird.ui.components.micaLayerOr
@@ -689,7 +690,7 @@ internal fun SDropdown(
                 Spacer(Modifier.width(4.dp))
                 Icon(FluentIcons.Regular.ChevronDown, null, tint = a.textColor.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            BluebirdDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { option ->
                     DropdownMenuItem(
                         text        = { Text(option, fontSize = (13 * (a.scale)).sp) },

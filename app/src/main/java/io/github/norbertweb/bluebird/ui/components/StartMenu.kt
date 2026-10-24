@@ -1866,7 +1866,7 @@ fun AnimatedPinnedIcon(
             }
         }
 
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+        BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.open_application)) },
                 onClick = { showMenu = false; onClick() }
@@ -1875,6 +1875,8 @@ fun AnimatedPinnedIcon(
                 text = { Text(if (isPinnedToTaskbar) stringResource(R.string.unpin_from_start) else stringResource(R.string.pin_to_start)) },
                 onClick = { showMenu = false; if (isPinnedToTaskbar) onUnpin() else onPinToTaskbar() }
             )
+        
+            AppSystemMenuItems(app.packageName, onDismiss = { showMenu = false })
         }
     }
 }
@@ -1936,7 +1938,7 @@ fun AnimatedBuiltInIcon(
                 fontWeight = FontWeight.Medium, modifier = Modifier.fillMaxWidth()
             )
         }
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+        BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(text = { Text(stringResource(R.string.open)) }, onClick = { showMenu = false; onClick() })
             DropdownMenuItem(text = { Text(stringResource(R.string.add_to_desktop)) }, onClick = { showMenu = false; onAddToDesktop() })
             DropdownMenuItem(
@@ -1987,8 +1989,10 @@ private fun HorizontalAppCard(app: AppInfo, isDark: Boolean, onClick: () -> Unit
                 Text(localizedAppName(app.name), fontSize = 9.sp, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
             }
         }
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+        BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_start_layer)) }, onClick = { showMenu = false; onPin() })
+        
+            AppSystemMenuItems(app.packageName, onDismiss = { showMenu = false })
         }
     }
 }
@@ -2059,9 +2063,11 @@ private fun AllAppsRow(
                 Text(stringResource(R.string.app), fontSize = 10.sp, color = textPrimary.copy(alpha = 0.35f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+        BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_start_menu)) }, onClick = { showMenu = false; onPinToStart() })
             DropdownMenuItem(text = { Text(stringResource(R.string.pin_to_taskbar)) }, onClick = { showMenu = false; onPinToTaskbar() })
+        
+            AppSystemMenuItems(app.packageName, onDismiss = { showMenu = false })
         }
     }
 }
@@ -2114,7 +2120,7 @@ private fun BuiltInAppListRow(
             }
         }
         if (hasMenu) {
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.open)) }, onClick = { showMenu = false; onClick() })
                 onAddToDesktop?.let { addToDesktop ->
                     DropdownMenuItem(text = { Text(stringResource(R.string.add_to_desktop)) }, onClick = { showMenu = false; addToDesktop() })

@@ -1,4 +1,5 @@
 package io.github.norbertweb.bluebird.ui.components
+import io.github.norbertweb.bluebird.AppActions
 import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
 import io.github.norbertweb.bluebird.ui.components.PopupWindowBlur
 import io.github.norbertweb.bluebird.i18n.ui
@@ -3771,9 +3772,7 @@ private fun LayoutCoordinates.trueScreenPosition(view: android.view.View): Offse
 // Now sits over a REAL blur (PopupWindowBlur) so it can be translucent; with Transparency effects
 // off it becomes opaque (nothing is blurred behind it).
 @Composable
-private fun bluebirdMenuSurfaceColor(isDark: Boolean): Color =
-    if (!LocalTransparencyEnabled.current) { if (isDark) Color(0xFF202020) else Color(0xFFF8F8F8) }
-    else if (isDark) Color(0xB81F1F1F) else Color(0xB8F8F8F8)
+private fun bluebirdMenuSurfaceColor(isDark: Boolean): Color = popupMenuFill(isDark)
 
 private fun bluebirdMenuBorderColor(isDark: Boolean): Color =
     if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
@@ -4082,6 +4081,20 @@ fun bluebirdIconContextMenu(
 
                 if (item.type == DesktopItemType.APP_SHORTCUT) {
                     W11CtxRow(FluentIcon.FolderOpen, stringResource(R.string.open_file_location), tc, tcDim) { onOpenFileLocation(); onDismiss() }
+
+                    // Installed Android apps: system "App info" page and uninstall.
+                    val appCtx = androidx.compose.ui.platform.LocalContext.current
+                    val appPkg = item.packageName
+                    if (appPkg != null && remember(appPkg) { AppActions.isInstalledAndroidApp(appCtx, appPkg) }) {
+                        W11CtxRow(FluentIcon.Info, stringResource(R.string.app_info), tc, tcDim) {
+                            AppActions.openAppInfo(appCtx, appPkg); onDismiss()
+                        }
+                        if (remember(appPkg) { AppActions.canUninstall(appCtx, appPkg) }) {
+                            W11CtxRow(FluentIcon.Delete, stringResource(R.string.program_uninstall), danger, tcDim) {
+                                AppActions.requestUninstall(appCtx, appPkg); onDismiss()
+                            }
+                        }
+                    }
                 }
 
                 // "Set as wallpaper" — only for image files

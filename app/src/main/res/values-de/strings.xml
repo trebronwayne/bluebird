@@ -793,4 +793,6 @@
     <string name="open_source_repo_desc">Code ansehen und Bluebird auf GitHub einen Stern geben</string>
     <string name="show_a_tip">Einen Tipp anzeigen</string>
     <string name="show_a_tip_desc">Jetzt einen hilfreichen Tipp sehen</string>
+    <!-- pending translation (English fallback) -->
+    <string name="app_info">App info</string>
 </resources>

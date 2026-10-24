@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.browser.ui
 
+import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -132,7 +133,7 @@ fun BrowserScreen(isDark1: Boolean) {
             IconButton(onClick={::newTab}, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.Add,stringResource(R.string.new_tab),tint=text,modifier=Modifier.size(17.dp)) }
             Box {
                 IconButton(onClick={ menuExpanded=true }, modifier=Modifier.size(30.dp)) { FluentIcon(FluentIcons.MoreVert,stringResource(R.string.more),tint=text,modifier=Modifier.size(17.dp)) }
-                DropdownMenu(expanded=menuExpanded, onDismissRequest={menuExpanded=false}) {
+                BluebirdDropdownMenu(expanded=menuExpanded, onDismissRequest={menuExpanded=false}) {
                     DropdownMenuItem(text={Text(stringResource(R.string.browser_bookmarks))}, leadingIcon={FluentIcon(FluentIcons.Star,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.BOOKMARKS})
                     DropdownMenuItem(text={Text(stringResource(R.string.browser_history))}, leadingIcon={FluentIcon(FluentIcons.History,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.HISTORY})
                     DropdownMenuItem(text={Text(stringResource(R.string.browser_downloads))}, leadingIcon={FluentIcon(FluentIcons.Download,null,tint=text,modifier=Modifier.size(18.dp))}, onClick={menuExpanded=false; panel=BrowserPanel.DOWNLOADS})

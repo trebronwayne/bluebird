@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
@@ -115,6 +117,35 @@ fun Modifier.windowMicaBackdrop(
     accent: Color,
     isDark: Boolean,
     shape: Shape
-): Modifier = this
-    .clip(shape)
-    .hazeEffect(state = hazeState, style = windowsMica(accent, isDark))
+): Modifier = if (LocalTransparencyEnabled.current)
+    this.clip(shape).hazeEffect(state = hazeState, style = windowsMica(accent, isDark))
+else
+    // Transparency off: never leave a window with no backdrop (Haze draws nothing without sources).
+    this.clip(shape).background(windowsMica(accent, isDark).backgroundColor.let { if (it.isSpecified) it.copy(alpha = 1f) else if (isDark) Color(0xFF202020) else Color(0xFFF3F3F3) })
+
+
+/** True when the device can blur what is behind a popup window (Android 12+, not disabled). */
+@Composable
+fun rememberBlurBehindSupported(): Boolean {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return androidx.compose.runtime.remember {
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && try {
+            (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).isCrossWindowBlurEnabled
+        } catch (_: Exception) { false }
+    }
+}
+
+/**
+ * Fill for popup menus. Translucent ONLY when there is a real blur behind it (so text stays
+ * legible); otherwise nearly opaque. Fully opaque when Transparency effects is off.
+ */
+@Composable
+fun popupMenuFill(isDark: Boolean): Color {
+    val transparency = LocalTransparencyEnabled.current
+    val blur = rememberBlurBehindSupported()
+    return when {
+        !transparency -> if (isDark) Color(0xFF202020) else Color(0xFFF8F8F8)
+        blur          -> if (isDark) Color(0xB81F1F1F) else Color(0xB8F8F8F8)
+        else          -> if (isDark) Color(0xF01F1F1F) else Color(0xF0F8F8F8)
+    }
+}
