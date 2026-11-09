@@ -27,6 +27,7 @@ import io.github.norbertweb.bluebird.ui.components.BpkPackageManager
 import io.github.norbertweb.bluebird.ui.components.DesktopFileInfo
 import io.github.norbertweb.bluebird.ui.components.DesktopItemType
 import io.github.norbertweb.bluebird.ui.components.InstalledBpkApp
+import io.github.norbertweb.bluebird.ui.components.RecentAppsStore
 import io.github.norbertweb.bluebird.ui.components.ToastNotifData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1644,6 +1645,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         customIconPath: String? = null
     ) {
         dismissAllOverlays()
+        RecentAppsStore.recordScreen(getApplication(), screen)
         var effectiveExtras = extras
         var effectiveCustomIconPath = customIconPath
         var effectiveTitle: String? = null
@@ -1845,6 +1847,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchBpkApp(appId: String) {
         val app = BpkPackageManager(getApplication<Application>()).apps().firstOrNull { it.id == appId } ?: return
         dismissAllOverlays()
+        RecentAppsStore.record(getApplication(), "bpk:${app.id}", app.name)
         openWindow(
             screen = LauncherScreen.WEB_APP_VIEWER,
             extras = mapOf(
@@ -2003,6 +2006,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         try {
             val intent = context.packageManager.getLaunchIntentForPackage(appInfo.packageName)
             intent?.let { it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); context.startActivity(it) }
+            if (intent != null) RecentAppsStore.record(context, "app:${appInfo.packageName}", appInfo.name)
             val recent = _uiState.value.recentApps.toMutableList()
             recent.removeAll { it.packageName == appInfo.packageName }
             recent.add(0, appInfo)

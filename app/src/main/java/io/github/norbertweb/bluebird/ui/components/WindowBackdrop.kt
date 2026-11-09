@@ -61,15 +61,15 @@ fun screenUsesMica(screen: io.github.norbertweb.bluebird.LauncherScreen): Boolea
 /** Win11 "CardBackground" fill: a faint layer over Mica (light: 70% white, dark: 10% white). */
 @Composable
 fun micaCardOr(solid: Color, isDark: Boolean): Color =
-    if (LocalMicaBackdrop.current) (if (isDark) Color(0x1AFFFFFF) else Color(0xB3FFFFFF)) else solid
+    if (LocalMicaBackdrop.current) (if (isDark) Color(0x14FFFFFF) else Color(0xB3FFFFFF)) else solid
 
 /**
  * Legibility scrim painted over a shell panel's own Acrylic. The panels used to paint a 90%-opaque
  * fill (0xE6…) over their blur, which hid it completely; a light scrim keeps text readable while
  * the blurred wallpaper stays clearly visible.
  */
-val ShellScrimDark = Color(0x331F1F1F)
-val ShellScrimLight = Color(0x33F8F8F8)
+val ShellScrimDark = Color(0x59202020)
+val ShellScrimLight = Color(0x47F6F6F6)
 
 /** Semi-translucent fill for individual cards that sit ON an acrylic panel (widgets etc.). */
 val ShellCardDark = Color(0x8C1F1F1F)

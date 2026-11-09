@@ -309,7 +309,7 @@ fun StartMenu(
     val isDark = LocalIsDarkTheme.current
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
     val textSecondary = textPrimary.copy(alpha = 0.62f)
-    val panelShape = RoundedCornerShape(12.dp)
+    val panelShape = RoundedCornerShape(DS.cornerRadius)
     val controlShape = RoundedCornerShape(6.dp)
 
     // One-way only: still publish to the shared ViewModel field in case other
@@ -333,10 +333,10 @@ fun StartMenu(
             .widthIn(min = 320.dp, max = 640.dp)
             .heightIn(min = 520.dp, max = 760.dp)
             .softShadow(
-                cornerRadius = 12.dp,
-                blurRadius = 34.dp,
-                alpha = 0.30f,
-                offsetY = 10.dp
+                cornerRadius = DS.cornerRadius,
+                blurRadius = 40.dp,
+                alpha = 0.34f,
+                offsetY = 12.dp
             )
             .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), panelShape)
             .background(
@@ -474,86 +474,13 @@ private fun Windows11StartSearchBar(
     accent: Color,
     onQueryChange: (String) -> Unit
 ) {
-    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val border = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
-
-    // Exactly the same shell as the Search overlay's bar: same height,
-    // shape, soft shadow and faint accent tint, so Start and Search read
-    // as the same control rather than two different-looking search fields.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .softShadow(
-                cornerRadius = 18.dp,
-                blurRadius = 12.dp,
-                alpha = 0.14f,
-                offsetY = 2.dp
-            )
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        accent.copy(alpha = if (isDark) 0.07f else 0.05f),
-                        if (isDark) Color.White.copy(alpha = 0.075f)
-                        else Color.White.copy(alpha = 0.82f)
-                    )
-                )
-            )
-            .border(1.dp, border, RoundedCornerShape(20.dp))
-            .padding(horizontal = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_bluebird_start_search),
-            contentDescription = stringResource(R.string.search),
-            modifier = Modifier.size(18.dp),
-            contentScale = ContentScale.Fit
-        )
-
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(
-                color = textPrimary,
-                fontSize = 14.sp,
-                lineHeight = 14.sp,
-                platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                    includeFontPadding = false
-                )
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .height(20.dp),
-            decorationBox = { inner ->
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (query.isBlank()) {
-                        Text(stringResource(R.string.search_apps_settings_documents),
-                            color = textPrimary.copy(alpha = 0.48f),
-                            fontSize = 14.sp
-                        )
-                    }
-                    inner()
-                }
-            }
-        )
-
-        if (query.isNotBlank()) {
-            Icon(
-                FluentIcon.Dismiss,
-                contentDescription = stringResource(R.string.clear_search),
-                tint = textPrimary.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .size(18.dp)
-                    .clickable { onQueryChange("") }
-            )
-        }
-    }
+    Win11SearchBox(
+        query = query,
+        onQueryChange = onQueryChange,
+        placeholder = stringResource(R.string.search_apps_settings_documents),
+        isDark = isDark,
+        accent = accent
+    )
 }
 
 @Composable
@@ -698,6 +625,15 @@ private fun Windows11PinnedContent(
     }
 }
 
+private data class RecentDisplay(
+    val key: String,
+    val title: String,
+    val timestamp: Long,
+    val iconRes: Int?,
+    val iconDrawable: Drawable?,
+    val open: () -> Unit
+)
+
 @Composable
 private fun Windows11RecommendedRow(
     uiState: LauncherUiState,
@@ -706,54 +642,76 @@ private fun Windows11RecommendedRow(
     isDark: Boolean,
     textSecondary: Color
 ) {
-    var showAllRecommended by rememberSaveable { mutableStateOf(false) }
-    val allRecommended = remember(uiState.installedApps, uiState.pinnedBpkStartIds) {
-        val ranked = uiState.installedApps
-            .map { it to getAppOpenCount(context, it.packageName) }
-            .sortedWith(compareByDescending<Pair<AppInfo, Int>> { it.second }.thenBy { it.first.name.lowercase() })
-            .map { it.first }
-
-        // Keep Recommended visible on a fresh Bluebird install too. Once usage
-        // data exists, the section is genuinely usage-ranked; before then we
-        // use the available installed apps as a sensible Windows-style seed.
-        ranked.filter { getAppOpenCount(context, it.packageName) > 0 }.ifEmpty {
-            ranked
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    var historyVersion by remember { mutableStateOf(0) }
+    // Re-read the real launch history whenever Start opens or the app lists change.
+    val entries = remember(uiState.installedApps, uiState.installedBpkApps, uiState.recentApps, historyVersion) {
+        RecentAppsStore.load(context)
+    }
+    val resolved = remember(entries, uiState.installedApps, uiState.installedBpkApps) {
+        entries.mapNotNull { e ->
+            when {
+                e.key.startsWith("win:") -> {
+                    val screen = runCatching { LauncherScreen.valueOf(e.key.removePrefix("win:")) }.getOrNull()
+                        ?: return@mapNotNull null
+                    RecentDisplay(e.key, e.label, e.timestamp, appIconRes(screen), null) { viewModel.openWindow(screen) }
+                }
+                e.key.startsWith("bpk:") -> {
+                    val id = e.key.removePrefix("bpk:")
+                    val app = uiState.installedBpkApps.firstOrNull { it.id == id } ?: return@mapNotNull null
+                    val info = viewModel.bpkAppInfo(app)
+                    RecentDisplay(e.key, app.name, e.timestamp, null, info.icon) { viewModel.launchBpkApp(id) }
+                }
+                e.key.startsWith("app:") -> {
+                    val pkg = e.key.removePrefix("app:")
+                    val app = uiState.installedApps.firstOrNull { it.packageName == pkg } ?: return@mapNotNull null
+                    RecentDisplay(e.key, app.name, e.timestamp, null, app.icon) {
+                        incrementAppOpenCount(context, app.packageName)
+                        viewModel.openApp(context, app)
+                    }
+                }
+                else -> null
+            }
         }
     }
 
-    if (allRecommended.isEmpty()) return
-
-    val visibleRecommended = if (showAllRecommended) allRecommended else allRecommended.take(6)
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    val visible = if (showAll) resolved else resolved.take(6)
 
     Column {
         Windows11SectionHeader(
             title = stringResource(R.string.recommended),
-            actionLabel = if (allRecommended.size > 6) (if (showAllRecommended) stringResource(R.string.less) else stringResource(R.string.more_2)) else "",
+            actionLabel = if (resolved.size > 6) (if (showAll) stringResource(R.string.less) else stringResource(R.string.more_2)) else "",
             isDark = isDark,
-            onAction = { if (allRecommended.size > 6) showAllRecommended = !showAllRecommended }
+            onAction = { if (resolved.size > 6) showAll = !showAll }
         )
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(6.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            visibleRecommended.chunked(2).forEach { rowApps ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowApps.forEach { app ->
-                        Windows11RecommendedCard(
-                            app = app,
+        if (resolved.isEmpty()) {
+            // Honest empty state instead of fake, alphabetically-seeded "recent" apps.
+            Text(
+                stringResource(R.string.no_recent_activities_detected),
+                color = textPrimary.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp, horizontal = 4.dp),
+                textAlign = TextAlign.Center
+            )
+        } else {
+            visible.chunked(2).forEach { rowItems ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    rowItems.forEach { item ->
+                        Windows11RecommendedItem(
+                            item = item,
                             isDark = isDark,
-                            textSecondary = textSecondary,
-                            onClick = {
-                                incrementAppOpenCount(context, app.packageName)
-                                viewModel.openApp(context, app)
+                            onClick = item.open,
+                            onRemove = {
+                                RecentAppsStore.remove(context, item.key)
+                                historyVersion++
                             },
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    repeat(2 - rowApps.size) { Spacer(Modifier.weight(1f)) }
+                    repeat(2 - rowItems.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -761,36 +719,52 @@ private fun Windows11RecommendedRow(
 }
 
 @Composable
-private fun Windows11RecommendedCard(
-    app: AppInfo,
+private fun Windows11RecommendedItem(
+    item: RecentDisplay,
     isDark: Boolean,
-    textSecondary: Color,
     onClick: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val fill = if (isDark) Color.White.copy(alpha = 0.055f) else Color.Black.copy(alpha = 0.035f)
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(7.dp))
-            .background(fill)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        AsyncImage(
-            model = app.icon,
-            contentDescription = app.name,
-            modifier = Modifier.size(30.dp),
-            contentScale = ContentScale.Fit
-        )
-        Text(
-            app.name,
-            color = textSecondary,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
+    var menu by remember { mutableStateOf(false) }
+    val now = System.currentTimeMillis()
+    val subtitle = android.text.format.DateUtils.getRelativeTimeSpanString(
+        item.timestamp, now, android.text.format.DateUtils.MINUTE_IN_MILLIS,
+        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
+    ).toString()
+
+    Box(modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(DS.tileCorner))
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onClick() }, onLongPress = { menu = true })
+                }
+                .padding(horizontal = 8.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (item.iconRes != null) {
+                PngIcon(res = item.iconRes, contentDescription = item.title, modifier = Modifier.size(32.dp))
+            } else {
+                AsyncImage(
+                    model = item.iconDrawable,
+                    contentDescription = item.title,
+                    modifier = Modifier.size(32.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(item.title, color = textPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, color = textPrimary.copy(alpha = 0.58f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        BluebirdDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.open)) }, onClick = { menu = false; onClick() })
+            DropdownMenuItem(text = { Text(stringResource(R.string.clear)) }, onClick = { menu = false; onRemove() })
+        }
     }
 }
 
@@ -803,7 +777,7 @@ private fun Windows11StartFooter(
     controlShape: RoundedCornerShape
 ) {
     val topBorder = if (isDark) Color.White.copy(alpha = 0.075f) else Color.Black.copy(alpha = 0.075f)
-    val footerFill = if (isDark) Color.Black.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.035f)
+    val footerFill = if (isDark) Color.Black.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.04f)
 
     Column(
         modifier = Modifier

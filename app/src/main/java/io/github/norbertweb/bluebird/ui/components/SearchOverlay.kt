@@ -214,7 +214,7 @@ fun SearchOverlay(
     // no second card, no size-picker control, and no inner blur region.
     // Sized identically to the Start Menu shell (see StartMenu's sizing
     // modifiers) rather than its own wider/taller calculation.
-    val radius = 12.dp
+    val radius = DS.cornerRadius
     val panelShape = RoundedCornerShape(radius)
 
     Box(
@@ -225,10 +225,10 @@ fun SearchOverlay(
             .heightIn(min = 520.dp, max = 760.dp)
             .imePadding()
             .softShadow(
-                cornerRadius = 12.dp,
-                blurRadius = 34.dp,
-                alpha = 0.30f,
-                offsetY = 10.dp
+                cornerRadius = DS.cornerRadius,
+                blurRadius = 40.dp,
+                alpha = 0.34f,
+                offsetY = 12.dp
             )
             .hazeMaterial(hazeState, windowsAcrylic(accent, isDark), panelShape)
             .background(
@@ -247,91 +247,15 @@ fun SearchOverlay(
                 // Keep one continuous Acrylic surface, exactly like Start.
                 .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
-            // Windows-style search field: same visual family as the polished
-            // Start Menu, with the Bluebird colored search XML asset.
-            // Elevated header: a soft shadow lifts the bar off the panel and
-            // a faint accent tint gives it a touch of color elevation
-            // without overpowering the field.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .softShadow(
-                        cornerRadius = 18.dp,
-                        blurRadius = 12.dp,
-                        alpha = 0.14f,
-                        offsetY = 2.dp
-                    )
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                accent.copy(alpha = if (isDark) 0.07f else 0.05f),
-                                if (isDark) Color.White.copy(alpha = 0.075f)
-                                else Color.White.copy(alpha = 0.82f)
-                            )
-                        )
-                    )
-                    .border(
-                        1.dp,
-                        if (isDark) Color.White.copy(alpha = 0.10f)
-                        else Color.Black.copy(alpha = 0.10f),
-                        RoundedCornerShape(20.dp)
-                    )
-                    .clickable { runCatching { focusRequester.requestFocus() } }
-                    .padding(horizontal = 13.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.ic_bluebird_start_search),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-
-                BasicTextField(
-                    value = localSearchQuery,
-                    onValueChange = { localSearchQuery = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(20.dp)
-                        .focusRequester(focusRequester),
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        color = textColor,
-                        fontSize = 14.sp,
-                        lineHeight = 14.sp,
-                        platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                            includeFontPadding = false
-                        )
-                    ),
-                    singleLine = true,
-                    cursorBrush = SolidColor(bluebirdColors.AccentBlue),
-                    decorationBox = { inner ->
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            if (localSearchQuery.isEmpty()) {
-                                androidx.compose.material3.Text(
-                                    stringResource(R.string.search_apps_settings_documents),
-                                    color = textColor.copy(alpha = 0.48f),
-                                    fontSize = 14.sp
-                                )
-                            }
-                            inner()
-                        }
-                    }
-                )
-
-                if (localSearchQuery.isNotEmpty()) {
-                    IconButton(
-                        icon = FluentIcon.Dismiss,
-                        tint = mutedText,
-                        size = 15.dp,
-                        onClick = { localSearchQuery = "" }
-                    )
-                }
-            }
+            // Same Windows 11 search field as Start (see Win11SearchBox.kt).
+            Win11SearchBox(
+                query = localSearchQuery,
+                onQueryChange = { localSearchQuery = it },
+                placeholder = stringResource(R.string.search_apps_settings_documents),
+                isDark = isDark,
+                accent = accent,
+                focusRequester = focusRequester
+            )
 
             Spacer(Modifier.height(12.dp))
 

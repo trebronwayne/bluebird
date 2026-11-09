@@ -463,9 +463,7 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(specialAccent.copy(alpha = 0.12f)),
+                        .size(44.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CategoryIconView(selectedCategoryState.value.icon, modifier = Modifier.size(22.dp), tint = specialAccent)
@@ -541,8 +539,8 @@ internal fun SettingsGroup(title: String, a: ScreenArgs, content: @Composable Co
         Card(
             colors = CardDefaults.cardColors(containerColor = a.surfaceBg),
             shape  = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.07f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            border = BorderStroke(1.dp, if (a.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) { Column(modifier = Modifier.padding(4.dp), content = content) }
     }
 }
@@ -554,12 +552,12 @@ internal fun SettingsGroup(title: String, a: ScreenArgs, content: @Composable Co
 private fun SIconBadge(icon: ImageVector, tint: Color, bg: Color) {
     Box(
         modifier = Modifier
-            .size(34.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(bg),
+            .size(34.dp),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(17.dp))
+        // Windows 11 Settings draws plain glyphs, not glyphs inside tinted tiles; the tile was
+        // the "mystery inner box" visible on translucent cards in blur mode.
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -682,8 +680,9 @@ internal fun SDropdown(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(a.textColor.copy(alpha = 0.05f))
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (a.isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.7f))
+                    .border(1.dp, if (a.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
                     .padding(horizontal = 12.dp, vertical = 7.dp)
             ) {
                 Text(selected, color = a.textColor, fontSize = (12 * (a.scale)).sp)
@@ -1502,7 +1501,8 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = a.surfaceBg),
         shape  = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, a.textColor.copy(alpha = 0.07f))
+        border = BorderStroke(1.dp, if (a.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
             // Header — always visible, tap to expand/collapse the form.
