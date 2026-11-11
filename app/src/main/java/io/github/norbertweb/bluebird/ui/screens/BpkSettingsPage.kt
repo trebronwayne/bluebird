@@ -396,3 +396,4 @@ private object BpkSnippets {
 
     val BRIDGE = "if (typeof Bluebird !== 'undefined') {\n  const info = JSON.parse(Bluebird.getAppInfo());\n  if (Bluebird.capabilityGranted('app_storage')) {\n    Bluebird.storageSet('display-name', 'Guest');\n    const saved = JSON.parse(Bluebird.storageGet('display-name'));\n    if (saved.ok) console.log(saved.value);\n  }\n  Bluebird.log('info', 'App started');\n}\n\nOther calls:\nBluebird.requestFilePicker()\nBluebird.requestMediaPicker()\nBluebird.setBrightness(1..255)"
 }
+ 
