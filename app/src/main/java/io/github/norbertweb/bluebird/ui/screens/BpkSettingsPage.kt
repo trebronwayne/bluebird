@@ -51,6 +51,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fluent.ui.system.icons.FluentIcons
+import fluent.ui.system.icons.regular.Add
+import fluent.ui.system.icons.regular.ArrowClockwise
+import fluent.ui.system.icons.regular.Bug
+import fluent.ui.system.icons.regular.Checkmark
+import fluent.ui.system.icons.regular.ChevronDown
+import fluent.ui.system.icons.regular.ChevronRight
+import fluent.ui.system.icons.regular.Code
+import fluent.ui.system.icons.regular.DataTrending
+import fluent.ui.system.icons.regular.Shield
 import io.github.norbertweb.bluebird.ui.components.BpkReminderPrefs
 import io.github.norbertweb.bluebird.ui.components.LocalMicaBackdrop
 import kotlinx.coroutines.delay

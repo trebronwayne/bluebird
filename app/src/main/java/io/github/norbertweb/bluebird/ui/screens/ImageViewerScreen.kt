@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.pluralText
@@ -2143,43 +2145,7 @@ private fun PhotoLoadingState(isDark: Boolean) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_bluebird_photos),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(34.dp)
-            )
-            Text(
-                stringResource(R.string.loading_your_photos),
-                color = textColor(isDark),
-                fontSize = 14.sp
-            )
-            Text(
-                stringResource(R.string.building_your_photo_library),
-                color = mutedColor(isDark),
-                fontSize = 11.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyLibraryState(
-    isDark: Boolean,
-    onRefresh: () -> Unit
-) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_bluebird_photos),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(46.dp)
-            )
+            Aubree(state = AubreeState.EMPTY, size = 112.dp, contentDescription = "")
             Text(
                 stringResource(R.string.no_photos_found),
                 color = textColor(isDark),

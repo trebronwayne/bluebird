@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.R
 
@@ -261,12 +263,7 @@ fun RecycleBinScreen(isDark: Boolean, viewModel: LauncherViewModel) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        FluentIcon.Delete,
-                        null,
-                        tint = textColor.copy(alpha = 0.15f),
-                        modifier = Modifier.size(80.dp)
-                    )
+                    Aubree(state = AubreeState.EMPTY, size = 128.dp, contentDescription = "")
                     Text(
                         stringResource(R.string.recycle_bin_empty),
                         color = textColor.copy(alpha = 0.4f),

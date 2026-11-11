@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.i18n.ui
 import io.github.norbertweb.bluebird.i18n.pluralText
@@ -94,6 +96,7 @@ import androidx.compose.runtime.*
 import io.github.norbertweb.bluebird.ui.components.LocalWindowRuntime
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1170,31 +1173,46 @@ fun MediaPlayerScreen(
     // ── ROOT LAYOUT ───────────────────────────────────────────────
     // collapsed = player folded into the bottom dock. Only honoured while something is loaded,
     // so clearing the queue can never leave the window stuck without a player.
-    val collapsed = state.playerCollapsed && state.currentTrack != null
-    Box(Modifier.fillMaxSize().background(bg)) {
-        if (state.isFullscreen && state.currentTrack?.isVideo == true) {
-            FullscreenVideoView(state, tc, tcm, isDark, ctx)
-        } else {
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.weight(1f).fillMaxWidth()) {
+    // collapsed = player folded away. The "Films & TV" header toggles it, so it can never get stuck;
+    // the bottom dock only appears when something is actually loaded.
+    val collapsed = state.playerCollapsed
+    BoxWithConstraints(Modifier.fillMaxSize().background(bg)) {
+        val rootW = maxWidth
+        CompositionLocalProvider(LocalCompactH provides (maxHeight < 420.dp)) {
+            if (state.isFullscreen && state.currentTrack?.isVideo == true) {
+                FullscreenVideoView(state, tc, tcm, isDark, ctx)
+            } else {
+                // Library width glides between sidebar / full width / hidden instead of snapping.
+                val libWidth by animateDpAsState(
                     when {
-                        collapsed -> LibraryPane(
-                            state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle,
-                            fullWidth = true, modifier = Modifier.fillMaxSize()
-                        )
-                        state.showQueue -> {
-                            LibraryPane(state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle)
-                            Divider(Modifier.fillMaxHeight().width(1.dp), color = border)
-                            PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+                        collapsed -> rootW
+                        state.showQueue -> 300.dp.coerceAtMost(rootW)
+                        else -> 0.dp
+                    },
+                    tween(280, easing = FastOutSlowInEasing), label = "libWidth"
+                )
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        if (libWidth > 1.dp) {
+                            LibraryPane(
+                                state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle,
+                                fullWidth = collapsed, modifier = Modifier.width(libWidth).fillMaxHeight()
+                            )
+                            if (!collapsed && state.showQueue) Divider(Modifier.fillMaxHeight().width(1.dp), color = border)
                         }
-                        else -> PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+                        AnimatedVisibility(
+                            visible = !collapsed,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            enter = fadeIn(tween(220)),
+                            exit = fadeOut(tween(120))
+                        ) { PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx) }
                     }
+                    AnimatedVisibility(
+                        visible = collapsed && state.currentTrack != null,
+                        enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200)),
+                        exit = slideOutVertically(tween(180)) { it } + fadeOut(tween(120))
+                    ) { NowPlayingDock(state, isDark, surface, border, tc, tcs, tcm, ctx) }
                 }
-                AnimatedVisibility(
-                    visible = collapsed,
-                    enter = slideInVertically(tween(220)) { it } + fadeIn(tween(180)),
-                    exit = fadeOut(tween(90))
-                ) { NowPlayingDock(state, isDark, surface, border, tc, tcs, tcm, ctx) }
             }
         }
     }
@@ -1454,23 +1472,51 @@ private fun LibraryPane(
     BoxWithConstraints(modifier) {
     val gridCols = (maxWidth / 280.dp).toInt().coerceIn(1, 4)
     Column(Modifier.fillMaxSize().background(surface)) {
+        val compactH = LocalCompactH.current
         Row(
             Modifier.fillMaxWidth().background(if (isDark) FTV.BgMid else FTV.LSurface)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 10.dp, vertical = if (compactH) 4.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(Modifier.size(32.dp).background(FTV.Accent, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Icon(FI.Movie, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            // "Films & TV" is the show/hide-player control: tap it to fold the player into the
+            // bottom dock (library goes full width) or bring it back.
+            Row(
+                Modifier.weight(1f)
+                    .smoothPress(onClick = { state.playerCollapsed = !state.playerCollapsed })
+                    .clip(RoundedCornerShape(12.dp))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    Modifier.size(if (compactH) 26.dp else 32.dp)
+                        .background(Brush.linearGradient(listOf(FTV.Accent, FTV.Accent.copy(alpha = 0.7f))), RoundedCornerShape(9.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(FI.Movie, null, tint = Color.White, modifier = Modifier.size(if (compactH) 15.dp else 18.dp))
+                }
+                Column(Modifier.weight(1f, fill = false)) {
+                    Text(stringResource(R.string.films_tv), color = tc, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    if (!compactH) {
+                        if (state.isLoading)
+                            Text(stringResource(R.string.loading_2), color = FTV.Accent, fontSize = 11.sp)
+                        else
+                            Text(pluralText(R.plurals.plural_items, state.allTracks.size), color = tcm, fontSize = 11.sp)
+                    }
+                }
+                val playerHidden = state.playerCollapsed
+                val rot by animateFloatAsState(if (playerHidden) 180f else 0f, tween(280, easing = FastOutSlowInEasing), label = "playerChevron")
+                Row(
+                    Modifier.clip(RoundedCornerShape(50)).background(FTV.Accent.copy(alpha = 0.16f))
+                        .padding(horizontal = if (fullWidth) 10.dp else 5.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (fullWidth) Text(if (playerHidden) "Show player" else "Hide player", color = FTV.Accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(FI.KeyboardArrowDown, null, tint = FTV.Accent, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rot })
+                }
             }
-            Column {
-                Text(stringResource(R.string.films_tv), color = tc, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                if (state.isLoading)
-                    Text(stringResource(R.string.loading_2), color = FTV.Accent, fontSize = 11.sp)
-                else
-                    Text(pluralText(R.plurals.plural_items, state.allTracks.size), color = tcm, fontSize = 11.sp)
-            }
-            Spacer(Modifier.weight(1f))
             IconButton(onClick = { state.showSettings = true }, modifier = Modifier.size(28.dp)) {
                 Icon(FI.Settings, null, tint = tcm, modifier = Modifier.size(16.dp))
             }
@@ -1488,7 +1534,7 @@ private fun LibraryPane(
         )
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                .background(surfaceH).padding(horizontal = 8.dp, vertical = 6.dp),
+                .background(surfaceH).padding(horizontal = 8.dp, vertical = if (compactH) 3.dp else 6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             tabs.forEach { (tab, icons) ->
@@ -1496,10 +1542,11 @@ private fun LibraryPane(
                 val (iconRegular, iconFilled) = icons
                 val tabBg by animateColorAsState(if (active) FTV.Accent else Color.Transparent, label = "tabbg")
                 Row(
-                    Modifier.clip(RoundedCornerShape(8.dp))
+                    Modifier
+                        .smoothPress(onClick = { state.activeTab = tab; if (tab != MediaTab.PLAYLISTS) state.openPlaylistId = null })
+                        .clip(RoundedCornerShape(10.dp))
                         .background(tabBg)
-                        .clickable { state.activeTab = tab; if (tab != MediaTab.PLAYLISTS) state.openPlaylistId = null }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 11.dp, vertical = if (compactH) 5.dp else 8.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1523,8 +1570,8 @@ private fun LibraryPane(
 
         if (!showsPlaylistFolderList) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (compactH) 3.dp else 6.dp).height(if (compactH) 34.dp else 40.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1601,20 +1648,25 @@ private fun LibraryPane(
 
         // Always-visible Recent strip (hidden only on the Recent/Queue tabs, which ARE lists of it,
         // while searching, and on the playlist folder list).
-        if (!showsPlaylistFolderList && state.searchQuery.isBlank() &&
-            state.activeTab != MediaTab.RECENTS && state.activeTab != MediaTab.PLAYLIST) {
-            RecentStrip(state, isDark, ctx, tc, tcs, tcm, border)
-        }
+        val showRecentStrip = !showsPlaylistFolderList && state.searchQuery.isBlank() &&
+            state.activeTab != MediaTab.RECENTS && state.activeTab != MediaTab.PLAYLIST
+        if (showRecentStrip && !compactH) RecentStrip(state, isDark, ctx, tc, tcs, tcm, border)
 
         val tracks    = state.filteredTracks
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridCols),
             state = rememberLazyGridState(),
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = if (compactH) 4.dp else 8.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compactH) 4.dp else 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // Short windows: Recent scrolls with the list so the list owns the whole height.
+            if (showRecentStrip && compactH) {
+                item(key = "recent_strip", span = { GridItemSpan(maxLineSpan) }) {
+                    RecentStrip(state, isDark, ctx, tc, tcs, tcm, border, inGrid = true)
+                }
+            }
             when (state.activeTab) {
                 MediaTab.PLAYLIST -> {
                     itemsIndexed(state.playlist, key = { i, t -> "${i}_${t.metaKey}" }) { idx, t ->
@@ -1930,13 +1982,12 @@ private fun TrackThumbnail(
             contentScale = ContentScale.Crop, error = null
         )
         else -> Box(
-            Modifier.size(size).clip(RoundedCornerShape(radius))
-                .background(if (track.isVideo) FTV.VideoGreen.copy(0.15f) else FTV.AudioPurple.copy(0.15f)),
+            Modifier.size(size).clip(RoundedCornerShape(radius)).background(artGradient(track)),
             contentAlignment = Alignment.Center
         ) {
-            if (isActive && isPlaying) AnimatedEqualizer(FTV.Accent)
+            if (isActive && isPlaying) AnimatedEqualizer(Color.White)
             else Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null,
-                tint = if (isActive) FTV.Accent else (if (track.isVideo) FTV.VideoGreen else FTV.AudioPurple).copy(0.7f),
+                tint = Color.White.copy(alpha = 0.92f),
                 modifier = Modifier.size(size * 0.5f))
         }
     }
@@ -1955,6 +2006,51 @@ private fun VideoPoster(track: MediaTrack, ctx: Context, modifier: Modifier = Mo
     } else if (track.artworkUri != null) {
         AsyncImage(model = track.artworkUri, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
     }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Visual language: smooth press feedback, rich art gradients, short-screen mode
+// ─────────────────────────────────────────────────────────────────
+
+/** True when the window is short (phone in landscape). Layout shrinks chrome to give lists room. */
+private val LocalCompactH = compositionLocalOf { false }
+
+/**
+ * Press feedback shared by every card and chip: a gentle spring scale-down while the finger is
+ * down, then back. Must be the FIRST modifier in the chain so the whole card (fill, border,
+ * content) scales together instead of only its content.
+ */
+@Composable
+private fun Modifier.smoothPress(onClick: () -> Unit, onLongPress: (() -> Unit)? = null): Modifier {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        if (pressed) 0.975f else 1f,
+        spring(dampingRatio = 0.65f, stiffness = 520f), label = "press"
+    )
+    return this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .pointerInput(onClick, onLongPress) {
+            detectTapGestures(
+                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onTap = { onClick() },
+                onLongPress = if (onLongPress != null) ({ _: Offset -> onLongPress() }) else null
+            )
+        }
+}
+
+/** Curated, saturated-but-friendly gradient pairs; one is picked per track so art-less items still look rich. */
+private val ArtPalette = listOf(
+    Color(0xFF7C4DFF) to Color(0xFF3D5AFE),   // violet → indigo
+    Color(0xFFFF6B6B) to Color(0xFFFF8E53),   // coral → orange
+    Color(0xFF00C9A7) to Color(0xFF0097E6),   // teal → blue
+    Color(0xFFF857A6) to Color(0xFFFF5858),   // pink → red
+    Color(0xFF43C59E) to Color(0xFF2E86AB),   // green → steel blue
+    Color(0xFFFFB347) to Color(0xFFFF7A59)    // amber → orange
+)
+
+private fun artGradient(track: MediaTrack): Brush {
+    val (a, b) = ArtPalette[(track.metaKey.hashCode() and Int.MAX_VALUE) % ArtPalette.size]
+    return Brush.linearGradient(listOf(a, b))
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1983,51 +2079,46 @@ private fun LibraryRow(
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(10.dp)
-    val cardBg by animateColorAsState(
-        when {
-            isActive -> FTV.Accent.copy(alpha = if (isDark) 0.18f else 0.12f)
-            isDark   -> Color.White.copy(alpha = 0.05f)
-            else     -> Color(0xFFF7F7F7)
-        }, label = "cardbg"
-    )
-    val cardBorder by animateColorAsState(
-        when {
-            isActive -> FTV.Accent.copy(alpha = 0.55f)
-            isDark   -> Color.White.copy(alpha = 0.07f)
-            else     -> Color.Black.copy(alpha = 0.07f)
-        }, label = "cardborder"
-    )
+    val compact = LocalCompactH.current
+    val shape = RoundedCornerShape(12.dp)
+    // 0 → 1 as the card becomes the playing one; colours are blended so the change is a smooth fade.
+    val t by animateFloatAsState(if (isActive) 1f else 0f, tween(280, easing = FastOutSlowInEasing), label = "cardActive")
+    val idleA = if (isDark) Color.White.copy(alpha = 0.085f) else Color.White
+    val idleB = if (isDark) Color.White.copy(alpha = 0.045f) else Color(0xFFF1F3F6)
+    val fillA = lerp(idleA, FTV.Accent.copy(alpha = if (isDark) 0.38f else 0.22f), t)
+    val fillB = lerp(idleB, FTV.Accent.copy(alpha = if (isDark) 0.10f else 0.06f), t)
+    val edgeA = lerp(if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.07f), FTV.Accent.copy(alpha = 0.75f), t)
+    val edgeB = lerp(if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.04f), FTV.Accent.copy(alpha = 0.22f), t)
 
-    // Each track is a small rounded card (Windows 11 style): art, title, artist · length, actions.
+    // A compact rounded card: art, title, artist · length, actions. Light top edge gives depth.
     Row(
         modifier.fillMaxWidth()
+            .smoothPress(onClick = onClick, onLongPress = { showMenu = true })
             .clip(shape)
-            .background(cardBg)
-            .border(1.dp, cardBorder, shape)
-            .pointerInput(Unit) { detectTapGestures(onTap = { onClick() }, onLongPress = { showMenu = true }) }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .background(Brush.horizontalGradient(listOf(fillA, fillB)))
+            .border(1.dp, Brush.verticalGradient(listOf(edgeA, edgeB)), shape)
+            .padding(horizontal = 8.dp, vertical = if (compact) 5.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-            TrackThumbnail(track, ctx, size = 44.dp, radius = 8.dp, isActive = isActive, isPlaying = isPlaying)
+        val thumb = if (compact) 34.dp else 40.dp
+        Box(Modifier.size(thumb), contentAlignment = Alignment.Center) {
+            TrackThumbnail(track, ctx, size = thumb, radius = 9.dp, isActive = isActive, isPlaying = isPlaying)
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(track.displayTitle, color = if (isActive) FTV.Accent else tc, fontSize = 13.5.sp,
+                Text(track.displayTitle, color = if (isActive) FTV.Accent else tc, fontSize = if (compact) 12.5.sp else 13.sp,
                     fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (track.isFavorite) Icon(FI.Star, null, tint = FTV.Gold, modifier = Modifier.size(11.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(ui(track.displayArtist), color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(ui(track.displayArtist), color = tcs, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (track.durationMs > 0) {
-                    Text("·", color = tcm, fontSize = 12.sp)
-                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 12.sp, maxLines = 1)
+                    Text("·", color = tcm, fontSize = 11.5.sp)
+                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 11.5.sp, maxLines = 1)
                 }
             }
-            if (track.playCount > 0) Text(stringResource(R.string.played, track.playCount), color = tcm, fontSize = 11.sp)
         }
         if (showMoveControls) {
             Column(Modifier.width(20.dp)) {
@@ -2037,7 +2128,7 @@ private fun LibraryRow(
                     Icon(FI.KeyboardArrowDown, null, tint = tcm, modifier = Modifier.size(16.dp).clickable { onMoveDown() })
             }
         }
-        Box(Modifier.size(30.dp).clip(CircleShape).clickable { showMenu = true }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(28.dp).clip(CircleShape).clickable { showMenu = true }, contentAlignment = Alignment.Center) {
             Icon(FI.MoreVert, null, tint = tcm, modifier = Modifier.size(16.dp))
             BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false },
                 modifier = fluentMenuModifier(isDark)) {
@@ -2174,8 +2265,8 @@ private fun TrackArt(track: MediaTrack, ctx: Context, modifier: Modifier = Modif
             model = track.artworkUri, contentDescription = null,
             modifier = modifier, contentScale = ContentScale.Crop
         )
-        else -> Box(modifier.background(tint.copy(0.16f)), contentAlignment = Alignment.Center) {
-            Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null, tint = tint.copy(0.85f), modifier = Modifier.size(26.dp))
+        else -> Box(modifier.background(artGradient(track)), contentAlignment = Alignment.Center) {
+            Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.size(26.dp))
         }
     }
 }
@@ -2184,19 +2275,27 @@ private fun TrackArt(track: MediaTrack, ctx: Context, modifier: Modifier = Modif
 private fun RecentCard(
     track: MediaTrack, active: Boolean, playing: Boolean, isDark: Boolean,
     tc: Color, tcm: Color, ctx: Context,
-    modifier: Modifier = Modifier, onClick: () -> Unit
+    modifier: Modifier = Modifier, showSubtitle: Boolean = true, onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(10.dp)
-    val bg = if (active) FTV.Accent.copy(alpha = if (isDark) 0.18f else 0.12f)
-             else if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF7F7F7)
-    val bd = if (active) FTV.Accent.copy(alpha = 0.55f)
-             else if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.07f)
+    val shape = RoundedCornerShape(12.dp)
+    val t by animateFloatAsState(if (active) 1f else 0f, tween(280, easing = FastOutSlowInEasing), label = "recentActive")
+    val fillA = lerp(if (isDark) Color.White.copy(alpha = 0.085f) else Color.White, FTV.Accent.copy(alpha = if (isDark) 0.38f else 0.22f), t)
+    val fillB = lerp(if (isDark) Color.White.copy(alpha = 0.045f) else Color(0xFFF1F3F6), FTV.Accent.copy(alpha = if (isDark) 0.10f else 0.06f), t)
+    val edgeA = lerp(if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.07f), FTV.Accent.copy(alpha = 0.75f), t)
+    val edgeB = lerp(if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.04f), FTV.Accent.copy(alpha = 0.22f), t)
     Column(
-        modifier.clip(shape).background(bg).border(1.dp, bd, shape).clickable(onClick = onClick).padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier
+            .smoothPress(onClick = onClick)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(fillA, fillB)))
+            .border(1.dp, Brush.verticalGradient(listOf(edgeA, edgeB)), shape)
+            .padding(5.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp))) {
             TrackArt(track, ctx, Modifier.fillMaxSize())
+            // soft scrim so the badge/title edge never fights a bright cover
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.28f)))))
             if (active) {
                 Box(
                     Modifier.align(Alignment.BottomEnd).padding(4.dp).size(20.dp).background(FTV.Accent, CircleShape),
@@ -2204,50 +2303,57 @@ private fun RecentCard(
                 ) { Icon(if (playing) FI.Pause else FI.Play, null, tint = Color.White, modifier = Modifier.size(11.dp)) }
             }
         }
-        Column(Modifier.padding(horizontal = 2.dp)) {
-            Text(track.displayTitle, color = if (active) FTV.Accent else tc, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(ui(track.displayArtist), color = tcm, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.padding(horizontal = 3.dp)) {
+            Text(track.displayTitle, color = if (active) FTV.Accent else tc, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (showSubtitle) Text(ui(track.displayArtist), color = tcm, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/** Horizontally scrolling "Recent" cards pinned above the library list; tap the header to fold it. */
+/**
+ * "Recent" cards above the library. On normal windows it is pinned (always visible); on short
+ * windows ([inGrid] = true) it is the first item of the scrolling list with smaller covers so
+ * the list keeps almost all of the height. Tap the header to fold it.
+ */
 @Composable
 private fun RecentStrip(
     state: PlayerState, isDark: Boolean, ctx: Context,
-    tc: Color, tcs: Color, tcm: Color, border: Color
+    tc: Color, tcs: Color, tcm: Color, border: Color,
+    inGrid: Boolean = false
 ) {
     val byKey = remember(state.allTracks) { state.allTracks.associateBy { it.metaKey } }
     val recents = remember(state.recentPaths, byKey) { state.recentPaths.mapNotNull { byKey[it] }.take(12) }
     if (recents.isEmpty()) return
+    val cardW = if (inGrid) 96.dp else 124.dp
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth().animateContentSize(tween(240, easing = FastOutSlowInEasing))) {
         Row(
             Modifier.fillMaxWidth()
                 .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { state.recentExpanded = !state.recentExpanded }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = if (inGrid) 4.dp else 14.dp, vertical = if (inGrid) 4.dp else 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(FI.HistoryFilled, null, tint = FTV.Accent, modifier = Modifier.size(14.dp))
-            Text(stringResource(R.string.recent), color = tc, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Icon(if (state.recentExpanded) FI.KeyboardArrowUp else FI.KeyboardArrowDown, null, tint = tcm, modifier = Modifier.size(16.dp))
+            Text(stringResource(R.string.recent), color = tc, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            val rot by animateFloatAsState(if (state.recentExpanded) 180f else 0f, tween(240), label = "recentChevron")
+            Icon(FI.KeyboardArrowDown, null, tint = tcm, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rot })
         }
-        AnimatedVisibility(state.recentExpanded) {
+        if (state.recentExpanded) {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 10.dp),
+                contentPadding = PaddingValues(horizontal = if (inGrid) 0.dp else 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 itemsIndexed(recents, key = { _, t -> "recent_" + t.metaKey }) { index, t ->
                     RecentCard(
                         t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcm, ctx,
-                        modifier = Modifier.width(132.dp)
+                        modifier = Modifier.width(cardW), showSubtitle = !inGrid
                     ) { state.playQueue(recents, index) }
                 }
             }
         }
-        Divider(color = border)
+        if (!inGrid) Divider(color = border)
     }
 }
 
@@ -2264,9 +2370,7 @@ private fun HomeStage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
     ) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(FTV.Accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-            Icon(FI.PlayCircle, null, tint = FTV.Accent, modifier = Modifier.size(32.dp))
-        }
+        Aubree(state = AubreeState.SLEEPY, size = 120.dp, contentDescription = "")
         Text("Nothing playing", color = tc, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text(
             if (recents.isEmpty()) "Pick a song or video from your library to start."
@@ -2344,7 +2448,7 @@ private fun PlayerPane(
 
     Column(Modifier.fillMaxSize().background(bg)) {
         Row(
-            Modifier.fillMaxWidth().height(48.dp).background(surface).padding(horizontal = 12.dp),
+            Modifier.fillMaxWidth().height(if (LocalCompactH.current) 40.dp else 48.dp).background(surface).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -2556,40 +2660,62 @@ private fun AudioPlayerArea(
         value
     } else 1f
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Box(
-            Modifier
-                .size(232.dp)
-                .graphicsLayer {
-                    val s = if (state.isPlaying) breathe else 1f
-                    scaleX = s; scaleY = s
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val short = maxHeight < 300.dp
+        // Art never exceeds the room available, so nothing is cut off on a landscape phone.
+        val artSize = if (short) (maxHeight - 24.dp).coerceIn(72.dp, 170.dp)
+                      else minOf(232.dp, maxHeight - 96.dp).coerceAtLeast(110.dp)
+        val art: @Composable () -> Unit = {
+            Box(
+                Modifier
+                    .size(artSize)
+                    .graphicsLayer {
+                        val s = if (state.isPlaying) breathe else 1f
+                        scaleX = s; scaleY = s
+                    }
+                    .shadow(if (short) 10.dp else 24.dp, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(artGradient(track)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (track.artworkUri != null) {
+                    AsyncImage(model = track.artworkUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Icon(FI.MusicNote, null, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.size(artSize * 0.36f))
                 }
-                .shadow(24.dp, RoundedCornerShape(20.dp))
-                .clip(RoundedCornerShape(20.dp))
-                .background(Brush.linearGradient(listOf(FTV.AudioPurple.copy(0.25f), FTV.Accent.copy(0.15f)))),
-            contentAlignment = Alignment.Center
-        ) {
-            if (track.artworkUri != null) {
-                AsyncImage(model = track.artworkUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            } else {
-                Icon(FI.MusicNote, null, tint = FTV.AudioPurple, modifier = Modifier.size(84.dp))
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(track.displayTitle, color = tc, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 320.dp))
-            Text(ui(track.displayArtist), color = tcs, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val info: @Composable (Alignment.Horizontal) -> Unit = { align ->
+            Column(horizontalAlignment = align, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(track.displayTitle, color = tc, fontSize = if (short) 17.sp else 21.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = if (short) 2 else 1, overflow = TextOverflow.Ellipsis,
+                    textAlign = if (short) TextAlign.Start else TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 320.dp))
+                Text(ui(track.displayArtist), color = tcs, fontSize = if (short) 13.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        if (state.playlist.size > 1 && state.currentIndex < state.playlist.size - 1) {
-            val next = state.playlist[state.currentIndex + 1]
-            Row(
-                Modifier.clip(RoundedCornerShape(12.dp)).background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(FI.QueueMusic, null, tint = tcm, modifier = Modifier.size(14.dp))
-                Text(stringResource(R.string.up_next, next.displayTitle), color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val upNext: @Composable () -> Unit = {
+            if (maxHeight >= 420.dp && state.playlist.size > 1 && state.currentIndex < state.playlist.size - 1) {
+                val next = state.playlist[state.currentIndex + 1]
+                Row(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(FI.QueueMusic, null, tint = tcm, modifier = Modifier.size(14.dp))
+                    Text(stringResource(R.string.up_next, next.displayTitle), color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        if (short) {
+            // Landscape phone: art on the left, text on the right.
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                art()
+                Box(Modifier.weight(1f, fill = false)) { info(Alignment.Start) }
+            }
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                art(); info(Alignment.CenterHorizontally); upNext()
             }
         }
     }

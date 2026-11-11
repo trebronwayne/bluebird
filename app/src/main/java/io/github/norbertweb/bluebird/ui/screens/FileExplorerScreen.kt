@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import io.github.norbertweb.bluebird.ui.components.rememberBlurBehindSupported
 import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
 import io.github.norbertweb.bluebird.ui.components.PopupWindowBlur
@@ -1422,7 +1424,7 @@ private fun FileListArea(
             state.isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-PngIcon(res = R.drawable.ic_folder_open, modifier = Modifier.size(34.dp))
+Aubree(state = AubreeState.WAIT, size = 72.dp, contentDescription = "")
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.loading), color = textColor.copy(alpha = 0.5f), fontSize = 12.5.sp)
                     }
@@ -1431,21 +1433,7 @@ PngIcon(res = R.drawable.ic_folder_open, modifier = Modifier.size(34.dp))
             state.files.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = surfaceBg.copy(alpha = 0.55f)
-                        ) {
-                            if (state.searchQuery.isNotBlank()) {
-                                Icon(
-                                    FluentIcons.Regular.Search,
-                                    null,
-                                    tint = textColor.copy(alpha = 0.25f),
-                                    modifier = Modifier.padding(14.dp).size(30.dp)
-                                )
-                            } else {
-                                PngIcon(res = R.drawable.ic_folder_empty, modifier = Modifier.padding(14.dp).size(34.dp))
-                            }
-                        }
+                        Aubree(state = AubreeState.EMPTY, size = 112.dp, contentDescription = "")
                         Spacer(Modifier.height(10.dp))
                         Text(
                             if (state.searchQuery.isNotBlank()) stringResource(R.string.no_matching_files) else stringResource(R.string.this_folder_is_empty),

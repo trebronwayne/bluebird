@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import androidx.compose.ui.res.stringResource
 import io.github.norbertweb.bluebird.R
 import androidx.compose.animation.core.LinearEasing
@@ -73,6 +75,8 @@ data class ToastNotifData(
     val title: String,
     val body: String,
     val accent: Color = bluebirdColors.AccentBlue,
+    /** When set, Aubree replaces the alert icon and shows this state. */
+    val aubree: AubreeState? = null,
     val actionLabel: String? = null,
     val actionUrl: String? = null,
     val packageName: String? = null,
@@ -249,6 +253,9 @@ private fun bluebirdToast(
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (toast.aubree != null) {
+                    Aubree(state = toast.aubree, size = 40.dp, contentDescription = "")
+                } else {
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -262,6 +269,7 @@ private fun bluebirdToast(
                         tint     = toast.accent,
                         modifier = Modifier.size(15.dp)
                     )
+                }
                 }
 
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

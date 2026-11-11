@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.browser.ui.panels
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import androidx.compose.ui.res.stringResource
 import io.github.norbertweb.bluebird.R
 import androidx.compose.foundation.clickable
@@ -211,7 +213,10 @@ fun BrowserPanelView(
 @Composable
 private fun EmptyPanel(message: String, muted: Color) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text(message, color = muted, fontSize = 12.sp)
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Aubree(state = AubreeState.EMPTY, size = 80.dp, contentDescription = "")
+            Text(message, color = muted, fontSize = 12.sp)
+        }
     }
 }
 

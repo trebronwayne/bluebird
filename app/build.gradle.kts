@@ -20,6 +20,17 @@ if (hasLocalKeystoreProperties) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Version comes from version.properties (kept in sync by the release workflow) and can be
+// overridden on the command line: ./gradlew assembleRelease -PversionNameOverride=2.4.1 -PversionCodeOverride=20401
+val versionProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) FileInputStream(f).use { load(it) }
+}
+val appVersionName: String = (project.findProperty("versionNameOverride") as String?)
+    ?: versionProps.getProperty("versionName", "2.4.0")
+val appVersionCode: Int = (project.findProperty("versionCodeOverride") as String?)?.toInt()
+    ?: versionProps.getProperty("versionCode", "20400").toInt()
+
 android {
     namespace = "io.github.norbertweb.bluebird"
     compileSdk = 36
@@ -28,8 +39,8 @@ android {
         applicationId = "io.github.trebronwayne.bluebird"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.4.1"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -138,6 +149,8 @@ implementation("io.github.niyajali:fluentui-system-icons:1.0.1")
     // powers. Compose has no first-party blur-behind-content API, Haze is
     // the standard solution (works down to minSdk, no API 31+ requirement).
     implementation("dev.chrisbanes.haze:haze:1.6.10")
+    // Aubree, the mascot (animated states for welcome, waiting, empty screens and errors)
+    implementation("com.github.trebronwayne.AubreeKit:aubree-compose:1.0.0")
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")
 
     // Firebase

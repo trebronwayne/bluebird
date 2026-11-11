@@ -1473,9 +1473,19 @@ private fun ClockWidget(isDark: Boolean, context: Context, textScale: Float) {
         SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date(now))
     }
 
+    // A friendly greeting for the time of day. Picked once per hour so it does not flicker every second.
+    val hourOfDay = remember(now / 60_000L) { Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.HOUR_OF_DAY) }
+    val greeting = remember(hourOfDay) { TimeGreetings.pick() }
+
     WidgetCard(isDark) {
         // Large local clock
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                ui(greeting.text),
+                fontSize   = (13 * textScale).sp,
+                fontWeight = FontWeight.Medium,
+                color      = bluebirdColors.AccentBlue
+            )
             Text(
                 localTime,
                 fontSize   = (38 * textScale).sp,

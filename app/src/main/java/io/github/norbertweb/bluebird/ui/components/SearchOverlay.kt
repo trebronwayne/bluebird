@@ -1,5 +1,7 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import com.trebronwayne.aubree.compose.Aubree
+import com.trebronwayne.aubree.AubreeState
 import io.github.norbertweb.bluebird.i18n.ui
 import androidx.compose.ui.res.stringResource
 import android.content.Context
@@ -605,11 +607,7 @@ private fun EmptySearchState(query: String, textColor: Color) {
             .padding(vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_bluebird_start_search),
-            contentDescription = null,
-            modifier = Modifier.size(28.dp)
-        )
+        Aubree(state = AubreeState.EMPTY, size = 72.dp, contentDescription = "")
         Spacer(Modifier.height(8.dp))
         androidx.compose.material3.Text(
             stringResource(R.string.no_apps_found_for, query),

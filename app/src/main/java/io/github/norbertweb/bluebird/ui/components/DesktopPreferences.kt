@@ -54,6 +54,12 @@ class DesktopPreferences(context: Context) {
         get() = prefs.getBoolean("show_icons", true)
         set(v) = prefs.edit().putBoolean("show_icons", v).apply()
 
+    // ── Aubree ─────────────────────────────────────────────────────
+    /** True once the person has seen the one-time "Meet Aubree" welcome. */
+    var metAubree: Boolean
+        get() = prefs.getBoolean("met_aubree", false)
+        set(v) = prefs.edit().putBoolean("met_aubree", v).apply()
+
     // ── Wallpaper ──────────────────────────────────────────────────
     // FIX: default changed from APPARENT to DEFAULT so the bundled wallpaper
     // images show on a fresh install instead of the gradient.

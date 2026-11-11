@@ -45,6 +45,12 @@ import io.github.norbertweb.bluebird.ui.components.wallpaperGradients
 import io.github.norbertweb.bluebird.ui.theme.LocalTextScale
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 
+/** The toast host shows at most this many at once, and the list never holds more (see the collector below). */
+private const val MAX_TOASTS_ON_SCREEN = 3
+
+/** Aubree's "Welcome back" card appears when the person returns after at least this long away. */
+private const val WELCOME_BACK_AFTER_MS = 60_000L
+
 @Composable
 fun DesktopScreen(viewModel: LauncherViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -78,6 +84,35 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
     // toastEvents flow (fires exactly once per new device notification).
     val activeToasts = remember { mutableStateListOf<ToastNotifData>() }
 
+    // One-time "Meet Aubree" welcome (new installs, and people who update).
+    var metAubree by remember { mutableStateOf(io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).metAubree) }
+    if (!metAubree) {
+        io.github.norbertweb.bluebird.ui.components.MeetAubreeDialog(isDark = uiState.isDarkTheme) {
+            io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).metAubree = true
+            metAubree = true
+        }
+    }
+
+    // "Welcome back": remember when the app went to the background and, when the person returns after a
+    // while, ask the card at the top of the screen to show.
+    var welcomeBackAt by remember { mutableStateOf(0L) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var stoppedAt = 0L
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> stoppedAt = android.os.SystemClock.elapsedRealtime()
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    val away = android.os.SystemClock.elapsedRealtime() - stoppedAt
+                    if (stoppedAt != 0L && away >= WELCOME_BACK_AFTER_MS) welcomeBackAt = System.currentTimeMillis()
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Defer PackageManager/app-icon discovery until the first desktop composition has
     // rendered. This keeps expensive launcher enumeration out of the critical startup frame.
     LaunchedEffect(Unit) { viewModel.ensureInstalledAppsLoaded() }
@@ -93,7 +128,14 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         viewModel.maybeShowBpkReminder()
     }
     LaunchedEffect(Unit) {
-        viewModel.toastEvents.collect { toast -> activeToasts.add(toast) }
+        viewModel.toastEvents.collect { toast ->
+            // Same message already showing? Replace it instead of stacking a copy.
+            activeToasts.removeAll { it.id == toast.id || (it.title == toast.title && it.body == toast.body) }
+            activeToasts.add(toast)
+            // Never queue more than the host can show. A toast the host cannot draw has no timer, so it
+            // used to sit in the list and replay in full each time a slot freed up: an endless tip loop.
+            while (activeToasts.size > MAX_TOASTS_ON_SCREEN) activeToasts.removeAt(0)
+        }
     }
 
     val wallpaperPicker = rememberLauncherForActivityResult(
@@ -356,6 +398,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             toasts    = activeToasts,
             isDark    = uiState.isDarkTheme,
             textScale = textScale,
+            maxVisible = MAX_TOASTS_ON_SCREEN,
             modifier  = Modifier.padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp),
             onDismiss = { id -> activeToasts.removeAll { it.id == id } },
             onOpen    = { toast ->
@@ -373,7 +416,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).setSettingsStartCategory("BPK_APPS")
                     viewModel.openWindow(io.github.norbertweb.bluebird.LauncherScreen.SETTINGS)
                 } else if (url == io.github.norbertweb.bluebird.AppLinks.ACTION_SHARE_APP) {
-                    // "Share Bluebird" tip → Android share sheet carrying the website URL
+                    // "Share Bluebird" tip → Android share sheet carrying the Uptodown link
                     io.github.norbertweb.bluebird.AppLinks.shareApp(context, context.getString(R.string.share_bluebird))
                 } else try {
                     context.startActivity(
@@ -381,6 +424,13 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                     )
                 } catch (e: Exception) { e.printStackTrace() }
             }
+        )
+
+        // ── 12b. Aubree's "Welcome back" card, sliding down from the top ──
+        io.github.norbertweb.bluebird.ui.components.WelcomeBackCard(
+            trigger = welcomeBackAt,
+            enabled = metAubree && !uiState.isLocked,
+            isDark  = uiState.isDarkTheme
         )
 
         // ── 13. "Set as default launcher" prompt — shown once, right after setup

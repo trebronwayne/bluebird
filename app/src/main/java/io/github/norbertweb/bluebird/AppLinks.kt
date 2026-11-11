@@ -12,8 +12,14 @@ import android.provider.Settings
  * Every outward link and system hand-off in ONE place so URLs are trivial to change.
  */
 object AppLinks {
-    /** Public website. This is the URL that "Share Bluebird" shares. */
+    /** Public website. */
     const val WEBSITE_URL = "https://trebronwayne.github.io"
+
+    /** Bluebird on Uptodown. This is the URL that "Share Bluebird" shares. */
+    const val STORE_URL = "https://bluebird-desktop-pc-launcher.en.uptodown.com/android"
+
+    /** The same Uptodown page, jumping straight to its rating section. Used by the review toast. */
+    const val STORE_REVIEW_URL = "$STORE_URL#rating"
 
     /** Open-source repository. */
     const val REPO_URL = "https://github.com/trebronwayne/bluebird"
@@ -24,12 +30,12 @@ object AppLinks {
     /** Special toast-action URL: opens Settings on the BPK apps page (build apps with AI). */
     const val ACTION_OPEN_BPK_GUIDE = "bluebird://action/open-bpk-guide"
 
-    /** Opens the system share sheet with the Bluebird website link. */
+    /** Opens the system share sheet with the Bluebird Uptodown link. */
     fun shareApp(context: Context, chooserTitle: String) {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, "Bluebird")
-            putExtra(Intent.EXTRA_TEXT, WEBSITE_URL)
+            putExtra(Intent.EXTRA_TEXT, STORE_URL)
         }
         startSafely(context, Intent.createChooser(send, chooserTitle))
     }

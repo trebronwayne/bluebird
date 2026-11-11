@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird
 
+import com.trebronwayne.aubree.AubreeState
 import android.app.Application
 import android.app.WallpaperManager
 import android.content.BroadcastReceiver
@@ -1431,7 +1432,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         appLabel: String = "Bluebird",
         accentColor: String = "#0078D4",
         actionLabel: String? = null,
-        actionUrl: String? = null
+        actionUrl: String? = null,
+        aubree: AubreeState? = null
     ) {
         val accent = try {
             androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(accentColor))
@@ -1445,7 +1447,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 body        = body,
                 accent      = accent,
                 actionLabel = actionLabel,
-                actionUrl   = actionUrl
+                actionUrl   = actionUrl,
+                aubree      = aubree
             )
         )
     }
@@ -1458,9 +1461,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** A tip is localized text plus an optional action (a URL, or [AppLinks.ACTION_SHARE_APP]). */
     private data class Tip(
-        @StringRes val text: Int,
+        @StringRes val text: Int = 0,
         @StringRes val actionLabel: Int? = null,
-        val actionUrl: String? = null
+        val actionUrl: String? = null,
+        /** English text for tips that are not in the translation files yet (shown through UiText). */
+        val literal: String? = null,
+        val actionLiteral: String? = null,
+        val aubree: AubreeState = AubreeState.ASK
     )
 
     private val tipLibrary = listOf(
@@ -1468,6 +1475,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         Tip(R.string.tip_snap_window),
         Tip(R.string.tip_right_click_desktop),
         Tip(R.string.tip_share_bluebird, R.string.tip_action_share, AppLinks.ACTION_SHARE_APP),
+        Tip(
+            literal = "Enjoying Bluebird? A rating on Uptodown helps other people find it.",
+            actionLiteral = "Rate on Uptodown",
+            actionUrl = AppLinks.STORE_REVIEW_URL,
+            aubree = AubreeState.HAPPY
+        ),
         Tip(R.string.tip_unpin_taskbar),
         Tip(R.string.tip_open_calendar),
         Tip(R.string.tip_support_github, R.string.tip_action_github, AppLinks.REPO_URL)
@@ -1488,15 +1501,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         get() = prefs.getInt("last_seen_tip_version_code", -1)
         set(value) { prefs.edit().putInt("last_seen_tip_version_code", value).apply() }
 
-    fun postTip(text: String, actionLabel: String? = null, actionUrl: String? = null) {
+    fun postTip(
+        text: String,
+        actionLabel: String? = null,
+        actionUrl: String? = null,
+        aubree: AubreeState = AubreeState.ASK
+    ) {
         val tipTitle = localizedContext().getString(R.string.tip_title)
         postSystemNotification(
-            id          = "tip_${System.currentTimeMillis()}",
+            id          = "tip_${UUID.randomUUID()}",
             title       = tipTitle,
             body        = text,
             appLabel    = tipTitle,
             actionLabel = actionLabel,
-            actionUrl   = actionUrl
+            actionUrl   = actionUrl,
+            aubree      = aubree
         )
     }
 
@@ -1509,7 +1528,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private fun postTipFromLibrary(tip: Tip) {
         val ctx = localizedContext()
-        postTip(ctx.getString(tip.text), tip.actionLabel?.let { ctx.getString(it) }, tip.actionUrl)
+        val text = tip.literal?.let { io.github.norbertweb.bluebird.i18n.UiText.get(ctx, it) } ?: ctx.getString(tip.text)
+        val label = tip.actionLiteral?.let { io.github.norbertweb.bluebird.i18n.UiText.get(ctx, it) }
+            ?: tip.actionLabel?.let { ctx.getString(it) }
+        postTip(text, label, tip.actionUrl, tip.aubree)
     }
 
     /**
@@ -1558,7 +1580,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             body = body,
             appLabel = "Bluebird BPK",
             actionLabel = "Open guide",
-            actionUrl = AppLinks.ACTION_OPEN_BPK_GUIDE
+            actionUrl = AppLinks.ACTION_OPEN_BPK_GUIDE,
+            aubree = AubreeState.TYPING
         )
     }
 
@@ -1589,26 +1612,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         if (versionCode > last) {
             lastSeenTipVersionCode = versionCode
-            if (updateTipText != null) postTip(updateTipText)
+            if (updateTipText != null) postTip(updateTipText, aubree = AubreeState.CELEBRATE)
         }
     }
 
     // ─── Overlays ─────────────────────────────────────────────────────────────
+    /** One overlay at a time: every flyout, menu and panel closes all the others, the widgets panel included. */
+    private fun LauncherUiState.withOverlaysClosed() = copy(
+        isStartMenuOpen = false, isActionCenterOpen = false, isCalendarOpen = false, isSearchOpen = false,
+        isWidgetsOpen = false, isPowerMenuOpen = false, isDesktopContextMenuOpen = false
+    )
+
     fun toggleStartMenu() {
-        _uiState.value = _uiState.value.copy(
-            isStartMenuOpen          = !_uiState.value.isStartMenuOpen,
-            isActionCenterOpen       = false, isCalendarOpen = false, isSearchOpen = false,
-            isPowerMenuOpen          = false, isDesktopContextMenuOpen = false, isWidgetsOpen = false
-        )
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isStartMenuOpen = !s.isStartMenuOpen)
     }
 
     fun toggleActionCenter() {
-        _uiState.value = _uiState.value.copy(
-            isActionCenterOpen       = !_uiState.value.isActionCenterOpen,
-            isCalendarOpen           = false,
-            isStartMenuOpen          = false, isSearchOpen = false,
-            isPowerMenuOpen          = false, isDesktopContextMenuOpen = false
-        )
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isActionCenterOpen = !s.isActionCenterOpen)
     }
 
     // Calendar is its own flyout now — opened by tapping the taskbar
@@ -1616,30 +1638,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // target. Mutually exclusive with every other overlay, same as Action
     // Center.
     fun toggleCalendar() {
-        _uiState.value = _uiState.value.copy(
-            isCalendarOpen           = !_uiState.value.isCalendarOpen,
-            isActionCenterOpen       = false,
-            isStartMenuOpen          = false, isSearchOpen = false,
-            isPowerMenuOpen          = false, isDesktopContextMenuOpen = false
-        )
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isCalendarOpen = !s.isCalendarOpen)
     }
 
     fun toggleSearch() {
-        _uiState.value = _uiState.value.copy(
-            isSearchOpen             = !_uiState.value.isSearchOpen,
-            isStartMenuOpen          = false, isActionCenterOpen = false, isCalendarOpen = false,
-            isDesktopContextMenuOpen = false
-        )
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isSearchOpen = !s.isSearchOpen)
     }
 
     fun toggleWidgets() {
-        _uiState.value = _uiState.value.copy(isWidgetsOpen = !_uiState.value.isWidgetsOpen)
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isWidgetsOpen = !s.isWidgetsOpen)
     }
 
     fun togglePowerMenu() {
-        _uiState.value = _uiState.value.copy(
-            isPowerMenuOpen = !_uiState.value.isPowerMenuOpen, isStartMenuOpen = false
-        )
+        val s = _uiState.value
+        _uiState.value = s.withOverlaysClosed().copy(isPowerMenuOpen = !s.isPowerMenuOpen)
     }
 
     fun dismissAllOverlays() {
@@ -3003,7 +3018,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 id          = "battery_low_$threshold",
                 title       = title,
                 body        = body,
-                accentColor = if (threshold <= 10) "#E81123" else "#FFB900"
+                accentColor = if (threshold <= 10) "#E81123" else "#FFB900",
+                aubree      = AubreeState.LOW_BATTERY
             )
         }
     }
