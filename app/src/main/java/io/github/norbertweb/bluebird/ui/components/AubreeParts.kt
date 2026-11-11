@@ -90,9 +90,13 @@ fun MeetAubreeDialog(isDark: Boolean, onDone: () -> Unit) {
     }
 }
 
+/** Lives as long as the app process: tells whether this start has already been looked at. */
+object WelcomeBackState {
+    @Volatile var handled = false
+}
+
 /**
- * The small "Welcome back" card that slides down from the top when the person returns to Bluebird after a
- * while. [trigger] is a timestamp: each new value shows the card again. It hides itself after a few seconds,
+ * The small "Welcome back" card that slides down from the top when Bluebird starts fresh. [trigger] is a timestamp: each new value shows the card again. It hides itself after a few seconds,
  * or when tapped. "Welcome back" goes through ui(), so it is translated wherever the text already exists.
  */
 @Composable

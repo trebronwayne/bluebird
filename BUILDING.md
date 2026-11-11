@@ -144,3 +144,31 @@ Most of these aren't Bluebird-specific bugs — they're restrictions Android pla
 | **Screen brightness control** | Requires `WRITE_SETTINGS`, granted manually | Settings → Display → System permissions |
 | **Wallpaper on lock screen** | The Android system lock screen is separate from Bluebird's in-app lock screen | Use the in-app lock (Start → Power → Lock) |
 | **Web apps run in a sandboxed WebView** | Not native apps, limited to WebView-supported APIs | Use native Android apps for anything outside WebView's scope |
+
+
+---
+
+## Automated releases (GitHub Actions)
+
+The **Build Signed Release APK** workflow versions, builds, signs and publishes for you.
+
+1. Open **Actions > Build Signed Release APK > Run workflow**.
+2. Either type a **version** (for example `2.4.1`; leave it blank to use the release type) or choose a **release type**:
+
+| Type | Example | Use for |
+| --- | --- | --- |
+| `none` | no tag | CI build only (APK artifact) |
+| `baseline` | creates `2.4.0` | one-time: tag where you stopped releasing |
+| `patch` | 2.4.0 to 2.4.1 | bug fixes |
+| `minor` | 2.4.1 to 2.5.0 | new features |
+| `major` | 2.5.0 to 3.0.0 | big or breaking changes |
+
+A typed version must be higher than the latest tag. `2.4` is read as `2.4.0`, and the build number is worked out from it.
+
+First time: run `baseline` (set `baseline_ref` to the commit of your last 2.4 release if it is not the current
+one), then run `patch`, `minor` or `major` as needed. If you skip `baseline`, the first patch/minor/major run
+creates the `2.4.0` tag itself.
+
+The version lives in `version.properties` (`versionName`, and `versionCode = major*10000 + minor*100 + patch`),
+so the build number always goes up. The APK is signed with your keystore secrets and its signature is verified
+in the run summary. Tags are plain git tags created by `github-actions[bot]`; they are independent of APK signing.

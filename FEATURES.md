@@ -37,6 +37,7 @@ Full feature list, grouped by the part of the shell each one lives in. Where use
 | **System tray** | Battery level, Wi-Fi indicator, Bluetooth, clock, date — Fluent-style tray glyphs |
 | **Notification badge** | Badge count on Action Center button when there are unread notifications |
 | **Toast notifications** | Transient, Windows-style toast popups for incoming notifications and system events |
+| **Aubree** | The Bluebird mascot appears in toasts and on empty screens, with a one-time welcome |
 
 ## Start Menu
 

@@ -48,9 +48,6 @@ import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 /** The toast host shows at most this many at once, and the list never holds more (see the collector below). */
 private const val MAX_TOASTS_ON_SCREEN = 3
 
-/** Aubree's "Welcome back" card appears when the person returns after at least this long away. */
-private const val WELCOME_BACK_AFTER_MS = 60_000L
-
 @Composable
 fun DesktopScreen(viewModel: LauncherViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -93,24 +90,18 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         }
     }
 
-    // "Welcome back": remember when the app went to the background and, when the person returns after a
-    // while, ask the card at the top of the screen to show.
+    // "Welcome back": only when Bluebird starts fresh, that is when its process is new (it was closed or
+    // Android stopped it, and now it is opened again). Switching back to a running Bluebird, rotating the
+    // screen, or returning from another app shows nothing. The first ever start has the Meet Aubree
+    // welcome instead.
     var welcomeBackAt by remember { mutableStateOf(0L) }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        var stoppedAt = 0L
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            when (event) {
-                androidx.lifecycle.Lifecycle.Event.ON_STOP -> stoppedAt = android.os.SystemClock.elapsedRealtime()
-                androidx.lifecycle.Lifecycle.Event.ON_START -> {
-                    val away = android.os.SystemClock.elapsedRealtime() - stoppedAt
-                    if (stoppedAt != 0L && away >= WELCOME_BACK_AFTER_MS) welcomeBackAt = System.currentTimeMillis()
-                }
-                else -> Unit
-            }
+    LaunchedEffect(Unit) {
+        if (WelcomeBackState.handled) return@LaunchedEffect
+        WelcomeBackState.handled = true
+        if (metAubree) {
+            kotlinx.coroutines.delay(800) // let the desktop settle first
+            welcomeBackAt = System.currentTimeMillis()
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Defer PackageManager/app-icon discovery until the first desktop composition has

@@ -1,6 +1,8 @@
 package io.github.norbertweb.bluebird
 
 import io.github.norbertweb.bluebird.ui.components.LocalTransparencyEnabled
+import io.github.norbertweb.bluebird.ui.components.trimAppIconCache
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -142,6 +144,20 @@ class MainActivity : ComponentActivity() {
                     else -> viewModel.dismissAllOverlays()
                 }
             }
+        }
+    }
+
+    /**
+     * Android tells us when memory is getting tight. Bluebird is the home screen, so the best way to stay alive is
+     * to be light: let go of cached icons first when memory runs low, and all of them once Bluebird is in the
+     * background and Android is looking for processes to stop. They are decoded again when needed.
+     */
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when {
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> trimAppIconCache(keep = 0)
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> trimAppIconCache(keep = 40)
         }
     }
 

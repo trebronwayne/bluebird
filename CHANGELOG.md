@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixes and changes
+- Tips: tapping "Show a tip" repeatedly no longer leaves tips stuck replaying. The toast list is capped at what the screen can show, and a repeated message replaces itself
+- Widgets panel now closes when you open Start, Search, Action Center, Calendar or Power, and each of those closes the widgets panel
+- "Share Bluebird" now shares the Uptodown page, and a new tip asks for a rating on Uptodown
+- The clock widget greets you by time of day (Night owl, Late night, Good evening and many more)
+- Aubree shows a "Welcome back" card at the top of the screen only when Bluebird starts fresh (it was closed, or Android stopped it, and you open it again), never when you just switch back to it
+- Settings → System → "Keep Bluebird running" opens Android's battery optimization list, so you can pick Bluebird and choose "Don't optimize"; Bluebird also lets go of cached icons when Android is short on memory, so it is less likely to be stopped
+- Translations for Aubree, the greetings, the review tip and the keep-running setting in Arabic, Bengali, Chinese (Simplified), Dutch, French, German, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Swahili, Turkish, Ukrainian and Urdu. Amharic, Hausa, Kinyarwanda, Somali, Luganda and Acholi show English for these until someone translates them
+- Release workflow: you can type a version (for example 2.4.1) instead of choosing patch, minor or major; the build number is worked out from it
+
+### Aubree, the mascot
+- A one-time "Meet Aubree" welcome the first time the desktop appears (new installs and updates)
+- Toasts show Aubree: tips (asking), battery alerts (low battery), BPK reminders (typing) and the update tip (celebrating)
+- Aubree on empty screens: File Explorer (also waiting while a folder loads), Recycle Bin, Photos, Browser bookmarks/history/downloads, Search with no results, and the media player when nothing is playing
+- Uses AubreeKit 1.0.0 from JitPack. The welcome text is English in every language until it is added to the translation files; everything else reuses text that is already translated
+
+### Added
+- Windows 11 search field shared by Start and Search, with a distinct header band and boundary
+- Start "Recommended" now shows real recently opened apps (installed, built-in and BPK) with times
+- Settings > BPK apps rebuilt: one-tap "Copy AI prompt", idea box, collapsible documentation, readable in blur mode
+- Periodic BPK reminders (toggle in Settings > BPK apps); tapping one opens the BPK page
+- Release workflow: choose patch / minor / major to tag, bump version, build, sign and publish automatically
+
+### Media player
+- Player can collapse into a full-width bottom dock (live video preview, transport, seek line, volume); tap it to expand
+- Always-visible "Recent" strip above the library, and a home screen with recent items when nothing is playing
+- Tracks and playlists are rounded cards; the library becomes a multi-column card grid when the player is collapsed
+- Smaller Windows 11 style controls: 40dp accent play button, slim seek bar with time labels, compact volume
+
+- Media player: tap "Films & TV" at the top of the library to hide/show the player (animated, with a state chip)
+- Media player: smooth spring press feedback, animated active-card colour blend, saturated per-track art gradients
+- Media player: short-screen (landscape phone) layout: slimmer chrome, smaller cards, Recent scrolls with the list, side-by-side art/title
+
+### Changed
+- Settings and File Explorer side panels now collapse after 1 minute, or on double-tap of empty space
+- Settings cards no longer draw shadows or icon tiles that showed through blur
+- Version now lives in `version.properties`
+
 ### Planned
 - Resizable floating windows with drag handles
 - Remote Schools learning app (Uganda curriculum P1–S6)

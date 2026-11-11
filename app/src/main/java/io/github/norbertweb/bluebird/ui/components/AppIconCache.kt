@@ -26,6 +26,15 @@ import kotlinx.coroutines.withContext
 private val iconBitmapCache = object : LruCache<String, ImageBitmap>(150) {}
 
 /**
+ * Called when Android is short on memory. A launcher that holds less memory is a lighter process, so it is
+ * less likely to be the one Android stops. Icons are decoded again on demand, so nothing is lost.
+ * [keep] is how many icons to hold on to (0 empties the cache).
+ */
+fun trimAppIconCache(keep: Int) {
+    if (keep <= 0) iconBitmapCache.evictAll() else iconBitmapCache.trimToSize(keep)
+}
+
+/**
  * Returns the cached ImageBitmap for [app] once ready, or null while it's
  * still being decoded on a background dispatcher. Use with a placeholder
  * (e.g. the Fluent "Apps" glyph) for the null case so the tile never blocks

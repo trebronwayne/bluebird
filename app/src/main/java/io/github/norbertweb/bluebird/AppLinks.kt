@@ -40,6 +40,17 @@ object AppLinks {
         startSafely(context, Intent.createChooser(send, chooserTitle))
     }
 
+    /**
+     * Opens Android's battery optimization list so the person can pick Bluebird and choose "Don't optimize".
+     * That is the setting that stops Android from closing a launcher in the background. Needs no permission.
+     */
+    fun openBatteryOptimizationSettings(context: Context) {
+        val opened = startSafely(context, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        if (!opened) {
+            startSafely(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+        }
+    }
+
     fun openRepo(context: Context) = openUrl(context, REPO_URL)
 
     fun openUrl(context: Context, url: String) =
