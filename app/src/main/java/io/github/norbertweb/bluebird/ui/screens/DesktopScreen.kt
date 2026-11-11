@@ -88,6 +88,9 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         kotlinx.coroutines.delay(2500)
         viewModel.maybeShowScheduledTip()
         viewModel.checkForUpdateTip(updateTipText = null)
+        // BPK reminder waits a few seconds so it never lands on top of a regular tip.
+        kotlinx.coroutines.delay(6000)
+        viewModel.maybeShowBpkReminder()
     }
     LaunchedEffect(Unit) {
         viewModel.toastEvents.collect { toast -> activeToasts.add(toast) }
@@ -365,7 +368,11 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
                 }
             },
             onAction  = { url ->
-                if (url == io.github.norbertweb.bluebird.AppLinks.ACTION_SHARE_APP) {
+                if (url == io.github.norbertweb.bluebird.AppLinks.ACTION_OPEN_BPK_GUIDE) {
+                    // BPK reminder → Settings, straight to the "BPK apps" page
+                    io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).setSettingsStartCategory("BPK_APPS")
+                    viewModel.openWindow(io.github.norbertweb.bluebird.LauncherScreen.SETTINGS)
+                } else if (url == io.github.norbertweb.bluebird.AppLinks.ACTION_SHARE_APP) {
                     // "Share Bluebird" tip → Android share sheet carrying the website URL
                     io.github.norbertweb.bluebird.AppLinks.shareApp(context, context.getString(R.string.share_bluebird))
                 } else try {

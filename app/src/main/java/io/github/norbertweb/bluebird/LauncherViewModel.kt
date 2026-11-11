@@ -27,6 +27,7 @@ import io.github.norbertweb.bluebird.ui.components.BpkPackageManager
 import io.github.norbertweb.bluebird.ui.components.DesktopFileInfo
 import io.github.norbertweb.bluebird.ui.components.DesktopItemType
 import io.github.norbertweb.bluebird.ui.components.InstalledBpkApp
+import io.github.norbertweb.bluebird.ui.components.BpkReminderPrefs
 import io.github.norbertweb.bluebird.ui.components.RecentAppsStore
 import io.github.norbertweb.bluebird.ui.components.ToastNotifData
 import kotlinx.coroutines.Dispatchers
@@ -1525,6 +1526,42 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         postTipFromLibrary(tipLibrary[next])
     }
 
+    // ─── BPK reminders ───────────────────────────────────────────────────────
+    // A separate, more frequent nudge than the general tips: Bluebird wants people to build their
+    // own apps (BPK) with an AI assistant. Tapping the toast opens Settings > BPK apps, where one
+    // button copies a ready-made prompt. Local in-app toasts (the project has no push backend),
+    // shown at most once per [bpkReminderMinIntervalMs] and only when the user hasn't switched
+    // them off. They never collide with a regular tip: if a tip was just shown we wait.
+    private val bpkReminderMinIntervalMs = 8L * 60 * 60 * 1000L // 8 hours
+
+    private val bpkReminders = listOf(
+        "Make your own Bluebird app" to "Describe an app, copy one prompt, paste it into any AI chat. No coding needed.",
+        "Your idea, as an installable app" to "Open Settings > BPK apps and copy the AI prompt. Your AI writes the files for you.",
+        "Build a habit tracker in minutes" to "Ask an AI with the BPK prompt. It returns a ready-to-install .bpk.",
+        "Turn a web page into an app" to "BPK packages run in their own Bluebird window. Copy the guide and try it.",
+        "Share what you build" to "Package your app as .bpk, test it, then share it with friends."
+    )
+
+    fun maybeShowBpkReminder() {
+        val app = getApplication<Application>()
+        if (!BpkReminderPrefs.isEnabled(app)) return
+        val now = System.currentTimeMillis()
+        if (now - BpkReminderPrefs.lastShownAt(app) < bpkReminderMinIntervalMs) return
+        // Keep tips and BPK reminders from stacking on the same launch.
+        if (now - lastTipShownAt < 10L * 60 * 1000L) return
+        val index = BpkReminderPrefs.nextIndex(app) % bpkReminders.size
+        val (title, body) = bpkReminders[index]
+        BpkReminderPrefs.markShown(app, now, (index + 1) % bpkReminders.size)
+        postSystemNotification(
+            id = "bpk_${now}",
+            title = title,
+            body = body,
+            appLabel = "Bluebird BPK",
+            actionLabel = "Open guide",
+            actionUrl = AppLinks.ACTION_OPEN_BPK_GUIDE
+        )
+    }
+
     /**
      * Call once per app open, alongside [maybeShowScheduledTip]. Shows
      * [updateTipText] exactly once, the first time it notices the installed
@@ -1645,7 +1682,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         customIconPath: String? = null
     ) {
         dismissAllOverlays()
-        RecentAppsStore.recordScreen(getApplication(), screen)
+        RecentAppsStore.recordScreen(getApplication<Application>(), screen)
         var effectiveExtras = extras
         var effectiveCustomIconPath = customIconPath
         var effectiveTitle: String? = null
@@ -1847,7 +1884,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchBpkApp(appId: String) {
         val app = BpkPackageManager(getApplication<Application>()).apps().firstOrNull { it.id == appId } ?: return
         dismissAllOverlays()
-        RecentAppsStore.record(getApplication(), "bpk:${app.id}", app.name)
+        RecentAppsStore.record(getApplication<Application>(), "bpk:${app.id}", app.name)
         openWindow(
             screen = LauncherScreen.WEB_APP_VIEWER,
             extras = mapOf(

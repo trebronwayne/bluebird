@@ -350,24 +350,8 @@ fun StartMenu(
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 20.dp)
-                    // Do not run a second Haze effect with the same HazeState
-                    // inside the already blurred Start surface. That creates a
-                    // feedback/self-capture effect and is what made the middle
-                    // of the menu look transparently broken on both themes.
-                    // The outer Acrylic material already blurs the wallpaper;
-                    // this layer is only a very subtle tonal veil on top.
-                    // Intentionally no inner background here.
-                    // The content must remain on the same continuous Acrylic
-                    // material as the rest of Start. A rounded translucent
-                    // body veil creates the visible "blur region" boundary
-                    // that Windows 11 does not have.
-            ) {
-                // Windows 11 search: the search field is the dominant control.
+            // Distinct header band with its own boundary (Windows 11 style).
+            Win11SearchHeader(isDark = isDark) {
                 Windows11StartSearchBar(
                     query = localSearchQuery,
                     isDark = isDark,
@@ -377,9 +361,14 @@ fun StartMenu(
                         activeTab = if (it.isBlank()) StartMenuTab.PINNED else StartMenuTab.SEARCH
                     }
                 )
+            }
 
-                Spacer(Modifier.height(22.dp))
-
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp)
+            ) {
                 if (activeTab == StartMenuTab.SEARCH) {
                     SearchResultsView(
                         query = localSearchQuery,

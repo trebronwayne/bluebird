@@ -46,6 +46,27 @@ import io.github.norbertweb.bluebird.R
 import io.github.norbertweb.bluebird.ui.theme.bluebirdColors
 
 /**
+ * The Windows 11 header band that holds the search field: a full-width strip with its own
+ * tint and a 1dp bottom boundary, so the header reads as a distinct zone above the body
+ * (Start/Search in Windows 11 do the same). Place it OUTSIDE the body's horizontal padding.
+ */
+@Composable
+fun Win11SearchHeader(isDark: Boolean, content: @Composable () -> Unit) {
+    val band = if (isDark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.45f)
+    val boundary = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.10f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(band)
+            .drawBehind {
+                val h = 1.dp.toPx()
+                drawRect(boundary, topLeft = Offset(0f, size.height - h), size = Size(size.width, h))
+            }
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+    ) { content() }
+}
+
+/**
  * The single Windows 11 search field used by both Start and Search.
  *
  * What changed vs. the old per-screen copies: no black drop-shadow halo and no gradient (those
@@ -66,7 +87,7 @@ fun Win11SearchBox(
 ) {
     var focused by remember { mutableStateOf(false) }
     val textPrimary = if (isDark) bluebirdColors.TextPrimary else bluebirdColors.TextPrimaryLight
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(8.dp)
 
     val fill = when {
         isDark && focused -> Color.White.copy(alpha = 0.13f)

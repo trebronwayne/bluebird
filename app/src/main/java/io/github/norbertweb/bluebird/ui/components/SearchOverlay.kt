@@ -241,24 +241,24 @@ fun SearchOverlay(
                 panelShape
             )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                // Keep one continuous Acrylic surface, exactly like Start.
-                .padding(horizontal = 24.dp, vertical = 20.dp)
-        ) {
-            // Same Windows 11 search field as Start (see Win11SearchBox.kt).
-            Win11SearchBox(
-                query = localSearchQuery,
-                onQueryChange = { localSearchQuery = it },
-                placeholder = stringResource(R.string.search_apps_settings_documents),
-                isDark = isDark,
-                accent = accent,
-                focusRequester = focusRequester
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header band with its own tint + boundary, same as Start.
+            Win11SearchHeader(isDark = isDark) {
+                Win11SearchBox(
+                    query = localSearchQuery,
+                    onQueryChange = { localSearchQuery = it },
+                    placeholder = stringResource(R.string.search_apps_settings_documents),
+                    isDark = isDark,
+                    accent = accent,
+                    focusRequester = focusRequester
+                )
+            }
 
-            Spacer(Modifier.height(12.dp))
-
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp, vertical = 14.dp)
+            ) {
             // Keep the idle Search home visually quiet. Category filters appear
             // once the user has an actual query, matching Windows Search's flow.
             if (searchQuery.isNotEmpty()) {
@@ -334,6 +334,7 @@ fun SearchOverlay(
                     )
             )
             Spacer(Modifier.height(2.dp))
+            }
         }
     }
 }

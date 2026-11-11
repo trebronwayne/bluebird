@@ -25,7 +25,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -274,7 +276,9 @@ fun SettingsScreen(
     LaunchedEffect(navInteractionTick, navListState.isScrollInProgress) {
         isNavExpanded = true
         if (!navListState.isScrollInProgress) {
-            delay(3000)
+            // Was 3s, which collapsed the pane while people were still reading it.
+            // Now one minute of inactivity, or double-tap empty space in the pane.
+            delay(NAV_AUTO_COLLAPSE_MS)
             isNavExpanded = false
         }
     }
@@ -304,10 +308,13 @@ fun SettingsScreen(
                 .width(navWidth)
                 .fillMaxHeight()
                 .background(micaOr(resolvedNav))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { pokeNav() }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { pokeNav() },
+                        // Double-tap on empty space collapses the pane right away.
+                        onDoubleTap = { isNavExpanded = false }
+                    )
+                }
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
             // Gated by `expandProgress > 0.001f` rather than the raw boolean so this
@@ -510,6 +517,8 @@ fun SettingsScreen(
  * adjust it to whatever your IDE resolves the library's actual package to.
  */
 
+private const val NAV_AUTO_COLLAPSE_MS = 60_000L
+
 internal data class ScreenArgs(
     val isDark    : Boolean,
     val textColor : Color,
@@ -531,7 +540,7 @@ internal data class ScreenArgs(
 internal fun SettingsGroup(title: String, a: ScreenArgs, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title.uppercase(),
-            color      = a.textColor.copy(alpha = 0.5f),
+            color      = a.textColor.copy(alpha = 0.72f),
             fontSize   = (11.5f * (a.scale)).sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.6.sp,
@@ -583,7 +592,7 @@ internal fun SToggle(
         SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
             Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
-            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
+            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.68f), fontSize = (12 * (a.scale)).sp)
         }
         Switch(
             checked         = checked,
@@ -614,7 +623,7 @@ internal fun SNav(
         SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
             Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
-            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
+            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.68f), fontSize = (12 * (a.scale)).sp)
         }
         if (value.isNotEmpty()) Text(value, color = a.textColor.copy(alpha = 0.5f), fontSize = (12 * (a.scale)).sp)
         Icon(FluentIcons.Regular.ChevronRight, null, tint = a.textColor.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
@@ -637,7 +646,7 @@ internal fun SSlider(
             SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
             Column(modifier = Modifier.weight(1f)) {
                 Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
-                if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
+                if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.68f), fontSize = (12 * (a.scale)).sp)
             }
             Text(valueLabel, color = a.textColor.copy(alpha = 0.6f), fontSize = (12 * (a.scale)).sp)
         }
@@ -674,7 +683,7 @@ internal fun SDropdown(
         SIconBadge(icon, tint = a.textColor.copy(alpha = 0.8f), bg = a.textColor.copy(alpha = 0.055f))
         Column(modifier = Modifier.weight(1f)) {
             Text(label, color = a.textColor, fontSize = (14 * (a.scale)).sp, fontWeight = FontWeight.Medium)
-            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * (a.scale)).sp)
+            if (sub.isNotEmpty()) Text(sub, color = a.textColor.copy(alpha = 0.68f), fontSize = (12 * (a.scale)).sp)
         }
         Box {
             Row(
@@ -1528,7 +1537,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                         fontWeight = FontWeight.SemiBold,
                         fontSize = (15 * scale).sp)
                     Text(stringResource(R.string.report_a_bug_or_share_an_idea_it_goes),
-                        color = a.textColor.copy(alpha = 0.55f),
+                        color = a.textColor.copy(alpha = 0.68f),
                         fontSize = (12 * scale).sp)
                 }
                 Icon(
@@ -1668,7 +1677,7 @@ private fun FeedbackUpdatesSettings(a: ScreenArgs) {
                 Text(pkgInfo?.versionName ?: "1.0", color = a.textColor, fontSize = (13 * scale).sp, fontWeight = FontWeight.Medium)
             }
             when {
-                isChecking  -> StatusPill(null, stringResource(R.string.checking), a.textColor.copy(alpha = 0.55f), scale, spinning = true)
+                isChecking  -> StatusPill(null, stringResource(R.string.checking), a.textColor.copy(alpha = 0.68f), scale, spinning = true)
                 checkError  -> StatusPill(FluentIcons.Regular.Dismiss, stringResource(R.string.couldnt_check), Color(0xFFE57373), scale)
                 updateInfo != null -> StatusPill(FluentIcons.Regular.ArrowDownload, stringResource(R.string.update_available), a.accent, scale)
                 upToDate    -> StatusPill(FluentIcons.Regular.Checkmark, stringResource(R.string.up_to_date), Color(0xFF4CAF50), scale)
@@ -1741,259 +1750,6 @@ private data class UpdateInfo(
 // BPK APPS
 // ─────────────────────────────────────────────────────────────────────────────
 
-@Composable
-private fun BpkAppsSettings(a: ScreenArgs) {
-    val scale = a.scale
-    val clipboardManager = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
-    var showFullGuide by remember { mutableStateOf(false) }
-
-    LaunchedEffect(copied) {
-        if (copied) {
-            delay(2200)
-            copied = false
-        }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Hero panel: make it clear that BPK is Bluebird's installable web-app format.
-        Card(
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = a.accent.copy(alpha = if (a.isDark) 0.20f else 0.10f)),
-            border = BorderStroke(1.dp, a.accent.copy(alpha = 0.24f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        Modifier.size(52.dp).clip(RoundedCornerShape(15.dp)).background(a.accent.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) { Icon(FluentIcons.Regular.Code, null, tint = a.accent, modifier = Modifier.size(27.dp)) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(stringResource(R.string.bluebird_package_kit), color = a.textColor, fontSize = (19 * scale).sp, fontWeight = FontWeight.Bold)
-                        Text(stringResource(R.string.installable_web_apps_bpk), color = a.textColor.copy(alpha = 0.68f), fontSize = (12.5f * scale).sp)
-                    }
-                }
-                Text(
-                    stringResource(R.string.bpk_turns_a_web_project_into_an),
-                    color = a.textColor.copy(alpha = 0.86f), fontSize = (13.2f * scale).sp, lineHeight = (19 * scale).sp
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BpkTag("HTML / CSS / JS", a)
-                    BpkTag(stringResource(R.string.version_1), a)
-                    BpkTag(stringResource(R.string.zip_based), a)
-                }
-            }
-        }
-
-        SettingsGroup(stringResource(R.string.what_you_can_do), a) {
-            BpkFeatureRow(FluentIcons.Regular.Add, stringResource(R.string.install_and_launch), stringResource(R.string.install_a_bpk_package_and_launch_it_as), a)
-            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.Shield, stringResource(R.string.app_permissions), stringResource(R.string.review_each_apps_capabilities_in), a)
-            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.DataTrending, stringResource(R.string.private_app_data), stringResource(R.string.apps_can_keep_small_key_value_settings), a)
-            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.Bug, stringResource(R.string.logs_and_troubleshooting), stringResource(R.string.apps_can_write_diagnostic_messages_and), a)
-            Divider(color = a.textColor.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 12.dp))
-            BpkFeatureRow(FluentIcons.Regular.ArrowClockwise, stringResource(R.string.updates_and_reinstall), stringResource(R.string.the_bpk_update_client_can_check_an), a)
-        }
-
-        SettingsGroup(stringResource(R.string.package_structure), a) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(R.string.a_bpk_is_a_zip_archive_renamed_with), color = a.textColor.copy(alpha = 0.78f), fontSize = (12.8f * scale).sp)
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(a.textColor.copy(alpha = 0.045f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    BpkTreeLine("my-app.bpk/", true, a)
-                    BpkTreeLine("manifest.json", false, a)
-                    BpkTreeLine("icon/icon.png", false, a)
-                    BpkTreeLine("app/index.html", false, a)
-                    BpkTreeLine("app/styles.css", false, a)
-                    BpkTreeLine("app/main.js", false, a)
-                    BpkTreeLine("installer/  (optional custom installer assets)", false, a)
-                }
-                Text(stringResource(R.string.the_manifest_entry_must_point_to_a), color = a.textColor.copy(alpha = 0.64f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
-            }
-        }
-
-        SettingsGroup(stringResource(R.string.capabilities), a) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                BpkCapabilityLine(stringResource(R.string.app_storage), stringResource(R.string.read_write_the_apps_own_key_value_data), a)
-                BpkCapabilityLine(stringResource(R.string.internet), stringResource(R.string.network_access_only_grant_this_to_apps), a)
-                BpkCapabilityLine(stringResource(R.string.file_picker), stringResource(R.string.request_the_system_file_picker_the), a)
-                BpkCapabilityLine(stringResource(R.string.media_picker), stringResource(R.string.request_the_system_media_picker_the), a)
-                BpkCapabilityLine(stringResource(R.string.logs), stringResource(R.string.allow_the_app_to_send_diagnostic), a)
-                BpkCapabilityLine(stringResource(R.string.audio_video_playback), stringResource(R.string.capability_flags_for_media_playback), a)
-                BpkCapabilityLine(stringResource(R.string.brightness_control), stringResource(R.string.request_a_brightness_change_android), a)
-                Text(stringResource(R.string.important_a_permission_toggle_is_not_a), color = a.textColor.copy(alpha = 0.72f), fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
-            }
-        }
-
-        SettingsGroup(stringResource(R.string.build_a_bpk_with_an_ai_assistant), a) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(R.string.you_can_ask_an_ai_to_create_a_complete), color = a.textColor.copy(alpha = 0.76f), fontSize = (12.8f * scale).sp, lineHeight = (18 * scale).sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = a.accent),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(if (copied) FluentIcons.Regular.Checkmark else FluentIcons.Regular.Code, null, modifier = Modifier.size(16.dp), tint = Color.White)
-                        Spacer(Modifier.width(7.dp))
-                        Text(if (copied) stringResource(R.string.guide_copied) else stringResource(R.string.copy_developer_guide), fontSize = (12.5f * scale).sp)
-                    }
-                    OutlinedButton(onClick = { showFullGuide = true }, shape = RoundedCornerShape(14.dp)) {
-                        Text(stringResource(R.string.preview), fontSize = (12.5f * scale).sp)
-                    }
-                }
-            }
-        }
-
-        SettingsGroup(stringResource(R.string.recommended_workflow), a) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                BpkStep("1", stringResource(R.string.create), stringResource(R.string.build_the_app_in_html_css_and), a)
-                BpkStep("2", "Describe", "Fill in manifest.json with a unique id, app name, version, publisher, entry file, icon, and description.", a)
-                BpkStep("3", "Package", "Zip the package contents so manifest.json is at the archive root, then rename the ZIP to .bpk.", a)
-                BpkStep("4", stringResource(R.string.install_and_test), stringResource(R.string.install_it_in_bluebird_test_launch_and), a)
-                BpkStep("5", stringResource(R.string.release_carefully), stringResource(R.string.use_https_for_update_feeds_and_verify), a)
-            }
-        }
-    }
-
-    if (showFullGuide) {
-        AlertDialog(
-            onDismissRequest = { showFullGuide = false },
-            title = { Text(stringResource(R.string.bpk_developer_guide)) },
-            text = {
-                Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(BPK_SETTINGS_DEVELOPER_GUIDE, color = a.textColor, fontSize = (12 * scale).sp, lineHeight = (17 * scale).sp)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { clipboardManager.setText(AnnotatedString(BPK_SETTINGS_DEVELOPER_GUIDE)); copied = true; showFullGuide = false }) { Text(stringResource(R.string.copy_guide)) }
-            },
-            dismissButton = { TextButton(onClick = { showFullGuide = false }) { Text(stringResource(R.string.close)) } }
-        )
-    }
-}
-
-@Composable
-private fun BpkTag(label: String, a: ScreenArgs) {
-    Box(Modifier.clip(RoundedCornerShape(50)).background(a.surfaceBg.copy(alpha = 0.82f)).padding(horizontal = 9.dp, vertical = 5.dp)) {
-        Text(label, color = a.textColor.copy(alpha = 0.78f), fontSize = (10.5f * a.scale).sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun BpkFeatureRow(icon: ImageVector, title: String, description: String, a: ScreenArgs) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        SIconBadge(icon, tint = a.accent, bg = a.accent.copy(alpha = 0.10f))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, color = a.textColor, fontSize = (13.5f * a.scale).sp, fontWeight = FontWeight.SemiBold)
-            Text(description, color = a.textColor.copy(alpha = 0.66f), fontSize = (12 * a.scale).sp, lineHeight = (17 * a.scale).sp)
-        }
-    }
-}
-
-@Composable
-private fun BpkCapabilityLine(title: String, description: String, a: ScreenArgs) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(title, color = a.textColor, fontSize = (12.8f * a.scale).sp, fontWeight = FontWeight.SemiBold)
-        Text(description, color = a.textColor.copy(alpha = 0.65f), fontSize = (11.8f * a.scale).sp, lineHeight = (16.5f * a.scale).sp)
-    }
-}
-
-@Composable
-private fun BpkTreeLine(value: String, isRoot: Boolean, a: ScreenArgs) {
-    Text(value, color = if (isRoot) a.accent else a.textColor.copy(alpha = 0.78f), fontSize = (12 * a.scale).sp, fontWeight = if (isRoot) FontWeight.SemiBold else FontWeight.Normal)
-}
-
-@Composable
-private fun BpkStep(number: String, title: String, detail: String, a: ScreenArgs) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(25.dp).clip(CircleShape).background(a.accent.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
-            Text(number, color = a.accent, fontSize = (11 * a.scale).sp, fontWeight = FontWeight.Bold)
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = a.textColor, fontSize = (12.8f * a.scale).sp, fontWeight = FontWeight.SemiBold)
-            Text(detail, color = a.textColor.copy(alpha = 0.66f), fontSize = (11.8f * a.scale).sp, lineHeight = (16.5f * a.scale).sp)
-        }
-    }
-}
-
-private const val BPK_SETTINGS_DEVELOPER_GUIDE = """
-BLUEBIRD BPK DEVELOPER GUIDE — FORMAT V1
-
-PURPOSE
-A .bpk is a ZIP archive containing a web app for Bluebird. Build the app with HTML, CSS and JavaScript. Keep it self-contained where practical and design for small screens and resizable app windows.
-
-REQUIRED ARCHIVE LAYOUT
-manifest.json
-icon/icon.png
-app/index.html (or the entry path declared in manifest.json)
-app/other files...
-installer/ (optional custom installer assets)
-
-MANIFEST FIELDS
-{
-  "id": "org.example.myapp",
-  "name": "My App",
-  "version": "1.0.0",
-  "publisher": "Example Publisher",
-  "entry": "app/index.html",
-  "icon": "icon/icon.png",
-  "description": "A short description",
-  "homepage": "https://example.org/",
-  "runtime": "web"
-}
-
-The required identity fields are id, name, version, publisher, entry and icon. Use a stable, unique id made from letters, numbers, dots, underscores or hyphens. Entry and icon paths must exist inside the package. The homepage and description are optional. Keep manifest.json at the archive root.
-
-PACKAGING
-1. Put manifest.json, icon/, app/ and optional installer/ at the top level of the ZIP. Do not zip an extra parent folder around them.
-2. Ensure the icon is a valid PNG and the entry HTML exists.
-3. Zip the contents and rename the resulting .zip to .bpk.
-4. Install in Bluebird and test on the target device. A file extension alone does not make an invalid archive installable.
-
-JAVASCRIPT BRIDGE
-When Bluebird exposes the bridge to trusted local app content, the global object is named Bluebird. Calls return JSON strings unless otherwise noted:
-- Bluebird.getAppInfo() — returns the current app id and bridge API version.
-- Bluebird.capabilityGranted(name) — returns whether the named capability is granted.
-- Bluebird.storageGet(key) — reads this app's private key/value data.
-- Bluebird.storageSet(key, value) — writes this app's private key/value data.
-- Bluebird.log(level, message) — writes a diagnostic message when Logs capability is granted.
-- Bluebird.requestFilePicker() — asks the host to open the file picker if File Picker capability is granted.
-- Bluebird.requestMediaPicker() — asks the host to open the media picker if Media Picker capability is granted.
-- Bluebird.setBrightness(value) — requests brightness from 1 to 255 if granted and supported by the host and Android settings.
-
-Example:
-const info = JSON.parse(Bluebird.getAppInfo());
-if (Bluebird.capabilityGranted('app_storage')) {
-  const saved = JSON.parse(Bluebird.storageGet('display-name'));
-  if (saved.ok && saved.value) console.log(saved.value);
-  Bluebird.storageSet('display-name', 'Guest');
-}
-Bluebird.log('info', 'App started');
-
-Storage keys may contain letters, numbers, dots, underscores, spaces and hyphens; they cannot contain slashes or backslashes. Each value is limited to approximately 256 KiB. The bridge returns objects with ok/value/error fields encoded as JSON for storage and picker/brightness methods. File and media picker selection events must be handled according to the host runtime's documented event integration; do not assume a picker result is synchronously returned by requestFilePicker().
-
-CAPABILITIES
-logs, app_storage, internet, file_picker, media_picker, audio_playback, video_playback, brightness_control. Request only the capabilities needed. Bluebird permission grants are not a substitute for safe coding or validation; actual enforcement can vary by host integration. Never expose the native JavaScript bridge to arbitrary remote websites. Restrict navigation and use safe local-content loading. Treat downloaded app content as untrusted until reviewed.
-
-UPDATES
-The update client expects an HTTPS JSON feed containing id, version, packageUrl and sha256. The app id must match the installed app, the package URL must use HTTPS, and sha256 must be a 64-character hexadecimal SHA-256 digest of the exact downloaded .bpk bytes. The package is staged and validated before install. Ask the user before applying an update. SHA-256 verifies file integrity against the supplied digest; it does not authenticate the publisher. For stronger publisher identity, add a signed manifest/package and verify it against a trusted public key.
-
-TEST CHECKLIST
-- Install a valid package and reject malformed packages.
-- Confirm name, version, icon and entry file are correct.
-- Test launch, window resizing, navigation and closing.
-- Test every capability both granted and denied.
-- Test missing files, invalid paths, oversized values and network failures.
-- Verify logs are useful and do not include passwords, tokens or private user data.
-- Test updates with correct and incorrect hashes and mismatched app ids.
-- Test uninstall and confirm the expected behavior for retained app data.
-- Never claim a capability is secure unless it is enforced in the actual runtime.
-"""
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ABOUT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2038,7 +1794,7 @@ private fun SystemSettings(a: ScreenArgs) {
                 )
                 Text(
                     stringResource(if (isDefault) R.string.default_launcher_active_desc else R.string.default_launcher_inactive_desc),
-                    color = a.textColor.copy(alpha = 0.55f), fontSize = (12 * a.scale).sp
+                    color = a.textColor.copy(alpha = 0.68f), fontSize = (12 * a.scale).sp
                 )
             }
         }

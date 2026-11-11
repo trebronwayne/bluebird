@@ -21,6 +21,9 @@ object AppLinks {
     /** Special toast-action URL: the toast host turns it into the Android share sheet. */
     const val ACTION_SHARE_APP = "bluebird://action/share-app"
 
+    /** Special toast-action URL: opens Settings on the BPK apps page (build apps with AI). */
+    const val ACTION_OPEN_BPK_GUIDE = "bluebird://action/open-bpk-guide"
+
     /** Opens the system share sheet with the Bluebird website link. */
     fun shareApp(context: Context, chooserTitle: String) {
         val send = Intent(Intent.ACTION_SEND).apply {

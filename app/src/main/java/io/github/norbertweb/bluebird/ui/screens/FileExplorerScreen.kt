@@ -623,7 +623,8 @@ private fun FileExplorerContent(
     LaunchedEffect(navInteractionTick, navScrollState.isScrollInProgress) {
         isNavExpanded = true
         if (!navScrollState.isScrollInProgress) {
-            delay(3000)
+            // One minute of inactivity (was 3s). Double-tap empty space to collapse now.
+            delay(60_000L)
             isNavExpanded = false
         }
     }
@@ -1058,6 +1059,7 @@ private fun FileExplorerContent(
                 labelAlpha = navLabelAlpha,
                 scrollState = navScrollState,
                 onInteract = pokeNav,
+                onCollapse = { isNavExpanded = false },
                 hazeState = hazeState,
                 wallpaperAccent = wallpaperAccent
             )
@@ -2529,6 +2531,7 @@ private fun NavigationPane(
     labelAlpha: Float,
     scrollState: ScrollState,
     onInteract: () -> Unit,
+    onCollapse: () -> Unit = {},
     hazeState: HazeState? = null,
     wallpaperAccent: Color = ExplorerAccentBlue
 ) {
@@ -2562,10 +2565,9 @@ private fun NavigationPane(
             .width(navWidth)
             .fillMaxHeight()
             .background(micaOr(navBg))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onInteract() }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onInteract() }, onDoubleTap = { onCollapse() })
+            }
             .verticalScroll(scrollState)
             .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {

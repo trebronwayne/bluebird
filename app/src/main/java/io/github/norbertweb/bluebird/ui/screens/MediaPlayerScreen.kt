@@ -70,6 +70,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 // Microsoft Fluent System UI icons (https://github.com/niyajali/fluentui-system-icons) —
@@ -97,6 +98,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -671,6 +674,11 @@ private class PlayerState {
     // UI
     var activeTab     by mutableStateOf(MediaTab.MUSIC)
     var showQueue     by mutableStateOf(true)
+    // Player collapsed to the bottom dock (VLC / Windows Media Player style): the library takes
+    // the whole window so you can browse and switch tracks, and the dock keeps playback in reach.
+    var playerCollapsed by mutableStateOf(false)
+    // The always-visible "Recent" strip at the top of the library can be folded away.
+    var recentExpanded  by mutableStateOf(true)
     var isFullscreen  by mutableStateOf(false)
     var showControls  by mutableStateOf(true)
     var isBuffering   by mutableStateOf(false)
@@ -1160,18 +1168,33 @@ fun MediaPlayerScreen(
     }
 
     // ── ROOT LAYOUT ───────────────────────────────────────────────
+    // collapsed = player folded into the bottom dock. Only honoured while something is loaded,
+    // so clearing the queue can never leave the window stuck without a player.
+    val collapsed = state.playerCollapsed && state.currentTrack != null
     Box(Modifier.fillMaxSize().background(bg)) {
         if (state.isFullscreen && state.currentTrack?.isVideo == true) {
             FullscreenVideoView(state, tc, tcm, isDark, ctx)
         } else {
-            if (state.showQueue) {
-                Row(Modifier.fillMaxSize()) {
-                    LibraryPane(state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle)
-                    Divider(Modifier.fillMaxHeight().width(1.dp), color = border)
-                    PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        collapsed -> LibraryPane(
+                            state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle,
+                            fullWidth = true, modifier = Modifier.fillMaxSize()
+                        )
+                        state.showQueue -> {
+                            LibraryPane(state, isDark, ctx, surface, surfaceH, border, tc, tcs, tcm, onPickSubtitle)
+                            Divider(Modifier.fillMaxHeight().width(1.dp), color = border)
+                            PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+                        }
+                        else -> PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+                    }
                 }
-            } else {
-                PlayerPane(state, isDark, bg, surface, border, tc, tcs, tcm, ctx)
+                AnimatedVisibility(
+                    visible = collapsed,
+                    enter = slideInVertically(tween(220)) { it } + fadeIn(tween(180)),
+                    exit = fadeOut(tween(90))
+                ) { NowPlayingDock(state, isDark, surface, border, tc, tcs, tcm, ctx) }
             }
         }
     }
@@ -1422,10 +1445,15 @@ private fun LibraryPane(
     ctx: Context,
     surface: Color, surfaceH: Color, border: Color,
     tc: Color, tcs: Color, tcm: Color,
-    onPickSubtitle: ((onPicked: (Uri) -> Unit) -> Unit)?
+    onPickSubtitle: ((onPicked: (Uri) -> Unit) -> Unit)?,
+    fullWidth: Boolean = false,
+    modifier: Modifier = Modifier.width(300.dp).fillMaxHeight()
 ) {
     val scope = rememberCoroutineScope()
-    Column(Modifier.width(300.dp).fillMaxHeight().background(surface)) {
+    // Wide library (player collapsed) lays tracks out as a grid of cards; the 300dp sidebar stays one column.
+    BoxWithConstraints(modifier) {
+    val gridCols = (maxWidth / 280.dp).toInt().coerceIn(1, 4)
+    Column(Modifier.fillMaxSize().background(surface)) {
         Row(
             Modifier.fillMaxWidth().background(if (isDark) FTV.BgMid else FTV.LSurface)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -1495,8 +1523,8 @@ private fun LibraryPane(
 
         if (!showsPlaylistFolderList) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(34.dp)
-                    .clip(RoundedCornerShape(17.dp))
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).height(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1571,9 +1599,22 @@ private fun LibraryPane(
             Divider(color = border.copy(alpha = 0.5f))
         }
 
-        val listState = rememberLazyListState()
+        // Always-visible Recent strip (hidden only on the Recent/Queue tabs, which ARE lists of it,
+        // while searching, and on the playlist folder list).
+        if (!showsPlaylistFolderList && state.searchQuery.isBlank() &&
+            state.activeTab != MediaTab.RECENTS && state.activeTab != MediaTab.PLAYLIST) {
+            RecentStrip(state, isDark, ctx, tc, tcs, tcm, border)
+        }
+
         val tracks    = state.filteredTracks
-        LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(gridCols),
+            state = rememberLazyGridState(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             when (state.activeTab) {
                 MediaTab.PLAYLIST -> {
                     itemsIndexed(state.playlist, key = { i, t -> "${i}_${t.metaKey}" }) { idx, t ->
@@ -1602,7 +1643,7 @@ private fun LibraryPane(
                     val openPl = state.openPlaylist
                     if (openPl == null) {
                         if (state.userPlaylists.isEmpty()) {
-                            item {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
                                 Column(
                                     Modifier.fillMaxWidth().padding(32.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1618,8 +1659,11 @@ private fun LibraryPane(
                             var showPlMenu by remember(pl.id) { mutableStateOf(false) }
                             Row(
                                 Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF7F7F7))
+                                    .border(1.dp, if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.07f), RoundedCornerShape(10.dp))
                                     .clickable { state.openPlaylistId = pl.id }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
@@ -1655,12 +1699,11 @@ private fun LibraryPane(
                                     }
                                 }
                             }
-                            Divider(color = border.copy(alpha = 0.4f))
                         }
                     } else {
                         val plTracks = state.openPlaylistTracks
                         if (plTracks.isEmpty()) {
-                            item {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
                                 Column(
                                     Modifier.fillMaxWidth().padding(32.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1690,7 +1733,7 @@ private fun LibraryPane(
                 }
                 MediaTab.FOLDERS -> {
                     state.folderGroups.forEach { (folderPath, groupTracks) ->
-                        stickyHeader(key = "folder_$folderPath") {
+                        item(key = "folder_$folderPath", span = { GridItemSpan(maxLineSpan) }) {
                             GroupHeader(File(folderPath).name.ifBlank { folderPath }, groupTracks.size, isDark, tc, tcm, surface, surfaceH) {
                                 state.playQueue(groupTracks, 0)
                             }
@@ -1755,13 +1798,14 @@ private fun LibraryPane(
                     }
                 }
             }
-            item { Spacer(Modifier.height(80.dp)) }
+            item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
         }
 
-        if (state.currentTrack != null) {
+        if (state.currentTrack != null && !fullWidth) {
             Divider(color = border)
             MiniNowPlaying(state, isDark, tc, tcs, tcm, ctx)
         }
+    }
     }
 }
 
@@ -1788,8 +1832,7 @@ private fun pickSubtitleFor(track: MediaTrack, onPickSubtitle: ((onPicked: (Uri)
 private fun GroupHeader(name: String, count: Int, isDark: Boolean, tc: Color, tcm: Color, surface: Color, surfaceH: Color, onPlayAll: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
-            .background(if (isDark) FTV.SurfaceHigh else FTV.LSurfaceHigh)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -1940,30 +1983,48 @@ private fun LibraryRow(
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val rowBg by animateColorAsState(if (isActive) FTV.SelectedBg else Color.Transparent, label = "rowbg")
+    val shape = RoundedCornerShape(10.dp)
+    val cardBg by animateColorAsState(
+        when {
+            isActive -> FTV.Accent.copy(alpha = if (isDark) 0.18f else 0.12f)
+            isDark   -> Color.White.copy(alpha = 0.05f)
+            else     -> Color(0xFFF7F7F7)
+        }, label = "cardbg"
+    )
+    val cardBorder by animateColorAsState(
+        when {
+            isActive -> FTV.Accent.copy(alpha = 0.55f)
+            isDark   -> Color.White.copy(alpha = 0.07f)
+            else     -> Color.Black.copy(alpha = 0.07f)
+        }, label = "cardborder"
+    )
 
+    // Each track is a small rounded card (Windows 11 style): art, title, artist · length, actions.
     Row(
-        modifier.fillMaxWidth().background(rowBg)
+        modifier.fillMaxWidth()
+            .clip(shape)
+            .background(cardBg)
+            .border(1.dp, cardBorder, shape)
             .pointerInput(Unit) { detectTapGestures(onTap = { onClick() }, onLongPress = { showMenu = true }) }
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            TrackThumbnail(track, ctx, size = 40.dp, isActive = isActive, isPlaying = isPlaying)
+        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+            TrackThumbnail(track, ctx, size = 44.dp, radius = 8.dp, isActive = isActive, isPlaying = isPlaying)
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(track.displayTitle, color = if (isActive) FTV.Accent else tc, fontSize = 14.sp,
-                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                Text(track.displayTitle, color = if (isActive) FTV.Accent else tc, fontSize = 13.5.sp,
+                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (track.isFavorite) Icon(FI.Star, null, tint = FTV.Gold, modifier = Modifier.size(11.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(ui(track.displayArtist), color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(ui(track.displayArtist), color = tcs, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (track.durationMs > 0) {
                     Text("·", color = tcm, fontSize = 12.sp)
-                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 12.sp)
+                    Text(formatDuration(track.durationMs), color = tcm, fontSize = 12.sp, maxLines = 1)
                 }
             }
             if (track.playCount > 0) Text(stringResource(R.string.played, track.playCount), color = tcm, fontSize = 11.sp)
@@ -1976,8 +2037,8 @@ private fun LibraryRow(
                     Icon(FI.KeyboardArrowDown, null, tint = tcm, modifier = Modifier.size(16.dp).clickable { onMoveDown() })
             }
         }
-        Box {
-            Icon(FI.MoreVert, null, tint = tcm, modifier = Modifier.size(16.dp).clickable { showMenu = true })
+        Box(Modifier.size(30.dp).clip(CircleShape).clickable { showMenu = true }, contentAlignment = Alignment.Center) {
+            Icon(FI.MoreVert, null, tint = tcm, modifier = Modifier.size(16.dp))
             BluebirdDropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false },
                 modifier = fluentMenuModifier(isDark)) {
                 val items = buildList {
@@ -1998,6 +2059,229 @@ private fun LibraryRow(
                         onClick = { action(); showMenu = false },
                         leadingIcon = { Icon(icon, null, tint = FTV.Accent, modifier = Modifier.size(16.dp)) }
                     )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Now-playing dock — the collapsed player (VLC / Windows Media Player style)
+// A full-width bar pinned to the bottom. Browse the whole library above it; tap the bar
+// (anywhere that is not a button) or the chevron to bring the full player back.
+// ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun NowPlayingDock(
+    state: PlayerState, isDark: Boolean,
+    surface: Color, border: Color,
+    tc: Color, tcs: Color, tcm: Color,
+    ctx: Context
+) {
+    val track = state.currentTrack ?: return
+    val accent = FTV.Accent
+    val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+    var seekPreview by remember { mutableStateOf<Float?>(null) }
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 640.dp
+        val medium = maxWidth >= 460.dp
+        Column(
+            Modifier.fillMaxWidth()
+                .shadow(8.dp, RectangleShape, ambientColor = Color.Black.copy(0.4f), spotColor = Color.Black.copy(0.4f))
+                .background(if (isDark) Color(0xFF202020) else Color(0xFFFBFBFB))
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                    state.playerCollapsed = false
+                }
+        ) {
+            // Slim seek line along the top edge: scrub without expanding.
+            FluentSeekBar(
+                progress = seekPreview ?: progress, accent = accent, trackColor = tc.copy(alpha = 0.14f),
+                compact = true, modifier = Modifier.fillMaxWidth(),
+                onPreview = { seekPreview = it },
+                onCommit = { frac ->
+                    val ms = (frac * state.durationMs).toLong()
+                    state.seekTo(ms); state.positionMs = ms; seekPreview = null
+                }
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Left: live preview (video) or artwork, with title and artist.
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (track.isVideo) {
+                        Box(Modifier.size(width = 80.dp, height = 45.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black)) {
+                            VideoPoster(track, ctx, Modifier.fillMaxSize())
+                            VideoSurface(state.controller, state.aspectRatio, Modifier.fillMaxSize())
+                        }
+                    } else {
+                        TrackThumbnail(track, ctx, size = 44.dp, radius = 8.dp, isActive = true, isPlaying = state.isPlaying)
+                    }
+                    Column(Modifier.weight(1f, fill = false)) {
+                        Text(track.displayTitle, color = tc, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(ui(track.displayArtist), color = tcs, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                // Centre: compact transport.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (medium) ControlBtn(FI.Shuffle, if (state.isShuffle) accent else tc.copy(0.6f), 16.dp, 30.dp) { state.isShuffle = !state.isShuffle }
+                    ControlBtn(FI.SkipPrevious, tc, 18.dp, 32.dp) { state.skipPrev() }
+                    PlayButton(state, accent, size = 36.dp)
+                    ControlBtn(FI.SkipNext, tc, 18.dp, 32.dp) { state.skipNext() }
+                    if (medium) ControlBtn(
+                        when (state.repeatMode) { RepeatMode.REPEAT_ONE -> FI.RepeatOne; else -> FI.Repeat },
+                        if (state.repeatMode != RepeatMode.OFF) accent else tc.copy(0.6f), 16.dp, 30.dp
+                    ) { state.repeatMode = RepeatMode.entries[(state.repeatMode.ordinal + 1) % RepeatMode.entries.size] }
+                }
+                // Right: time, volume, expand.
+                Row(
+                    if (medium) Modifier.weight(1f) else Modifier,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (wide) {
+                        Text(
+                            formatDuration(((seekPreview ?: progress) * state.durationMs).toLong()) + " / " + formatDuration(state.durationMs),
+                            color = tcm, fontSize = 11.sp, maxLines = 1
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        VolumeCompact(state, tc, accent, showSlider = true)
+                    }
+                    ControlBtn(FI.KeyboardArrowUp, tc, 18.dp, 34.dp) { state.playerCollapsed = false }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Recent — always-visible strip at the top of the library, plus the home stage
+// ─────────────────────────────────────────────────────────────────
+
+/** Art for a track at any size/aspect: video frame → artwork → tinted icon tile. */
+@Composable
+private fun TrackArt(track: MediaTrack, ctx: Context, modifier: Modifier = Modifier) {
+    val videoFrame = if (track.isVideo) rememberVideoThumbnail(ctx, track) else null
+    val tint = if (track.isVideo) FTV.VideoGreen else FTV.AudioPurple
+    when {
+        track.isVideo && videoFrame != null -> Image(
+            bitmap = videoFrame.asImageBitmap(), contentDescription = null,
+            modifier = modifier, contentScale = ContentScale.Crop
+        )
+        !track.isVideo && track.artworkUri != null -> AsyncImage(
+            model = track.artworkUri, contentDescription = null,
+            modifier = modifier, contentScale = ContentScale.Crop
+        )
+        else -> Box(modifier.background(tint.copy(0.16f)), contentAlignment = Alignment.Center) {
+            Icon(if (track.isVideo) FI.PlayCircle else FI.MusicNote, null, tint = tint.copy(0.85f), modifier = Modifier.size(26.dp))
+        }
+    }
+}
+
+@Composable
+private fun RecentCard(
+    track: MediaTrack, active: Boolean, playing: Boolean, isDark: Boolean,
+    tc: Color, tcm: Color, ctx: Context,
+    modifier: Modifier = Modifier, onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val bg = if (active) FTV.Accent.copy(alpha = if (isDark) 0.18f else 0.12f)
+             else if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF7F7F7)
+    val bd = if (active) FTV.Accent.copy(alpha = 0.55f)
+             else if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.07f)
+    Column(
+        modifier.clip(shape).background(bg).border(1.dp, bd, shape).clickable(onClick = onClick).padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp))) {
+            TrackArt(track, ctx, Modifier.fillMaxSize())
+            if (active) {
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(4.dp).size(20.dp).background(FTV.Accent, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) { Icon(if (playing) FI.Pause else FI.Play, null, tint = Color.White, modifier = Modifier.size(11.dp)) }
+            }
+        }
+        Column(Modifier.padding(horizontal = 2.dp)) {
+            Text(track.displayTitle, color = if (active) FTV.Accent else tc, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(ui(track.displayArtist), color = tcm, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Horizontally scrolling "Recent" cards pinned above the library list; tap the header to fold it. */
+@Composable
+private fun RecentStrip(
+    state: PlayerState, isDark: Boolean, ctx: Context,
+    tc: Color, tcs: Color, tcm: Color, border: Color
+) {
+    val byKey = remember(state.allTracks) { state.allTracks.associateBy { it.metaKey } }
+    val recents = remember(state.recentPaths, byKey) { state.recentPaths.mapNotNull { byKey[it] }.take(12) }
+    if (recents.isEmpty()) return
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth()
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { state.recentExpanded = !state.recentExpanded }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(FI.HistoryFilled, null, tint = FTV.Accent, modifier = Modifier.size(14.dp))
+            Text(stringResource(R.string.recent), color = tc, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(if (state.recentExpanded) FI.KeyboardArrowUp else FI.KeyboardArrowDown, null, tint = tcm, modifier = Modifier.size(16.dp))
+        }
+        AnimatedVisibility(state.recentExpanded) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                itemsIndexed(recents, key = { _, t -> "recent_" + t.metaKey }) { index, t ->
+                    RecentCard(
+                        t, state.currentTrack?.metaKey == t.metaKey, state.isPlaying, isDark, tc, tcm, ctx,
+                        modifier = Modifier.width(132.dp)
+                    ) { state.playQueue(recents, index) }
+                }
+            }
+        }
+        Divider(color = border)
+    }
+}
+
+/** What the player pane shows before anything is playing: a calm home with recent items to resume. */
+@Composable
+private fun HomeStage(
+    state: PlayerState, ctx: Context, isDark: Boolean,
+    tc: Color, tcs: Color, tcm: Color
+) {
+    val byKey = remember(state.allTracks) { state.allTracks.associateBy { it.metaKey } }
+    val recents = remember(state.recentPaths, byKey) { state.recentPaths.mapNotNull { byKey[it] }.take(6) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+    ) {
+        Box(Modifier.size(64.dp).clip(CircleShape).background(FTV.Accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            Icon(FI.PlayCircle, null, tint = FTV.Accent, modifier = Modifier.size(32.dp))
+        }
+        Text("Nothing playing", color = tc, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            if (recents.isEmpty()) "Pick a song or video from your library to start."
+            else "Pick something from your library, or continue with a recent item.",
+            color = tcs, fontSize = 13.sp, textAlign = TextAlign.Center
+        )
+        if (recents.isNotEmpty()) {
+            recents.chunked(3).forEach { rowItems ->
+                Row(Modifier.fillMaxWidth().widthIn(max = 520.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowItems.forEach { t ->
+                        RecentCard(t, false, false, isDark, tc, tcm, ctx, Modifier.weight(1f)) {
+                            state.playQueue(recents, recents.indexOf(t))
+                        }
+                    }
+                    repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -2097,6 +2381,8 @@ private fun PlayerPane(
             if (track?.isVideo == true) {
                 ToolbarBtn(FI.Fullscreen, tc) { state.isFullscreen = true }
             }
+            // Fold the player into the bottom dock so the whole library is browsable while it plays.
+            if (track != null) ToolbarBtn(FI.KeyboardArrowDown, tc) { state.playerCollapsed = true }
         }
         Divider(color = border)
 
@@ -2111,7 +2397,7 @@ private fun PlayerPane(
             contentAlignment = Alignment.Center
         ) {
             when {
-                track == null  -> EmptyState(tc, tcm)
+                track == null  -> HomeStage(state, ctx, isDark, tc, tcs, tcm)
                 track.isVideo  -> VideoPlayerArea(state, track, tc, tcm, ctx)
                 else           -> AudioPlayerArea(state, track, isDark, tc, tcs, tcm, ctx) { dynamicAccent = it }
             }
@@ -2120,11 +2406,10 @@ private fun PlayerPane(
         Column(
             Modifier.fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(if (isDark) FTV.Bg else FTV.LBg, surface)))
-                .padding(horizontal = 20.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
         ) {
             ProgressBar(state, tc, tcm, dynamicAccent)
             MainControls(state, tc, dynamicAccent)
-            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -2271,10 +2556,10 @@ private fun AudioPlayerArea(
         value
     } else 1f
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Box(
             Modifier
-                .size(268.dp)
+                .size(232.dp)
                 .graphicsLayer {
                     val s = if (state.isPlaying) breathe else 1f
                     scaleX = s; scaleY = s
@@ -2291,10 +2576,10 @@ private fun AudioPlayerArea(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(track.displayTitle, color = tc, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+            Text(track.displayTitle, color = tc, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(max = 320.dp))
-            Text(ui(track.displayArtist), color = tcs, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(ui(track.displayArtist), color = tcs, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (state.playlist.size > 1 && state.currentIndex < state.playlist.size - 1) {
             val next = state.playlist[state.currentIndex + 1]
@@ -2338,80 +2623,160 @@ private fun AnimatedEqualizer(color: Color) {
 @Composable
 private fun ProgressBar(state: PlayerState, tc: Color, tcm: Color, accent: Color = FTV.Accent) {
     var seekPreview by remember { mutableStateOf<Float?>(null) }
-    val displayedProgress = seekPreview
+    val progress = seekPreview
         ?: if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+    val shownMs = (progress * state.durationMs).toLong()
 
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatDuration((displayedProgress * state.durationMs).toLong()), color = tcm, fontSize = 12.sp)
-            Text("-${formatDuration((state.durationMs - (displayedProgress * state.durationMs).toLong()).coerceAtLeast(0))}", color = tcm, fontSize = 12.sp)
-            Text(formatDuration(state.durationMs), color = tcm, fontSize = 12.sp)
-        }
-        Spacer(Modifier.height(2.dp))
-        Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(tc.copy(0.15f))) {
-                Box(Modifier.fillMaxWidth(displayedProgress).fillMaxHeight()
-                    .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.7f), accent)), RoundedCornerShape(2.dp)))
+    // Windows 11 Media Player layout: elapsed · slim seek bar · total, all on one line.
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(formatDuration(shownMs), color = tcm, fontSize = 11.sp, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
+        FluentSeekBar(
+            progress = progress, accent = accent, trackColor = tc.copy(alpha = 0.18f),
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            onPreview = { seekPreview = it },           // B-03: preview only while dragging
+            onCommit = { frac ->                          // one seek per gesture
+                val ms = (frac * state.durationMs).toLong()
+                state.seekTo(ms); state.positionMs = ms
+                seekPreview = null
             }
-            Slider(
-                value = displayedProgress,
-                onValueChange = { frac -> seekPreview = frac }, // B-03: preview only, no seek yet
-                onValueChangeFinished = {
-                    val frac = seekPreview ?: return@Slider
-                    state.seekTo((frac * state.durationMs).toLong())
-                    seekPreview = null
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White, activeTrackColor = Color.Transparent,
-                    inactiveTrackColor = Color.Transparent, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent
+        )
+        Text(formatDuration(state.durationMs), color = tcm, fontSize = 11.sp, maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 32.dp))
+    }
+}
+
+/**
+ * Slim Fluent seek/volume bar: 3dp track, accent fill, 12dp thumb that grows while dragging.
+ * Tap anywhere to jump; drag to scrub (onPreview fires continuously, onCommit once at the end).
+ * [compact] draws a 2dp edge-to-edge line with no resting thumb, used on the dock's top edge.
+ */
+@Composable
+private fun FluentSeekBar(
+    progress: Float,
+    accent: Color,
+    trackColor: Color,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    onPreview: (Float) -> Unit,
+    onCommit: (Float) -> Unit
+) {
+    var widthPx by remember { mutableStateOf(0) }
+    var dragging by remember { mutableStateOf(false) }
+    var lastFraction by remember { mutableStateOf(0f) }
+    val currentPreview by rememberUpdatedState(onPreview)
+    val currentCommit by rememberUpdatedState(onCommit)
+    val thumbPx = with(LocalDensity.current) { 12.dp.toPx() }
+    val p = progress.coerceIn(0f, 1f)
+    val thumbScale by animateFloatAsState(if (dragging) 1f else 0.78f, label = "seekThumb")
+    val trackHeight = if (compact) 2.dp else 3.dp
+
+    Box(
+        modifier
+            .height(if (compact) 14.dp else 20.dp)
+            .onSizeChanged { widthPx = it.width }
+            .pointerInput(Unit) {
+                detectTapGestures { off ->
+                    if (widthPx > 0) currentCommit((off.x / widthPx).coerceIn(0f, 1f))
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        dragging = true
+                        if (widthPx > 0) { lastFraction = (off.x / widthPx).coerceIn(0f, 1f); currentPreview(lastFraction) }
+                    },
+                    onDragEnd = { dragging = false; currentCommit(lastFraction) },
+                    onDragCancel = { dragging = false },
+                    onHorizontalDrag = { change, _ ->
+                        if (widthPx > 0) { lastFraction = (change.position.x / widthPx).coerceIn(0f, 1f); currentPreview(lastFraction) }
+                    }
                 )
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(Modifier.fillMaxWidth().height(trackHeight).clip(RoundedCornerShape(2.dp)).background(trackColor))
+        Box(Modifier.fillMaxWidth(p).height(trackHeight).clip(RoundedCornerShape(2.dp)).background(accent))
+        if (!compact || dragging) {
+            Box(
+                Modifier
+                    .offset { IntOffset((p * widthPx - thumbPx / 2f).roundToInt().coerceIn(0, (widthPx - thumbPx.toInt()).coerceAtLeast(0)), 0) }
+                    .size(12.dp)
+                    .graphicsLayer { scaleX = thumbScale; scaleY = thumbScale }
+                    .background(Color.White, CircleShape)
+                    .border(2.dp, accent, CircleShape)
             )
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Main controls row
+// Main controls row — Windows 11 Media Player proportions:
+// a 40dp accent play button, 34dp skip buttons, 30dp secondary buttons, 16–18dp glyphs.
+// Layout adapts to width: speed (left) and volume slider (right) appear when there is room.
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun MainControls(state: PlayerState, tc: Color, accent: Color = FTV.Accent) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        ControlBtn(FI.Shuffle, if (state.isShuffle) accent else tc.copy(0.5f), 20.dp) { state.isShuffle = !state.isShuffle }
-        ControlBtn(FI.SkipPrevious, tc, 28.dp) { state.skipPrev() }
-        val interactionSource = remember { MutableInteractionSource() }
-        val isPressed by interactionSource.collectIsPressedAsState()
-        val pressScale by animateFloatAsState(if (isPressed) 0.92f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "playbtn_scale")
-        Box(
-            Modifier.size(72.dp)
-                .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
-                .shadow(14.dp, CircleShape, spotColor = accent, ambientColor = accent)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(accent, accent.copy(alpha = 0.85f))), CircleShape)
-                .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { state.togglePlayPause() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(if (state.isPlaying) FI.Pause else FI.Play, null, tint = Color.White, modifier = Modifier.size(36.dp))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 520.dp
+        val medium = maxWidth >= 380.dp
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (wide) SpeedChip(state, tc, tc)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                ControlBtn(FI.Shuffle, if (state.isShuffle) accent else tc.copy(0.6f), 16.dp, 30.dp) { state.isShuffle = !state.isShuffle }
+                if (medium) ControlBtn(FI.Replay10, tc.copy(0.7f), 16.dp, 30.dp) { state.seekTo((state.positionMs - 10000).coerceAtLeast(0)) }
+                ControlBtn(FI.SkipPrevious, tc, 18.dp, 34.dp) { state.skipPrev() }
+                PlayButton(state, accent)
+                ControlBtn(FI.SkipNext, tc, 18.dp, 34.dp) { state.skipNext() }
+                if (medium) ControlBtn(FI.Forward10, tc.copy(0.7f), 16.dp, 30.dp) { state.seekTo((state.positionMs + 10000).coerceAtMost(state.durationMs)) }
+                ControlBtn(
+                    when (state.repeatMode) { RepeatMode.REPEAT_ONE -> FI.RepeatOne; else -> FI.Repeat },
+                    if (state.repeatMode != RepeatMode.OFF) accent else tc.copy(0.6f), 16.dp, 30.dp
+                ) { state.repeatMode = RepeatMode.entries[(state.repeatMode.ordinal + 1) % RepeatMode.entries.size] }
+            }
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                VolumeCompact(state, tc, accent, showSlider = wide)
+            }
         }
-        ControlBtn(FI.SkipNext, tc, 28.dp) { state.skipNext() }
-        ControlBtn(
-            when (state.repeatMode) { RepeatMode.REPEAT_ONE -> FI.RepeatOne; else -> FI.Repeat },
-            if (state.repeatMode != RepeatMode.OFF) accent else tc.copy(0.5f), 20.dp
-        ) { state.repeatMode = RepeatMode.entries[(state.repeatMode.ordinal + 1) % RepeatMode.entries.size] }
     }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 2.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+}
+
+/** Solid accent circle, Windows 11 style: no glow, subtle press scale. */
+@Composable
+private fun PlayButton(state: PlayerState, accent: Color, size: Dp = 40.dp) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(if (isPressed) 0.92f else 1f, spring(stiffness = Spring.StiffnessMedium), label = "playbtn_scale")
+    Box(
+        Modifier.size(size)
+            .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+            .clip(CircleShape)
+            .background(accent, CircleShape)
+            .clickable(interactionSource = interactionSource, indication = LocalIndication.current) { state.togglePlayPause() },
+        contentAlignment = Alignment.Center
     ) {
-        ControlBtn(FI.Replay10, tc.copy(0.7f), 20.dp) { state.seekTo((state.positionMs - 10000).coerceAtLeast(0)) }
-        Spacer(Modifier.width(48.dp))
-        ControlBtn(FI.Forward10, tc.copy(0.7f), 20.dp) { state.seekTo((state.positionMs + 10000).coerceAtMost(state.durationMs)) }
+        Icon(if (state.isPlaying) FI.Pause else FI.Play, null, tint = Color.White, modifier = Modifier.size(size * 0.5f))
+    }
+}
+
+/** Speaker button (tap = mute) with an optional slim volume bar, like the Windows 11 flyout. */
+@Composable
+private fun VolumeCompact(state: PlayerState, tc: Color, accent: Color, showSlider: Boolean) {
+    val icon = when {
+        state.isMuted || state.volume == 0f -> FI.VolumeOff
+        state.volume < 0.5f -> FI.VolumeDown
+        else -> FI.VolumeUp
+    }
+    ControlBtn(icon, tc.copy(0.8f), 16.dp, 30.dp) { state.isMuted = !state.isMuted }
+    if (showSlider) {
+        FluentSeekBar(
+            progress = if (state.isMuted) 0f else state.volume,
+            accent = accent, trackColor = tc.copy(alpha = 0.18f),
+            modifier = Modifier.width(88.dp),
+            onPreview = { state.volume = it; state.isMuted = false },
+            onCommit = { state.volume = it; state.isMuted = false }
+        )
     }
 }
 
@@ -2882,10 +3247,10 @@ private fun shareTrack(ctx: Context, track: MediaTrack) {
 // ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ControlBtn(icon: ImageVector, tint: Color, size: Dp, onClick: () -> Unit) {
+private fun ControlBtn(icon: ImageVector, tint: Color, iconSize: Dp, box: Dp = 34.dp, onClick: () -> Unit) {
     val animatedTint by animateColorAsState(tint, label = "controlbtn_tint")
-    Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = animatedTint, modifier = Modifier.size(size))
+    Box(Modifier.size(box).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = animatedTint, modifier = Modifier.size(iconSize))
     }
 }
 
