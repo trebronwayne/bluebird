@@ -1809,6 +1809,10 @@ private fun SystemSettings(a: ScreenArgs) {
         SNav(FluentIcons.Regular.Open, stringResource(R.string.change_default_launcher), stringResource(R.string.change_default_launcher_desc), a = a) {
             AppLinks.openDefaultLauncherSettings(ctx, forceChooser = true)
         }
+        Divider(color = divColor(a), modifier = Modifier.padding(horizontal = 12.dp))
+        SNav(FluentIcons.Regular.Open, stringResource(R.string.keep_running_title), stringResource(R.string.keep_running_desc), a = a) {
+            AppLinks.openBatteryOptimizationSettings(ctx)
+        }
     }
 }
 
