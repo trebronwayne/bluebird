@@ -54,6 +54,11 @@ class DesktopPreferences(context: Context) {
         get() = prefs.getBoolean("show_icons", true)
         set(v) = prefs.edit().putBoolean("show_icons", v).apply()
 
+    /** A short sound when a notification toast appears. On by default; turned off in Settings → System → Notifications. */
+    var notificationSound: Boolean
+        get() = prefs.getBoolean("notification_sound", true)
+        set(v) = prefs.edit().putBoolean("notification_sound", v).apply()
+
     // ── Aubree ─────────────────────────────────────────────────────
     /** True once the person has seen the one-time "Meet Aubree" welcome. */
     var metAubree: Boolean

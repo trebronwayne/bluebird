@@ -52,6 +52,9 @@ private const val MAX_TOASTS_ON_SCREEN = 3
 fun DesktopScreen(viewModel: LauncherViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The real light/dark state (same source the Start menu, taskbar and windows use). uiState.isDarkTheme does not
+    // follow the system theme, which left the toasts and Aubree's cards dark in light mode.
+    val isDarkNow = io.github.norbertweb.bluebird.ui.theme.LocalIsDarkTheme.current
     val textScale = LocalTextScale.current
 
     // Real, measured taskbar height in px — fed into Desktop() below so it knows to
@@ -84,7 +87,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
     // One-time "Meet Aubree" welcome (new installs, and people who update).
     var metAubree by remember { mutableStateOf(io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).metAubree) }
     if (!metAubree) {
-        io.github.norbertweb.bluebird.ui.components.MeetAubreeDialog(isDark = uiState.isDarkTheme) {
+        io.github.norbertweb.bluebird.ui.components.MeetAubreeDialog(isDark = isDarkNow) {
             io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).metAubree = true
             metAubree = true
         }
@@ -119,6 +122,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         viewModel.maybeShowBpkReminder()
     }
     LaunchedEffect(Unit) {
+        if (DesktopPreferences(context).notificationSound) NotificationSound.warmUp(context)
         viewModel.toastEvents.collect { toast ->
             // Same message already showing? Replace it instead of stacking a copy.
             activeToasts.removeAll { it.id == toast.id || (it.title == toast.title && it.body == toast.body) }
@@ -126,6 +130,8 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
             // Never queue more than the host can show. A toast the host cannot draw has no timer, so it
             // used to sit in the list and replay in full each time a slot freed up: an endless tip loop.
             while (activeToasts.size > MAX_TOASTS_ON_SCREEN) activeToasts.removeAt(0)
+            // The notification sound: on by default, turned off in Settings → System → Notifications.
+            if (DesktopPreferences(context).notificationSound) NotificationSound.play(context)
         }
     }
 
@@ -387,7 +393,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         //    is always visible regardless of what's currently open. ──
         NotificationToastHost(
             toasts    = activeToasts,
-            isDark    = uiState.isDarkTheme,
+            isDark    = isDarkNow,
             textScale = textScale,
             maxVisible = MAX_TOASTS_ON_SCREEN,
             modifier  = Modifier.padding(bottom = if (uiState.isTaskbarVisible) 48.dp else 0.dp),
@@ -421,7 +427,7 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         io.github.norbertweb.bluebird.ui.components.WelcomeBackCard(
             trigger = welcomeBackAt,
             enabled = metAubree && !uiState.isLocked,
-            isDark  = uiState.isDarkTheme
+            isDark  = isDarkNow
         )
 
         // ── 13. "Set as default launcher" prompt — shown once, right after setup

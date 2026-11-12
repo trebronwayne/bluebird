@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">Fijn weekend</string>
     <string name="greet_no_rush_today">Vandaag geen haast</string>
     <string name="greet_enjoy_your_weekend">Geniet van je weekend</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">Overig</string>
+    <string name="support_tip_text">Een beetje steun doet veel! Wil je me helpen om te blijven creëren? Dat kan via https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">Steun op Ko-fi</string>
+    <string name="notification_sound_title">Meldingsgeluid</string>
+    <string name="notification_sound_desc">Speel een kort geluid af als er een melding verschijnt</string>
 </resources>

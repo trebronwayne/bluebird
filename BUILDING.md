@@ -169,6 +169,8 @@ First time: run `baseline` (set `baseline_ref` to the commit of your last 2.4 re
 one), then run `patch`, `minor` or `major` as needed. If you skip `baseline`, the first patch/minor/major run
 creates the `2.4.0` tag itself.
 
-The version lives in `version.properties` (`versionName`, and `versionCode = major*10000 + minor*100 + patch`),
-so the build number always goes up. The APK is signed with your keystore secrets and its signature is verified
+The version lives in `version.properties`. `versionName` is the version you type or choose (2.4.1). `versionCode` is a
+plain build number that goes up by 1 on every release, starting after the last published build (15, so the next
+release is 16). The workflow counts from the number recorded in each release tag (`Bluebird 2.4.1 (build 16)`), not from
+`version.properties`, so an old copy of that file can never make the build number jump or go back. If the last published build changes, edit `MIN_PUBLISHED_BUILD` in the workflow. The APK is signed with your keystore secrets and its signature is verified
 in the run summary. Tags are plain git tags created by `github-actions[bot]`; they are independent of APK signing.

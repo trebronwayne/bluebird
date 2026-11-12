@@ -1480,12 +1480,22 @@ private fun ClockWidget(isDark: Boolean, context: Context, textScale: Float) {
     WidgetCard(isDark) {
         // Large local clock
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            // A strong, slightly larger greeting with a soft blue-to-violet gradient (readable in light and dark).
             Text(
                 ui(greeting.text),
-                fontSize   = (13 * textScale).sp,
-                fontWeight = FontWeight.Medium,
-                color      = bluebirdColors.AccentBlue
+                style = androidx.compose.ui.text.TextStyle(
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(
+                            if (isDark) Color(0xFF7CB7FF) else Color(0xFF1F6FEB),
+                            if (isDark) Color(0xFFC39BFF) else Color(0xFF7A3FE0)
+                        )
+                    ),
+                    fontSize      = (18 * textScale).sp,
+                    fontWeight    = FontWeight.ExtraBold,
+                    letterSpacing = 0.2.sp
+                )
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 localTime,
                 fontSize   = (38 * textScale).sp,

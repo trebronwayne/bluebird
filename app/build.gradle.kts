@@ -21,7 +21,7 @@ if (hasLocalKeystoreProperties) {
 }
 
 // Version comes from version.properties (kept in sync by the release workflow) and can be
-// overridden on the command line: ./gradlew assembleRelease -PversionNameOverride=2.4.1 -PversionCodeOverride=20401
+// overridden on the command line: ./gradlew assembleRelease -PversionNameOverride=2.4.1 -PversionCodeOverride=16
 val versionProps = Properties().apply {
     val f = rootProject.file("version.properties")
     if (f.exists()) FileInputStream(f).use { load(it) }
@@ -29,7 +29,7 @@ val versionProps = Properties().apply {
 val appVersionName: String = (project.findProperty("versionNameOverride") as String?)
     ?: versionProps.getProperty("versionName", "2.4.0")
 val appVersionCode: Int = (project.findProperty("versionCodeOverride") as String?)?.toInt()
-    ?: versionProps.getProperty("versionCode", "20400").toInt()
+    ?: versionProps.getProperty("versionCode", "15").toInt()
 
 android {
     namespace = "io.github.norbertweb.bluebird"

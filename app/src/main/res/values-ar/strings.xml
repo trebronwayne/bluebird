@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">عطلة سعيدة</string>
     <string name="greet_no_rush_today">لا عجلة اليوم</string>
     <string name="greet_enjoy_your_weekend">استمتع بعطلتك</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">أخرى</string>
+    <string name="support_tip_text">الدعم الصغير يصنع فرقًا كبيرًا! إذا أردت مساعدتي على مواصلة الإبداع، يمكنك ذلك عبر https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">ادعم على Ko-fi</string>
+    <string name="notification_sound_title">صوت الإشعار</string>
+    <string name="notification_sound_desc">تشغيل صوت قصير عند ظهور إشعار</string>
 </resources>

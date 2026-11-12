@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">শুভ সপ্তাহান্ত</string>
     <string name="greet_no_rush_today">আজ কোনো তাড়া নেই</string>
     <string name="greet_enjoy_your_weekend">সপ্তাহান্ত উপভোগ করুন</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">অন্যান্য</string>
+    <string name="support_tip_text">সামান্য সহায়তাও অনেক কাজে লাগে! আমাকে সৃষ্টি চালিয়ে যেতে সাহায্য করতে চাইলে এখানে করতে পারেন: https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">Ko-fi-তে সমর্থন করুন</string>
+    <string name="notification_sound_title">বিজ্ঞপ্তির শব্দ</string>
+    <string name="notification_sound_desc">বিজ্ঞপ্তি এলে একটি ছোট শব্দ বাজান</string>
 </resources>

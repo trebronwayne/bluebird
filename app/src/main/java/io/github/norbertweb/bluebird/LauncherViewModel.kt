@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird
 
+import androidx.annotation.DrawableRes
 import com.trebronwayne.aubree.AubreeState
 import android.app.Application
 import android.app.WallpaperManager
@@ -1433,7 +1434,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         accentColor: String = "#0078D4",
         actionLabel: String? = null,
         actionUrl: String? = null,
-        aubree: AubreeState? = null
+        aubree: AubreeState? = null,
+        image: Int? = null
     ) {
         val accent = try {
             androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(accentColor))
@@ -1448,7 +1450,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 accent      = accent,
                 actionLabel = actionLabel,
                 actionUrl   = actionUrl,
-                aubree      = aubree
+                aubree      = aubree,
+                image       = image
             )
         )
     }
@@ -1467,7 +1470,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         /** English text for tips that are not in the translation files yet (shown through UiText). */
         val literal: String? = null,
         val actionLiteral: String? = null,
-        val aubree: AubreeState = AubreeState.ASK
+        val aubree: AubreeState = AubreeState.ASK,
+        @DrawableRes val image: Int? = null
     )
 
     private val tipLibrary = listOf(
@@ -1480,6 +1484,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             actionLiteral = "Rate on Uptodown",
             actionUrl = AppLinks.STORE_REVIEW_URL,
             aubree = AubreeState.HAPPY
+        ),
+        Tip(
+            literal = "A little support goes a long way! If you’d like to help me keep creating, you can do so at https://ko-fi.com/nobertlamn",
+            actionLiteral = "Support on Ko-fi",
+            actionUrl = AppLinks.KOFI_URL,
+            aubree = AubreeState.HAPPY,
+            image = R.drawable.support_card
         ),
         Tip(R.string.tip_unpin_taskbar),
         Tip(R.string.tip_open_calendar),
@@ -1505,7 +1516,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         text: String,
         actionLabel: String? = null,
         actionUrl: String? = null,
-        aubree: AubreeState = AubreeState.ASK
+        aubree: AubreeState = AubreeState.ASK,
+        image: Int? = null
     ) {
         val tipTitle = localizedContext().getString(R.string.tip_title)
         postSystemNotification(
@@ -1515,7 +1527,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             appLabel    = tipTitle,
             actionLabel = actionLabel,
             actionUrl   = actionUrl,
-            aubree      = aubree
+            aubree      = aubree,
+            image       = image
         )
     }
 
@@ -1531,7 +1544,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val text = tip.literal?.let { io.github.norbertweb.bluebird.i18n.UiText.get(ctx, it) } ?: ctx.getString(tip.text)
         val label = tip.actionLiteral?.let { io.github.norbertweb.bluebird.i18n.UiText.get(ctx, it) }
             ?: tip.actionLabel?.let { ctx.getString(it) }
-        postTip(text, label, tip.actionUrl, tip.aubree)
+        postTip(text, label, tip.actionUrl, tip.aubree, tip.image)
     }
 
     /**

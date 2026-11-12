@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">İyi hafta sonları</string>
     <string name="greet_no_rush_today">Bugün acele yok</string>
     <string name="greet_enjoy_your_weekend">Hafta sonunun tadını çıkar</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">Diğer</string>
+    <string name="support_tip_text">Küçük bir destek çok şey ifade eder! Üretmeye devam etmeme yardım etmek istersen şuradan yapabilirsin: https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">Ko-fi\'de destekle</string>
+    <string name="notification_sound_title">Bildirim sesi</string>
+    <string name="notification_sound_desc">Bildirim göründüğünde kısa bir ses çal</string>
 </resources>

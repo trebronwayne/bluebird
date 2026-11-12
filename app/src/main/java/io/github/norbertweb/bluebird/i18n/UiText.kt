@@ -835,6 +835,11 @@ object UiText {
         "Happy weekend" to R.string.greet_happy_weekend,
         "No rush today" to R.string.greet_no_rush_today,
         "Enjoy your weekend" to R.string.greet_enjoy_your_weekend,
+        "Others" to R.string.media_tab_others,
+        "A little support goes a long way! If you’d like to help me keep creating, you can do so at https://ko-fi.com/nobertlamn" to R.string.support_tip_text,
+        "Support on Ko-fi" to R.string.support_on_kofi,
+        "Notification sound" to R.string.notification_sound_title,
+        "Play a short sound when a notification appears" to R.string.notification_sound_desc,
     )
     fun resId(english: String): Int? = map[english] ?: builtInAppNameRes(english)
     fun get(context: Context, english: String): String = resId(english)?.let { context.getString(it) } ?: english

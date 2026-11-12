@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">ویک اینڈ مبارک</string>
     <string name="greet_no_rush_today">آج کوئی جلدی نہیں</string>
     <string name="greet_enjoy_your_weekend">اپنے ویک اینڈ کا لطف اٹھائیں</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">دیگر</string>
+    <string name="support_tip_text">تھوڑی سی مدد بھی بہت معنی رکھتی ہے! اگر آپ مجھے تخلیق جاری رکھنے میں مدد دینا چاہیں تو یہاں کر سکتے ہیں: https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">Ko-fi پر سپورٹ کریں</string>
+    <string name="notification_sound_title">اطلاع کی آواز</string>
+    <string name="notification_sound_desc">اطلاع آنے پر مختصر آواز بجائیں</string>
 </resources>

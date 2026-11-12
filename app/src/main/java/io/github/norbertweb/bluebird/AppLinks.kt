@@ -21,6 +21,9 @@ object AppLinks {
     /** The same Uptodown page, jumping straight to its rating section. Used by the review toast. */
     const val STORE_REVIEW_URL = "$STORE_URL#rating"
 
+    /** Where people can support the developer. */
+    const val KOFI_URL = "https://ko-fi.com/nobertlamn"
+
     /** Open-source repository. */
     const val REPO_URL = "https://github.com/trebronwayne/bluebird"
 
@@ -52,6 +55,8 @@ object AppLinks {
     }
 
     fun openRepo(context: Context) = openUrl(context, REPO_URL)
+
+    fun openSupport(context: Context) = openUrl(context, KOFI_URL)
 
     fun openUrl(context: Context, url: String) =
         startSafely(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)))

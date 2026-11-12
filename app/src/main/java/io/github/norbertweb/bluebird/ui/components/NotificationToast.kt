@@ -1,5 +1,10 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Image
 import com.trebronwayne.aubree.compose.Aubree
 import com.trebronwayne.aubree.AubreeState
 import androidx.compose.ui.res.stringResource
@@ -77,6 +82,8 @@ data class ToastNotifData(
     val accent: Color = bluebirdColors.AccentBlue,
     /** When set, Aubree replaces the alert icon and shows this state. */
     val aubree: AubreeState? = null,
+    /** A small picture card shown under the text (a drawable resource), e.g. the support card. */
+    val image: Int? = null,
     val actionLabel: String? = null,
     val actionUrl: String? = null,
     val packageName: String? = null,
@@ -292,9 +299,27 @@ private fun bluebirdToast(
                         text     = toast.body,
                         color    = textColor.copy(alpha = 0.72f),
                         fontSize = (11.5f * textScale).sp,
-                        maxLines = 2,
+                        maxLines = if (toast.image != null) 5 else 2,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (toast.image != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Image(
+                            painter = painterResource(toast.image),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .width(150.dp)
+                                .aspectRatio(2f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, textColor.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (toast.actionUrl != null) onAction(toast.actionUrl)
+                                    startExit()
+                                }
+                        )
+                    }
 
                     val primaryLabel = toast.actionLabel ?: if (toast.packageName != null) stringResource(R.string.open) else null
                     if (primaryLabel != null) {

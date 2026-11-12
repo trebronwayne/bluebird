@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">Wikendi njema</string>
     <string name="greet_no_rush_today">Hakuna haraka leo</string>
     <string name="greet_enjoy_your_weekend">Furahia wikendi yako</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">Zingine</string>
+    <string name="support_tip_text">Msaada kidogo unasaidia sana! Ikiwa ungependa kunisaidia niendelee kubuni, unaweza kufanya hivyo kupitia https://ko-fi.com/nobertlamn</string>
+    <string name="support_on_kofi">Saidia kwenye Ko-fi</string>
+    <string name="notification_sound_title">Sauti ya arifa</string>
+    <string name="notification_sound_desc">Cheza sauti fupi arifa inapoonekana</string>
 </resources>

@@ -46,7 +46,9 @@ data class ScannedTrack(
     val durationMs: Long,
     val isVideo: Boolean,
     val artworkUri: Uri?,
-    val dateModified: Long
+    val dateModified: Long,
+    /** Audio that is not an mp3 (voice notes, recordings, wav, m4a, ogg...). Shown on the Others tab, not Music. */
+    val isOtherAudio: Boolean = false
 )
 
 object MediaLibraryRepository {
@@ -91,7 +93,8 @@ object MediaLibraryRepository {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.DATE_MODIFIED,
-            MediaStore.Audio.Media.IS_MUSIC
+            MediaStore.Audio.Media.IS_MUSIC,
+            MediaStore.Audio.Media.MIME_TYPE
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val results = ArrayList<ScannedTrack>()
@@ -106,6 +109,7 @@ object MediaLibraryRepository {
                 val durCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val dataCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
                 val dateCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+                val mimeCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
 
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
@@ -115,6 +119,11 @@ object MediaLibraryRepository {
                         Uri.parse("content://media/external/audio/albumart"), albumId
                     )
                     val path = c.getStringOrNull(dataCol)
+                    // Only mp3 counts as Music. The file extension decides; when the path is hidden by scoped
+                    // storage, fall back to the MIME type.
+                    val ext = path?.substringAfterLast('.', "")?.lowercase().orEmpty()
+                    val mime = c.getStringOrNull(mimeCol)
+                    val isMp3 = if (ext.isNotEmpty()) ext == "mp3" else (mime == "audio/mpeg" || mime == "audio/mp3")
                     results += ScannedTrack(
                         contentUri = trackUri,
                         file = path?.let { File(it) },
@@ -124,7 +133,8 @@ object MediaLibraryRepository {
                         durationMs = c.getLong(durCol),
                         isVideo = false,
                         artworkUri = artUri,
-                        dateModified = c.getLong(dateCol)
+                        dateModified = c.getLong(dateCol),
+                        isOtherAudio = !isMp3
                     )
                 }
             }

@@ -883,4 +883,10 @@
     <string name="greet_happy_weekend">즐거운 주말</string>
     <string name="greet_no_rush_today">오늘은 서두르지 않아도 돼요</string>
     <string name="greet_enjoy_your_weekend">주말을 즐기세요</string>
+    <!-- Support card, notification sound, media Others tab -->
+    <string name="media_tab_others">기타</string>
+    <string name="support_tip_text">작은 응원이 큰 힘이 돼요! 제가 계속 창작할 수 있도록 도와주실 분은 https://ko-fi.com/nobertlamn 에서 할 수 있어요</string>
+    <string name="support_on_kofi">Ko-fi에서 후원하기</string>
+    <string name="notification_sound_title">알림음</string>
+    <string name="notification_sound_desc">알림이 나타날 때 짧은 소리 재생</string>
 </resources>

@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixes and changes
+- Media player: every list is now newest first (by when the file was last modified). Music shows mp3 files only; other audio types (voice notes, recordings, wav, m4a, ogg and so on) are on the new Others tab. Playlists, the queue and Recent keep their own order
+- Notification toasts, the Meet Aubree welcome and the Welcome back card now follow the light theme (they used a dark-only flag that ignored the system theme)
+- The greeting on the clock widget is bigger and bolder, with a blue-to-violet gradient that reads well in light and dark
+- Support: a Ko-fi card (picture, text and button) at the top of Settings → About → Support Bluebird, and a support tip toast with the picture as a small card
+- Notification sound: toasts play a short sound (res/raw/notification_sound.ogg). On by default; turn it off in Settings → System → Notifications. It stays silent when the phone is on silent or vibrate
+- Translations for the new text in the same 18 languages as before
 - Tips: tapping "Show a tip" repeatedly no longer leaves tips stuck replaying. The toast list is capped at what the screen can show, and a repeated message replaces itself
 - Widgets panel now closes when you open Start, Search, Action Center, Calendar or Power, and each of those closes the widgets panel
 - "Share Bluebird" now shares the Uptodown page, and a new tip asks for a rating on Uptodown
@@ -17,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aubree shows a "Welcome back" card at the top of the screen only when Bluebird starts fresh (it was closed, or Android stopped it, and you open it again), never when you just switch back to it
 - Settings → System → "Keep Bluebird running" opens Android's battery optimization list, so you can pick Bluebird and choose "Don't optimize"; Bluebird also lets go of cached icons when Android is short on memory, so it is less likely to be stopped
 - Translations for Aubree, the greetings, the review tip and the keep-running setting in Arabic, Bengali, Chinese (Simplified), Dutch, French, German, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish, Swahili, Turkish, Ukrainian and Urdu. Amharic, Hausa, Kinyarwanda, Somali, Luganda and Acholi show English for these until someone translates them
-- Release workflow: you can type a version (for example 2.4.1) instead of choosing patch, minor or major; the build number is worked out from it
+- Release workflow: you can type a version (for example 2.4.1) instead of choosing patch, minor or major. The build number is a plain counter that goes up by 1 on every release, continuing from the last published build (15, so the next is 16)
 
 ### Aubree, the mascot
 - A one-time "Meet Aubree" welcome the first time the desktop appears (new installs and updates)

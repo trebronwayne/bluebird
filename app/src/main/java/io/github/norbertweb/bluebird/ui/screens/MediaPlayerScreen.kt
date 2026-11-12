@@ -466,7 +466,11 @@ data class MediaTrack(
     var editArtist    : String?    = null,
     var editAlbum     : String?    = null,
     // N-04: real SRT subtitle wiring
-    var subtitleUri   : Uri?       = null
+    var subtitleUri   : Uri?       = null,
+    // When the file was last modified (seconds), used to list the newest first
+    val dateModified  : Long       = 0L,
+    // Audio that is not an mp3: listed on the Others tab instead of Music
+    val isOtherAudio  : Boolean    = false
 ) {
     val displayTitle  get() = editTitle  ?: title
     val displayArtist get() = editArtist ?: artist
@@ -516,11 +520,13 @@ private fun ScannedTrack.toMediaTrack() = MediaTrack(
     album      = album,
     durationMs = durationMs,
     isVideo    = isVideo,
-    artworkUri = artworkUri
+    artworkUri = artworkUri,
+    dateModified = dateModified,
+    isOtherAudio = isOtherAudio
 )
 
 enum class RepeatMode { OFF, REPEAT_ALL, REPEAT_ONE }
-enum class MediaTab   { VIDEOS, MUSIC, PLAYLIST, PLAYLISTS, FOLDERS, RECENTS, FAVORITES }
+enum class MediaTab   { VIDEOS, MUSIC, OTHERS, PLAYLIST, PLAYLISTS, FOLDERS, RECENTS, FAVORITES }
 
 private fun RepeatMode.toPlayerRepeat() = when (this) {
     RepeatMode.OFF        -> Player.REPEAT_MODE_OFF
@@ -648,6 +654,8 @@ private class PlayerState {
     var allTracks   by mutableStateOf(listOf<MediaTrack>())
     var videoTracks by mutableStateOf(listOf<MediaTrack>())
     var audioTracks by mutableStateOf(listOf<MediaTrack>())
+    // Audio that is not an mp3 (voice notes, recordings, wav, m4a...): kept out of Music, found on the Others tab
+    var otherTracks by mutableStateOf(listOf<MediaTrack>())
     var isLoading   by mutableStateOf(false)
     var isLibraryReady by mutableStateOf(false)
     var hasRestoredQueue by mutableStateOf(false)
@@ -742,6 +750,7 @@ private class PlayerState {
     val filteredTracks get() = when (activeTab) {
         MediaTab.VIDEOS    -> videoTracks.filter { q -> q.displayTitle.contains(searchQuery, true) || q.displayArtist.contains(searchQuery, true) || searchQuery.isEmpty() }
         MediaTab.MUSIC     -> audioTracks.filter { q -> q.displayTitle.contains(searchQuery, true) || q.displayArtist.contains(searchQuery, true) || searchQuery.isEmpty() }
+        MediaTab.OTHERS    -> otherTracks.filter { q -> q.displayTitle.contains(searchQuery, true) || q.displayArtist.contains(searchQuery, true) || searchQuery.isEmpty() }
         MediaTab.PLAYLIST  -> playlist.filter    { q -> q.displayTitle.contains(searchQuery, true) || searchQuery.isEmpty() }
         MediaTab.PLAYLISTS -> openPlaylistTracks.filter { q -> q.displayTitle.contains(searchQuery, true) || searchQuery.isEmpty() }
         MediaTab.FOLDERS   -> allTracks.filter   { q -> q.displayTitle.contains(searchQuery, true) || searchQuery.isEmpty() }
@@ -943,9 +952,13 @@ fun MediaPlayerScreen(
             )
         }
         val tracks = libraryData.tracks
-        state.allTracks   = tracks
-        state.videoTracks = tracks.filter { it.isVideo }
-        state.audioTracks = tracks.filter { !it.isVideo }
+        // Every list is newest first (by when the file was last modified), so new files sit on top and older
+        // ones further down. Music is mp3 only; other audio types are on the Others tab.
+        val newestFirst = compareByDescending<MediaTrack> { it.dateModified }.thenBy { it.displayTitle.lowercase() }
+        state.allTracks   = tracks.sortedWith(newestFirst)
+        state.videoTracks = tracks.filter { it.isVideo }.sortedWith(newestFirst)
+        state.audioTracks = tracks.filter { !it.isVideo && !it.isOtherAudio }.sortedWith(newestFirst)
+        state.otherTracks = tracks.filter { !it.isVideo && it.isOtherAudio }.sortedWith(newestFirst)
         state.isLoading   = false
         state.isLibraryReady = true
         state.recentPaths = libraryData.recentPaths
@@ -1072,7 +1085,7 @@ fun MediaPlayerScreen(
         if (target != null) {
             state.lastHandledInitialPath = initialPath
             val index = state.allTracks.indexOf(target)
-            state.activeTab = if (target.isVideo) MediaTab.VIDEOS else MediaTab.MUSIC
+            state.activeTab = when { target.isVideo -> MediaTab.VIDEOS; target.isOtherAudio -> MediaTab.OTHERS; else -> MediaTab.MUSIC }
             state.playQueue(state.allTracks, index)
         } else {
             // MediaStore can occasionally omit a freshly-created or unusual file.
@@ -1091,10 +1104,11 @@ fun MediaPlayerScreen(
                         contentUri = uri,
                         file = file,
                         title = file.nameWithoutExtension,
-                        isVideo = ext in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "wmv", "m4v")
+                        isVideo = ext in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "wmv", "m4v"),
+                        isOtherAudio = ext != "mp3" && ext !in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "wmv", "m4v")
                     )
                     state.lastHandledInitialPath = initialPath
-                    state.activeTab = if (direct.isVideo) MediaTab.VIDEOS else MediaTab.MUSIC
+                    state.activeTab = when { direct.isVideo -> MediaTab.VIDEOS; direct.isOtherAudio -> MediaTab.OTHERS; else -> MediaTab.MUSIC }
                     state.playQueue(listOf(direct), 0)
                 }
             }
@@ -1525,6 +1539,7 @@ private fun LibraryPane(
 
         val tabs = listOf(
             MediaTab.MUSIC to (FI.MusicNote to FI.MusicNoteFilled),
+            MediaTab.OTHERS to (FI.Tune to FI.Tune),
             MediaTab.VIDEOS to (FI.MovieOutline to FI.Movie),
             MediaTab.PLAYLISTS to (FI.PlaylistPlay to FI.PlaylistPlayFilled),
             MediaTab.PLAYLIST to (FI.QueueMusic to FI.QueueMusicFilled),
@@ -1555,6 +1570,7 @@ private fun LibraryPane(
                     Text(
                         when (tab) {
                             MediaTab.MUSIC -> stringResource(R.string.music); MediaTab.VIDEOS -> stringResource(R.string.videos)
+                            MediaTab.OTHERS -> stringResource(R.string.media_tab_others)
                             MediaTab.PLAYLISTS -> stringResource(R.string.playlists)
                             MediaTab.PLAYLIST -> stringResource(R.string.queue); MediaTab.FOLDERS -> stringResource(R.string.folders)
                             MediaTab.RECENTS -> stringResource(R.string.recent); MediaTab.FAVORITES -> stringResource(R.string.faves)
@@ -1630,7 +1646,7 @@ private fun LibraryPane(
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 val cnt = state.filteredTracks.size
                 Text(pluralText(when(state.activeTab){ MediaTab.VIDEOS->R.plurals.plural_videos; MediaTab.MUSIC->R.plurals.plural_tracks; else->R.plurals.plural_items }, cnt), color = tcm, fontSize = 11.sp)
-                if (state.activeTab == MediaTab.MUSIC || state.activeTab == MediaTab.VIDEOS) {
+                if (state.activeTab == MediaTab.MUSIC || state.activeTab == MediaTab.VIDEOS || state.activeTab == MediaTab.OTHERS) {
                     Text(stringResource(R.string.add_all_to_queue), color = FTV.Accent, fontSize = 11.sp,
                         modifier = Modifier.clickable { state.filteredTracks.forEach { state.addToPlaylist(it) } })
                 }
