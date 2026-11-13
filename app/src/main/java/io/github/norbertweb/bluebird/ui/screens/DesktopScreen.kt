@@ -90,6 +90,13 @@ fun DesktopScreen(viewModel: LauncherViewModel) {
         io.github.norbertweb.bluebird.ui.components.MeetAubreeDialog(isDark = isDarkNow) {
             io.github.norbertweb.bluebird.ui.components.DesktopPreferences(context).metAubree = true
             metAubree = true
+            // Aubree answers with a toast: happy, with a short welcome.
+            viewModel.postSystemNotification(
+                title    = io.github.norbertweb.bluebird.i18n.UiText.get(context, "Nice to meet you!"),
+                body     = io.github.norbertweb.bluebird.i18n.UiText.get(context, "Welcome to Bluebird"),
+                appLabel = "Aubree",
+                aubree   = com.trebronwayne.aubree.AubreeState.HAPPY
+            )
         }
     }
 

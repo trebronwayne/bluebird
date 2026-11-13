@@ -1,5 +1,10 @@
 package io.github.norbertweb.bluebird.ui.components
 
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -117,7 +122,12 @@ fun WelcomeBackCard(trigger: Long, enabled: Boolean, isDark: Boolean) {
     }
 
     Box(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 12.dp),
+        // Below the status bar and any camera cutout (punch-hole or notch), plus a little extra, so the card is
+        // never hidden behind the front camera.
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+            .padding(top = 24.dp),
         contentAlignment = Alignment.TopCenter
     ) {
         AnimatedVisibility(

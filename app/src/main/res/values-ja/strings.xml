@@ -889,4 +889,5 @@
     <string name="support_on_kofi">Ko-fiで応援する</string>
     <string name="notification_sound_title">通知音</string>
     <string name="notification_sound_desc">通知が表示されたときに短い音を鳴らす</string>
+    <string name="aubree_nice_to_meet_you">はじめまして！</string>
 </resources>

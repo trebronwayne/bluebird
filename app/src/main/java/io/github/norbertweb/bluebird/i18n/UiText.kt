@@ -840,6 +840,7 @@ object UiText {
         "Support on Ko-fi" to R.string.support_on_kofi,
         "Notification sound" to R.string.notification_sound_title,
         "Play a short sound when a notification appears" to R.string.notification_sound_desc,
+        "Nice to meet you!" to R.string.aubree_nice_to_meet_you,
     )
     fun resId(english: String): Int? = map[english] ?: builtInAppNameRes(english)
     fun get(context: Context, english: String): String = resId(english)?.let { context.getString(it) } ?: english

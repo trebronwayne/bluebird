@@ -889,4 +889,5 @@
     <string name="support_on_kofi">Apoyar en Ko-fi</string>
     <string name="notification_sound_title">Sonido de notificación</string>
     <string name="notification_sound_desc">Reproducir un sonido breve cuando aparece una notificación</string>
+    <string name="aubree_nice_to_meet_you">¡Mucho gusto!</string>
 </resources>

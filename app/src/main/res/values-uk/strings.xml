@@ -889,4 +889,5 @@
     <string name="support_on_kofi">Підтримати на Ko-fi</string>
     <string name="notification_sound_title">Звук сповіщення</string>
     <string name="notification_sound_desc">Відтворювати короткий звук, коли з\'являється сповіщення</string>
+    <string name="aubree_nice_to_meet_you">Приємно познайомитися!</string>
 </resources>

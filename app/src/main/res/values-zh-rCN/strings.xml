@@ -889,4 +889,5 @@
     <string name="support_on_kofi">在 Ko-fi 上支持</string>
     <string name="notification_sound_title">通知声音</string>
     <string name="notification_sound_desc">出现通知时播放简短提示音</string>
+    <string name="aubree_nice_to_meet_you">很高兴认识你！</string>
 </resources>

@@ -889,4 +889,5 @@
     <string name="support_on_kofi">Ko-fi에서 후원하기</string>
     <string name="notification_sound_title">알림음</string>
     <string name="notification_sound_desc">알림이 나타날 때 짧은 소리 재생</string>
+    <string name="aubree_nice_to_meet_you">만나서 반가워요!</string>
 </resources>

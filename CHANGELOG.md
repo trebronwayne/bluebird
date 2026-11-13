@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Media player: every list is now newest first (by when the file was last modified). Music shows mp3 files only; other audio types (voice notes, recordings, wav, m4a, ogg and so on) are on the new Others tab. Playlists, the queue and Recent keep their own order
 - Notification toasts, the Meet Aubree welcome and the Welcome back card now follow the light theme (they used a dark-only flag that ignored the system theme)
 - The greeting on the clock widget is bigger and bolder, with a blue-to-violet gradient that reads well in light and dark
-- Support: a Ko-fi card (picture, text and button) at the top of Settings → About → Support Bluebird, and a support tip toast with the picture as a small card
+- Support: a Ko-fi card (a sentence with the link, and a button) at the top of Settings → About → Support Bluebird
+- Saying hi to Aubree now gets a happy toast back ("Nice to meet you!"); the Welcome back card sits lower, clear of the status bar and front camera cutouts
 - Notification sound: toasts play a short sound (res/raw/notification_sound.ogg). On by default; turn it off in Settings → System → Notifications. It stays silent when the phone is on silent or vibrate
 - Translations for the new text in the same 18 languages as before
 - Tips: tapping "Show a tip" repeatedly no longer leaves tips stuck replaying. The toast list is capped at what the screen can show, and a repeated message replaces itself

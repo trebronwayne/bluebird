@@ -889,4 +889,5 @@
     <string name="support_on_kofi">Auf Ko-fi unterstützen</string>
     <string name="notification_sound_title">Benachrichtigungston</string>
     <string name="notification_sound_desc">Kurzen Ton abspielen, wenn eine Benachrichtigung erscheint</string>
+    <string name="aubree_nice_to_meet_you">Schön, dich kennenzulernen!</string>
 </resources>

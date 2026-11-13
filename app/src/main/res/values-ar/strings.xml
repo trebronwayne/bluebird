@@ -889,4 +889,5 @@
     <string name="support_on_kofi">ادعم على Ko-fi</string>
     <string name="notification_sound_title">صوت الإشعار</string>
     <string name="notification_sound_desc">تشغيل صوت قصير عند ظهور إشعار</string>
+    <string name="aubree_nice_to_meet_you">تشرفت بمعرفتك!</string>
 </resources>
