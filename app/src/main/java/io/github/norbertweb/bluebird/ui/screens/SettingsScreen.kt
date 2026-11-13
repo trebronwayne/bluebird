@@ -60,7 +60,6 @@ import androidx.compose.foundation.verticalScroll
 // tree-shakeable extension property that needs its OWN import; a single blanket
 // `import ...FluentIcons` is not enough. Package root and per-icon import path below
 // per confirmed working example from another file in this project.
-import fluent.ui.system.icons.regular.Alert
 import fluent.ui.system.icons.FluentIcons
 import fluent.ui.system.icons.regular.Add
 import fluent.ui.system.icons.regular.ArrowClockwise
