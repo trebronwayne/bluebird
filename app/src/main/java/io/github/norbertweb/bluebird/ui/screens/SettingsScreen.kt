@@ -1,5 +1,6 @@
 package io.github.norbertweb.bluebird.ui.screens
 
+import fluent.ui.system.icons.regular.Alert
 import io.github.norbertweb.bluebird.ui.components.NotificationSound
 import androidx.compose.foundation.layout.aspectRatio
 import io.github.norbertweb.bluebird.ui.components.BluebirdDropdownMenu
@@ -1831,28 +1832,18 @@ private fun SystemSettings(a: ScreenArgs) {
     }
 }
 
-/** A small card that invites people to support the developer on Ko-fi: the picture, a sentence and a button. */
+/** Invites people to support the developer on Ko-fi: a sentence with the link, and a button. */
 @Composable
 private fun KofiSupportCard(a: ScreenArgs) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Image(
-            painter = painterResource(R.drawable.support_card),
-            contentDescription = ui("Support on Ko-fi"),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .width(220.dp)
-                .aspectRatio(2f)
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, a.textColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                .clickable { AppLinks.openSupport(a.ctx) }
-        )
         Text(
             ui("A little support goes a long way! If you\u2019d like to help me keep creating, you can do so at https://ko-fi.com/nobertlamn"),
             color = a.textColor.copy(alpha = 0.78f),
-            fontSize = (12.5f * a.scale).sp
+            fontSize = (12.5f * a.scale).sp,
+            modifier = Modifier.clickable { AppLinks.openSupport(a.ctx) }
         )
         Button(
             onClick = { AppLinks.openSupport(a.ctx) },
